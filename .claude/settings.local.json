@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill:*)",
+      "Bash(streamlit run:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(lsof:*)",
+      "Bash(uvicorn:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(open http://127.0.0.1:5001)",
+      "Bash(rm:*)",
+      "Bash(timeout:*)",
+      "Bash(brew install:*)",
+      "Bash(brew:*)",
+      "Bash(export:*)",
+      "Bash(kill:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(mv:*)",
+      "Bash(cp:*)",
+      "Bash(awk:*)",
+      "Bash(env)",
+      "Bash(pip show:*)"
+    ],
+    "deny": []
+  }
+}

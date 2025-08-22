@@ -1,0 +1,6 @@
+# Add your dependencies here
+# Common ones you might need:
+requests
+beautifulsoup4
+pandas
+csv
