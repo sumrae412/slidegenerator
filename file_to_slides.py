@@ -474,10 +474,26 @@ class DocumentParser:
         content = self._process_click_markers(content)
         
         lines = content.split('\n')
+        
+        # For large files, limit content slides to prevent timeouts  
+        non_heading_lines = [line for line in lines if not line.strip().startswith('#')]
+        if len(non_heading_lines) > 50:
+            logger.warning(f"Large file detected with {len(non_heading_lines)} content blocks. Limiting to first 50 to prevent timeout.")
+            # Keep all headings but limit content
+            processed_lines = []
+            content_count = 0
+            for line in lines:
+                if line.strip().startswith('#'):
+                    processed_lines.append(line)  # Keep all headings
+                elif content_count < 50:
+                    processed_lines.append(line)  # Keep first 50 content blocks
+                    content_count += 1
+            lines = processed_lines
+        
         slides = []
         script_slide_counter = 1
         
-        logger.info(f"Converting script content to slides, total lines: {len(lines)}")
+        logger.info(f"Converting script content to slides, processing {len(lines)} lines ({len(non_heading_lines)} content blocks)")
         
         pending_h4_title = None  # Store H4 title waiting for content
         
@@ -572,12 +588,29 @@ class DocumentParser:
         logger.info(f"Final complete sentence bullets: {bullets}")
         return bullets[:4]  # Limit to 4 bullets for readability
     
+    def _create_basic_bullets(self, text: str) -> List[str]:
+        """Create basic bullet points without AI - split by sentences"""
+        if not text or len(text.strip()) < 20:
+            return []
+        
+        # Split into sentences and clean up
+        import re
+        sentences = re.split(r'[.!?]+', text)
+        bullets = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) > 15:  # Only include substantial sentences
+                bullets.append(sentence.capitalize() + '.')
+        
+        return bullets[:4]  # Limit to 4 bullets
+    
     def _summarize_paragraph_to_bullets(self, text: str) -> List[str]:
         """Make a dedicated API call to convert a paragraph into clear bullet points"""
         if not self.api_key:
-            # No OpenAI API key - leave blank
-            logger.info("No OpenAI API key available, leaving slide blank")
-            return []
+            # No OpenAI API key - use basic extraction
+            logger.info("No OpenAI API key, using basic bullet extraction")
+            return self._create_basic_bullets(text)
         
         # Skip API call if text is too short - leave blank
         if not text or len(text.strip()) < 20:

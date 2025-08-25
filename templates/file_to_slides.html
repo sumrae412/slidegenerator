@@ -360,6 +360,23 @@
                 showUploadError();
                 return;
             }
+            
+            // Warn about large files that might timeout
+            if (file.size > 5 * 1024 * 1024) { // 5MB+
+                const proceed = confirm(
+                    `Large file detected (${formatFileSize(file.size)}). ` +
+                    `For best results:\n\n` +
+                    `• Leave OpenAI API key empty for faster processing\n` +
+                    `• Large files may be limited to first 50 content blocks\n` +
+                    `• Consider using paragraph mode\n\n` +
+                    `Continue anyway?`
+                );
+                if (!proceed) {
+                    selectedFile = null;
+                    fileInput.value = '';
+                    return;
+                }
+            }
 
             selectedFile = file;
             showFileInfo(file);
