@@ -92,6 +92,7 @@ class DocumentParser:
         # Store API key for direct HTTP requests (avoid OpenAI client proxy issues)
         self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
         self.client = None  # Don't use OpenAI client due to proxy conflicts
+        self.force_basic_mode = False  # Flag to override AI processing for large files
         
         if not self.api_key:
             logger.warning("No OpenAI API key found - bullet generation will use fallback method")
@@ -479,6 +480,10 @@ class DocumentParser:
         non_heading_lines = [line for line in lines if not line.strip().startswith('#')]
         if len(non_heading_lines) > 50:
             logger.warning(f"Large file detected with {len(non_heading_lines)} content blocks. Limiting to first 50 to prevent timeout.")
+            # Force basic mode for very large files even with API key to prevent timeout
+            self.force_basic_mode = True
+            logger.warning("Forcing basic bullet extraction mode to prevent timeout (even with API key provided)")
+            
             # Keep all headings but limit content
             processed_lines = []
             content_count = 0
@@ -607,9 +612,12 @@ class DocumentParser:
     
     def _summarize_paragraph_to_bullets(self, text: str) -> List[str]:
         """Make a dedicated API call to convert a paragraph into clear bullet points"""
-        if not self.api_key:
-            # No OpenAI API key - use basic extraction
-            logger.info("No OpenAI API key, using basic bullet extraction")
+        if not self.api_key or self.force_basic_mode:
+            # No OpenAI API key or forced basic mode for large files
+            if self.force_basic_mode:
+                logger.info("Using basic bullet extraction (forced for large file)")
+            else:
+                logger.info("No OpenAI API key, using basic bullet extraction")
             return self._create_basic_bullets(text)
         
         # Skip API call if text is too short - leave blank

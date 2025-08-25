@@ -365,11 +365,12 @@
             if (file.size > 5 * 1024 * 1024) { // 5MB+
                 const proceed = confirm(
                     `Large file detected (${formatFileSize(file.size)}). ` +
-                    `For best results:\n\n` +
-                    `• Leave OpenAI API key empty for faster processing\n` +
-                    `• Large files may be limited to first 50 content blocks\n` +
-                    `• Consider using paragraph mode\n\n` +
-                    `Continue anyway?`
+                    `To prevent timeouts:\n\n` +
+                    `• Files with 50+ content blocks will automatically use basic processing\n` +
+                    `• Even with API key, large files get basic bullet extraction\n` +
+                    `• Only first 50 content sections will be processed\n` +
+                    `• All headings (H1-H4) will be preserved\n\n` +
+                    `Continue with optimized processing?`
                 );
                 if (!proceed) {
                     selectedFile = null;
