@@ -18,6 +18,19 @@ import re
 import random
 from math import cos, sin
 import requests
+import warnings
+
+# Semantic analysis libraries
+try:
+    from sentence_transformers import SentenceTransformer
+    from sklearn.cluster import KMeans
+    from sklearn.metrics.pairwise import cosine_similarity
+    import numpy as np
+    SEMANTIC_AVAILABLE = True
+    warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
+except ImportError:
+    SEMANTIC_AVAILABLE = False
+    logging.warning("Sentence transformers not available - falling back to basic text processing")
 
 import flask
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
@@ -78,6 +91,167 @@ class DocumentStructure:
     slides: List[SlideContent]
     metadata: Dict[str, Any]
 
+@dataclass
+class SemanticChunk:
+    """Represents a semantically coherent chunk of text"""
+    text: str
+    embedding: Optional[np.ndarray] = None
+    topic_cluster: Optional[int] = None
+    intent: Optional[str] = None
+    importance_score: float = 0.0
+
+class SemanticAnalyzer:
+    """Handles semantic analysis of document content using sentence transformers"""
+    
+    def __init__(self):
+        self.model = None
+        self.initialized = False
+        if SEMANTIC_AVAILABLE:
+            try:
+                # Use a lightweight model for better performance
+                self.model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.initialized = True
+                logging.info("Semantic analyzer initialized with all-MiniLM-L6-v2")
+            except Exception as e:
+                logging.warning(f"Failed to initialize semantic analyzer: {e}")
+                self.initialized = False
+    
+    def analyze_chunks(self, text_chunks: List[str]) -> List[SemanticChunk]:
+        """Analyze text chunks for semantic content and clustering"""
+        if not self.initialized or not text_chunks:
+            return [SemanticChunk(text=chunk) for chunk in text_chunks]
+        
+        try:
+            # Create semantic chunks with embeddings
+            chunks = []
+            for text in text_chunks:
+                if len(text.strip()) < 10:  # Skip very short chunks
+                    continue
+                    
+                embedding = self.model.encode([text])[0]
+                intent = self._classify_intent(text)
+                importance = self._calculate_importance(text)
+                
+                chunks.append(SemanticChunk(
+                    text=text,
+                    embedding=embedding,
+                    intent=intent,
+                    importance_score=importance
+                ))
+            
+            # Cluster chunks by topic similarity
+            if len(chunks) > 2:
+                chunks = self._cluster_chunks(chunks)
+            
+            return chunks
+            
+        except Exception as e:
+            logging.error(f"Error in semantic analysis: {e}")
+            return [SemanticChunk(text=chunk) for chunk in text_chunks]
+    
+    def _classify_intent(self, text: str) -> str:
+        """Classify the intent/purpose of a text chunk"""
+        text_lower = text.lower()
+        
+        # Intent classification based on content patterns
+        if any(word in text_lower for word in ['learn', 'understand', 'explore', 'discover']):
+            return 'learning_objective'
+        elif any(word in text_lower for word in ['step', 'process', 'method', 'procedure']):
+            return 'process_description'
+        elif any(word in text_lower for word in ['example', 'for instance', 'such as', 'demonstration']):
+            return 'example'
+        elif any(word in text_lower for word in ['definition', 'means', 'refers to', 'is defined as']):
+            return 'definition'
+        elif any(word in text_lower for word in ['benefit', 'advantage', 'feature', 'capability']):
+            return 'benefits'
+        elif any(word in text_lower for word in ['problem', 'challenge', 'issue', 'difficulty']):
+            return 'problem'
+        elif any(word in text_lower for word in ['solution', 'approach', 'strategy', 'way to']):
+            return 'solution'
+        else:
+            return 'general_content'
+    
+    def _calculate_importance(self, text: str) -> float:
+        """Calculate importance score based on content characteristics"""
+        score = 0.0
+        text_lower = text.lower()
+        
+        # Length factor (moderate length preferred)
+        length_score = min(len(text) / 200, 1.0) * 0.3
+        score += length_score
+        
+        # Key term presence
+        key_terms = ['important', 'key', 'main', 'primary', 'essential', 'critical', 'fundamental']
+        if any(term in text_lower for term in key_terms):
+            score += 0.4
+        
+        # Technical content indicators
+        tech_terms = ['data', 'system', 'process', 'method', 'algorithm', 'framework', 'platform']
+        if any(term in text_lower for term in tech_terms):
+            score += 0.3
+        
+        return min(score, 1.0)
+    
+    def _cluster_chunks(self, chunks: List[SemanticChunk]) -> List[SemanticChunk]:
+        """Cluster chunks by topic similarity"""
+        try:
+            embeddings = np.array([chunk.embedding for chunk in chunks])
+            
+            # Determine optimal number of clusters (max 5, min 2)
+            n_clusters = min(max(len(chunks) // 3, 2), 5)
+            
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            cluster_labels = kmeans.fit_predict(embeddings)
+            
+            # Assign cluster labels to chunks
+            for i, chunk in enumerate(chunks):
+                chunk.topic_cluster = int(cluster_labels[i])
+            
+            return chunks
+            
+        except Exception as e:
+            logging.error(f"Error in clustering: {e}")
+            return chunks
+    
+    def get_slide_break_suggestions(self, chunks: List[SemanticChunk]) -> List[int]:
+        """Suggest where to break content into slides based on semantic analysis"""
+        if not self.initialized or len(chunks) < 3:
+            return []
+        
+        suggestions = []
+        
+        try:
+            for i in range(1, len(chunks)):
+                # Check for topic cluster changes
+                if (chunks[i-1].topic_cluster != chunks[i].topic_cluster and 
+                    chunks[i-1].topic_cluster is not None):
+                    suggestions.append(i)
+                
+                # Check for intent changes that suggest new slides
+                intent_changes = [
+                    ('definition', 'example'),
+                    ('problem', 'solution'),
+                    ('learning_objective', 'process_description'),
+                    ('general_content', 'benefits')
+                ]
+                
+                prev_intent = chunks[i-1].intent
+                curr_intent = chunks[i].intent
+                
+                if any((prev_intent == a and curr_intent == b) or (prev_intent == b and curr_intent == a) 
+                       for a, b in intent_changes):
+                    suggestions.append(i)
+            
+            # Remove duplicates and sort
+            suggestions = sorted(list(set(suggestions)))
+            
+            # Limit number of suggestions to avoid too many slides
+            return suggestions[:8]  # Max 8 slide breaks
+            
+        except Exception as e:
+            logging.error(f"Error generating slide break suggestions: {e}")
+            return []
+
 class DocumentParser:
     """Handles parsing of various document formats"""
     
@@ -93,6 +267,9 @@ class DocumentParser:
         self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
         self.client = None  # Don't use OpenAI client due to proxy conflicts
         self.force_basic_mode = False  # Flag to override AI processing for large files
+        
+        # Initialize semantic analyzer
+        self.semantic_analyzer = SemanticAnalyzer()
         
         if not self.api_key:
             logger.warning("No OpenAI API key found - bullet generation will use fallback method")
@@ -594,7 +771,7 @@ class DocumentParser:
         return bullets[:4]  # Limit to 4 bullets for readability
     
     def _create_basic_bullets(self, text: str) -> List[str]:
-        """Create basic bullet points without AI - completely rewritten for quality"""
+        """Create basic bullet points using semantic analysis and text processing"""
         if not text or len(text.strip()) < 20:
             return []
         
@@ -604,7 +781,13 @@ class DocumentParser:
         text = text.strip()
         text = re.sub(r'\s+', ' ', text)
         
-        # Try different extraction strategies in order of preference
+        # Try semantic analysis first if available
+        if self.semantic_analyzer.initialized:
+            bullets = self._create_semantic_bullets(text)
+            if len(bullets) >= 2:
+                return bullets[:4]
+        
+        # Fallback to original strategies
         strategies = [
             self._extract_perfect_sentences,
             self._extract_topic_based_bullets,
@@ -618,6 +801,109 @@ class DocumentParser:
         
         # Final fallback
         return ["Explore the key concepts discussed in this content."]
+    
+    def _create_semantic_bullets(self, text: str) -> List[str]:
+        """Create bullet points using semantic analysis"""
+        try:
+            # Split text into sentences for analysis
+            import re
+            sentences = re.split(r'[.!?]+\s+', text)
+            sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+            
+            if len(sentences) < 2:
+                return []
+            
+            # Analyze semantic chunks
+            semantic_chunks = self.semantic_analyzer.analyze_chunks(sentences)
+            
+            if not semantic_chunks:
+                return []
+            
+            # Group chunks by intent and importance
+            bullets = []
+            
+            # Prioritize by intent and importance
+            intent_priority = {
+                'learning_objective': 4,
+                'definition': 3,
+                'benefits': 3,
+                'process_description': 2,
+                'solution': 2,
+                'example': 1,
+                'general_content': 1
+            }
+            
+            # Sort chunks by priority and importance
+            sorted_chunks = sorted(
+                semantic_chunks,
+                key=lambda x: (intent_priority.get(x.intent, 1), x.importance_score),
+                reverse=True
+            )
+            
+            # Create bullets from high-priority chunks
+            for chunk in sorted_chunks[:4]:
+                bullet = self._format_semantic_bullet(chunk)
+                if bullet and len(bullet) > 20:
+                    bullets.append(bullet)
+            
+            # If we have fewer than 2 bullets, supplement with topic-based bullets
+            if len(bullets) < 2:
+                topic_bullets = self._extract_topic_based_bullets(text)
+                for bullet in topic_bullets:
+                    if bullet not in bullets:
+                        bullets.append(bullet)
+                        if len(bullets) >= 4:
+                            break
+            
+            return bullets[:4]
+            
+        except Exception as e:
+            logging.error(f"Error in semantic bullet creation: {e}")
+            return []
+    
+    def _format_semantic_bullet(self, chunk: SemanticChunk) -> str:
+        """Format a semantic chunk into a bullet point"""
+        text = chunk.text.strip()
+        
+        # Intent-based formatting
+        if chunk.intent == 'learning_objective':
+            # Convert to actionable learning objective
+            if not text.lower().startswith(('learn', 'understand', 'explore', 'discover')):
+                if 'will' in text.lower() or 'can' in text.lower():
+                    # "You will learn X" -> "Learn X"
+                    text = re.sub(r'^.*?(will|can)\s+', '', text, flags=re.IGNORECASE)
+                    text = f"Learn {text.lower()}"
+                else:
+                    text = f"Understand {text.lower()}"
+        
+        elif chunk.intent == 'definition':
+            # Ensure definition format
+            if not any(word in text.lower() for word in ['is', 'are', 'refers to', 'means']):
+                text = f"Understand what {text.lower()}"
+        
+        elif chunk.intent == 'process_description':
+            # Convert to actionable process
+            if not text.lower().startswith(('learn', 'follow', 'apply')):
+                text = f"Apply {text.lower()}"
+        
+        elif chunk.intent == 'benefits':
+            # Highlight benefits
+            if not text.lower().startswith(('discover', 'explore', 'benefit from')):
+                text = f"Discover {text.lower()}"
+        
+        # Clean up and format
+        text = re.sub(r'\s+', ' ', text).strip()
+        if len(text) > 1:
+            text = text[0].upper() + text[1:]
+        
+        if not text.endswith(('.', '!', '?')):
+            text += '.'
+            
+        # Quality check
+        if len(text) >= 25 and len(text.split()) >= 4:
+            return text
+        
+        return ""
     
     def _extract_perfect_sentences(self, text: str) -> List[str]:
         """Extract perfectly formed, complete sentences"""
@@ -2460,7 +2746,7 @@ OUTPUT FORMAT - Return exactly this:
         return title
     
     def _create_slides_from_content(self, content: str) -> List[SlideContent]:
-        """Create slides from content without clear headings"""
+        """Create slides from content using semantic analysis and heading detection"""
         lines = [line.strip() for line in content.split('\n') if line.strip()]
         
         if not lines:
@@ -2468,7 +2754,13 @@ OUTPUT FORMAT - Return exactly this:
         
         slides = []
         
-        # Try to detect potential headings first
+        # Try semantic analysis first if available
+        if self.semantic_analyzer.initialized and len(lines) > 5:
+            semantic_slides = self._create_semantic_slides(lines)
+            if semantic_slides:
+                return semantic_slides
+        
+        # Fallback to traditional heading detection
         potential_headings = []
         for i, line in enumerate(lines):
             # Look for short lines that might be headings
@@ -2516,6 +2808,98 @@ OUTPUT FORMAT - Return exactly this:
                 ))
         
         return slides
+    
+    def _create_semantic_slides(self, lines: List[str]) -> List[SlideContent]:
+        """Create slides using semantic analysis to identify optimal breakpoints"""
+        try:
+            # Join lines into meaningful chunks (paragraphs)
+            chunks = []
+            current_chunk = []
+            
+            for line in lines:
+                if len(line) < 50 and not line.endswith('.'):
+                    # Potential heading - start new chunk if we have content
+                    if current_chunk:
+                        chunks.append(' '.join(current_chunk))
+                        current_chunk = []
+                    # Start new chunk with potential heading
+                    current_chunk = [line]
+                else:
+                    # Add content to current chunk
+                    current_chunk.append(line)
+            
+            # Add final chunk
+            if current_chunk:
+                chunks.append(' '.join(current_chunk))
+            
+            if not chunks or len(chunks) < 2:
+                return []
+            
+            # Analyze semantic chunks
+            semantic_chunks = self.semantic_analyzer.analyze_chunks(chunks)
+            
+            if not semantic_chunks:
+                return []
+            
+            # Get slide break suggestions
+            break_points = self.semantic_analyzer.get_slide_break_suggestions(semantic_chunks)
+            
+            # Create slides based on semantic breaks
+            slides = []
+            start_idx = 0
+            
+            for break_point in break_points + [len(semantic_chunks)]:
+                slide_chunks = semantic_chunks[start_idx:break_point]
+                
+                if not slide_chunks:
+                    continue
+                
+                # Create slide title from first chunk or most important chunk
+                title_chunk = max(slide_chunks, key=lambda x: x.importance_score)
+                
+                # Create title from chunk text
+                title_text = title_chunk.text
+                if len(title_text) > 60:
+                    # Extract key phrases for title
+                    words = title_text.split()
+                    if len(words) > 8:
+                        title_text = ' '.join(words[:8]) + '...'
+                    else:
+                        title_text = title_text[:60] + '...'
+                
+                # Create content bullets from all chunks
+                content_bullets = []
+                for chunk in slide_chunks:
+                    bullet = self._format_semantic_bullet(chunk)
+                    if bullet and bullet not in content_bullets:
+                        content_bullets.append(bullet)
+                
+                # Ensure we have at least some content
+                if not content_bullets:
+                    content_bullets = [f"Explore the concepts in this {title_chunk.intent or 'section'}."]
+                
+                slides.append(SlideContent(
+                    title=title_text,
+                    content=content_bullets[:4],  # Max 4 bullets per slide
+                    slide_type='content'
+                ))
+                
+                start_idx = break_point
+                
+                # Limit total slides to prevent overwhelming presentations
+                if len(slides) >= 10:
+                    break
+            
+            # If no slides were created, fall back to basic grouping
+            if not slides:
+                return []
+            
+            logger.info(f"Created {len(slides)} slides using semantic analysis")
+            return slides
+            
+        except Exception as e:
+            logging.error(f"Error in semantic slide creation: {e}")
+            return []
 
 class SlideGenerator:
     """Handles generation of presentation slides"""
