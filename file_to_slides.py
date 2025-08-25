@@ -1215,44 +1215,69 @@ Return EXACTLY 3-4 bullets using this format:
         if not bullet or len(bullet) < 25:
             return False
         
-        # Check for generic/poor content
-        poor_indicators = [
-            'fundamental concepts related to this',
-            'practical applications of this',
-            'key features and capabilities of this',
-            'apply this knowledge',
-            'related to alright',
-            'applications of alright', 
-            'capabilities of alright',
-            'alright knowledge',
-            'concepts in this section',
-            'information from this content',
-            'explore the key concepts',
-            'learn about the concepts',
-            'this is where you',
-            'this helps with',
-            'understand this is',
-            'this section',
-            'this content'
+        bullet_lower = bullet.lower()
+        
+        # First: Check for explicit bad patterns that must be rejected
+        explicit_bad_patterns = [
+            # Generic template patterns
+            r'fundamental concepts (related to|about) \w+\.$',
+            r'practical applications of \w+\.$',
+            r'key features and capabilities of \w+\.$',
+            r'apply \w+ knowledge to',
+            # Problematic words as topics
+            r'(related to|about|of) (this|that|alright|okay|well)\.',
+            r'(this|that|these|those) (helps?|provides?|enables?)',
+            r'concepts in (this|that) (section|content)',
+            r'learn about (the )?concepts',
+            r'explore (the )?key concepts',
+            r'understand (this|that) is'
         ]
         
-        bullet_lower = bullet.lower()
-        if any(indicator in bullet_lower for indicator in poor_indicators):
+        # Reject if matches any explicit bad pattern
+        import re
+        if any(re.search(pattern, bullet_lower) for pattern in explicit_bad_patterns):
+            logger.warning(f"Rejecting bullet due to bad pattern: {bullet}")
             return False
         
-        # Check for meaningful content
+        # Second: Check for meaningless topic words and problematic sentence starters
+        meaningless_topics = ['this', 'that', 'alright', 'okay', 'well', 'now', 'here', 'there']
+        if any(f" {topic}." in bullet_lower or f" {topic} " in bullet_lower for topic in meaningless_topics):
+            logger.warning(f"Rejecting bullet due to meaningless topic: {bullet}")
+            return False
+        
+        # Also reject bullets that start with problematic patterns
+        bad_starters = [
+            r'^this is where you',
+            r'^this helps with', 
+            r'^this (will|can|may|might)',
+            r'^that is where',
+            r'^these (help|provide|enable)'
+        ]
+        if any(re.match(pattern, bullet_lower) for pattern in bad_starters):
+            logger.warning(f"Rejecting bullet due to bad starter pattern: {bullet}")
+            return False
+        
+        # Third: Require meaningful content
         meaningful_words = ['data', 'system', 'process', 'method', 'algorithm', 'framework', 
                           'platform', 'application', 'interface', 'network', 'security',
                           'analysis', 'development', 'programming', 'software', 'database',
                           'machine learning', 'artificial intelligence', 'neural network',
-                          'snowflake', 'snowsight', 'python', 'sql', 'api', 'cloud']
+                          'snowflake', 'snowsight', 'python', 'sql', 'api', 'cloud',
+                          'server', 'client', 'authentication', 'deployment', 'container',
+                          'microservice', 'architecture', 'infrastructure', 'monitoring']
         
         has_meaningful_content = any(word in bullet_lower for word in meaningful_words)
         
-        # Must have some meaningful content or be a complete, specific sentence
+        # Fourth: Must have meaningful content or be very specific
         word_count = len(bullet.split())
-        if has_meaningful_content or word_count >= 8:
+        if has_meaningful_content:
             return True
+        elif word_count >= 10:  # Increased threshold for non-technical content
+            # Additional check for specific, non-generic content
+            generic_words = ['fundamental', 'practical', 'key', 'important', 'various', 'different', 'basic']
+            generic_count = sum(1 for word in generic_words if word in bullet_lower)
+            if generic_count <= 2:  # Allow some generic words but not too many
+                return True
             
         return False
     
@@ -1383,9 +1408,9 @@ Return EXACTLY 3-4 bullets using this format:
                 "Apply coding skills to build practical solutions."
             ]
         
-        # Improved topic extraction
+        # Improved topic extraction - only return if we have truly meaningful topics
         meaningful_topics = self._extract_meaningful_topics(text)
-        if meaningful_topics:
+        if meaningful_topics and self._validate_topic_quality(meaningful_topics[0]):
             primary_topic = meaningful_topics[0]
             return [
                 f"Learn fundamental concepts about {primary_topic}.",
@@ -1394,7 +1419,26 @@ Return EXACTLY 3-4 bullets using this format:
                 f"Apply {primary_topic} knowledge to solve problems."
             ]
         
+        # If no good topics, return empty to avoid generic bullets
         return []
+    
+    def _validate_topic_quality(self, topic: str) -> bool:
+        """Validate that a topic is meaningful before using in generic bullets"""
+        if not topic or len(topic) < 3:
+            return False
+            
+        # Reject meaningless words
+        meaningless = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well', 'now', 'here', 'there']
+        if topic.lower() in meaningless:
+            return False
+        
+        # Reject common non-specific words
+        non_specific = ['section', 'content', 'part', 'chapter', 'example', 'information', 'concepts']
+        if topic.lower() in non_specific:
+            return False
+            
+        # Must be at least 4 characters for technical terms or proper nouns
+        return len(topic) >= 4
     
     def _extract_meaningful_topics(self, text: str) -> List[str]:
         """Extract meaningful topic words, filtering out generic terms"""
