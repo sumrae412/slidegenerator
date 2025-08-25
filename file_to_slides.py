@@ -920,21 +920,11 @@ class DocumentParser:
                 unique_bullets = self._deduplicate_bullets(llm_bullets)
                 return unique_bullets[:4]
             else:
-                logger.warning("LLM approach failed, trying backup LLM call")
-                # Try one more time with different prompt
-                backup_bullets = self._create_llm_backup_bullets(text)
-                if backup_bullets:
-                    logger.info(f"✅ BACKUP SUCCESS: Generated {len(backup_bullets)} backup LLM bullets")
-                    return backup_bullets[:4]
+                logger.warning("LLM approach failed - returning empty bullets")
+                return []
         else:
-            logger.warning("No API key available - cannot generate quality bullets")
-        
-        # If no API key or LLM fails completely, return minimal placeholder
-        logger.error("LLM bullet generation failed completely - returning placeholder")
-        return [
-            "Review the key concepts presented in this content.",
-            "Apply the insights gained to your specific use case."
-        ]
+            logger.warning("No API key available - returning empty bullets")
+            return []
     
     def _create_llm_only_bullets(self, text: str) -> List[str]:
         """Create bullets using only LLM with optimized prompt for content relevance"""
@@ -993,51 +983,6 @@ Return only the bullet points, one per line, without bullet symbols or numbering
                 
         except Exception as e:
             logger.error(f"Error in LLM bullet generation: {e}")
-            return []
-    
-    def _create_llm_backup_bullets(self, text: str) -> List[str]:
-        """Backup LLM call with simpler prompt if main approach fails"""
-        try:
-            # Simpler, more direct prompt
-            prompt = f"""Create 3 specific bullet points about this content. Make each bullet point concrete and actionable, focusing on what someone would learn or do. Avoid generic phrases.
-
-Content: {text}
-
-Format: Just return 3 lines, no bullets or numbers."""
-
-            response = requests.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {self.api_key}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'model': 'gpt-3.5-turbo',
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 200,
-                    'temperature': 0.4
-                },
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                content = result['choices'][0]['message']['content'].strip()
-                
-                bullets = []
-                for line in content.split('\n'):
-                    line = line.strip().lstrip('•-*123456789. ')
-                    if line and len(line) > 10:
-                        bullets.append(line)
-                
-                logger.info(f"Backup LLM generated {len(bullets)} bullets")
-                return bullets[:3]
-            else:
-                logger.error(f"Backup LLM API call failed: {response.status_code}")
-                return []
-                
-        except Exception as e:
-            logger.error(f"Error in backup LLM bullet generation: {e}")
             return []
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
