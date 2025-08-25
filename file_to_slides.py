@@ -1919,47 +1919,145 @@ Return EXACTLY 3-4 bullets using this format:
         # Try to identify the main topic
         text_lower = text.lower()
         
-        if any(term in text_lower for term in ['snowflake', 'snowsight']):
-            bullets = [
-                "Learn about Snowflake's data platform and capabilities.",
-                "Explore Snowsight's web-based interface and features.", 
-                "Understand how to access and work with your data.",
-                "Discover tools for Python coding and Streamlit apps."
-            ]
-        elif any(term in text_lower for term in ['data', 'analytics', 'database']):
-            bullets = [
-                "Understand data management concepts and techniques.",
-                "Learn about analytics tools and methodologies.",
-                "Explore database features and functionality.",
-                "Apply data skills to practical scenarios."
-            ]
-        elif any(term in text_lower for term in ['python', 'code', 'programming']):
-            bullets = [
-                "Learn Python programming fundamentals and concepts.",
-                "Understand how to write and execute Python code.",
-                "Explore programming tools and development environments.",
-                "Apply coding skills to solve practical problems."
-            ]
-        else:
-            # Generic fallback based on content
-            topic_words = [word for word in words[:10] if len(word) > 4 and word.isalpha()]
-            if topic_words:
-                main_topic = topic_words[0].lower()
-                bullets = [
-                    f"Understand key concepts related to {main_topic}.",
-                    f"Learn how to work with {main_topic} effectively.",
-                    f"Explore practical applications of {main_topic}.",
-                    f"Apply {main_topic} knowledge to real-world scenarios."
-                ]
-            else:
-                bullets = [
-                    "Learn the fundamental concepts presented.",
-                    "Understand practical applications and use cases.",
-                    "Explore tools and techniques discussed.",
-                    "Apply knowledge to relevant scenarios."
-                ]
+        # Instead of fixed templates, create unique bullets based on actual content
+        bullets = self._create_content_adaptive_bullets(text, words)
         
         return bullets[:4]
+    
+    def _create_content_adaptive_bullets(self, text: str, words: List[str]) -> List[str]:
+        """Create unique bullets by extracting actual content rather than using fixed templates"""
+        import re
+        import random
+        
+        # Extract meaningful sentences and phrases from the actual content
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+        
+        bullets = []
+        
+        # Strategy 1: Convert sentences to actionable bullet points
+        for sentence in sentences[:3]:
+            sentence = sentence.strip()
+            if len(sentence) > 20:
+                # Convert to actionable format
+                bullet = self._convert_to_actionable_bullet(sentence)
+                if bullet and len(bullet) > 20:
+                    bullets.append(bullet)
+        
+        # Strategy 2: Extract key concepts and make them learning-focused
+        key_concepts = self._extract_key_concepts_from_text(text)
+        for concept in key_concepts[:2]:
+            if concept and len(concept) > 3:
+                # Vary the learning verbs to avoid repetition
+                verbs = ['Master', 'Navigate', 'Utilize', 'Implement', 'Work with']
+                verb = random.choice(verbs)
+                bullet = f"{verb} {concept} for practical applications."
+                bullets.append(bullet)
+        
+        # Strategy 3: If still need more, extract action items from content
+        if len(bullets) < 3:
+            action_bullets = self._extract_action_oriented_bullets(text)
+            bullets.extend(action_bullets[:2])
+        
+        # Ensure we have some bullets (final fallback with variety)
+        if len(bullets) < 2:
+            # Create varied generic bullets to avoid duplication across slides
+            generic_templates = [
+                ["Build practical skills with the tools and concepts covered.", 
+                 "Apply the techniques learned to real-world scenarios.",
+                 "Develop proficiency in the methods discussed.",
+                 "Gain hands-on experience with the presented approaches."],
+                ["Implement the strategies and best practices outlined.",
+                 "Master the fundamental concepts and their applications.", 
+                 "Navigate the key features and capabilities discussed.",
+                 "Develop expertise in the tools and techniques covered."],
+                ["Utilize the knowledge gained for practical problem-solving.",
+                 "Build competency in the methods and approaches presented.",
+                 "Apply the insights to improve your workflows and processes.", 
+                 "Strengthen your understanding of the core principles."]
+            ]
+            bullets = random.choice(generic_templates)
+        
+        return bullets
+    
+    def _convert_to_actionable_bullet(self, sentence: str) -> str:
+        """Convert a sentence to an actionable bullet point"""
+        sentence = sentence.strip()
+        
+        # Remove stage directions and common fillers
+        sentence = re.sub(r'\[.*?\]', '', sentence)
+        sentence = re.sub(r'^(so|well|now|alright|okay),?\s*', '', sentence, flags=re.IGNORECASE)
+        sentence = sentence.strip()
+        
+        if len(sentence) < 15:
+            return ""
+        
+        # Convert to action format if needed
+        action_starters = ['learn to', 'understand how to', 'discover how', 'see how', 'explore how']
+        
+        # If it's already actionable, clean it up
+        if any(starter in sentence.lower() for starter in action_starters):
+            return sentence.capitalize() + ("." if not sentence.endswith('.') else "")
+        
+        # Convert statements to actionable format
+        if 'you' in sentence.lower():
+            sentence = re.sub(r'you (will|can|\'ll)\s*', '', sentence, flags=re.IGNORECASE)
+            return f"Learn to {sentence.lower()}".capitalize() + ("." if not sentence.endswith('.') else "")
+        
+        return sentence.capitalize() + ("." if not sentence.endswith('.') else "")
+    
+    def _extract_key_concepts_from_text(self, text: str) -> List[str]:
+        """Extract key concepts from actual text content"""
+        import re
+        
+        concepts = []
+        
+        # Look for technical terms and proper nouns
+        tech_terms = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text)
+        concepts.extend(tech_terms[:3])
+        
+        # Look for quoted terms or emphasized content
+        quoted = re.findall(r'"([^"]+)"', text)
+        concepts.extend(quoted[:2])
+        
+        # Extract compound technical terms
+        compounds = re.findall(r'\b(?:data\s+\w+|web\s+\w+|\w+\s+interface|\w+\s+platform|\w+\s+database)\b', text, re.IGNORECASE)
+        concepts.extend(compounds[:2])
+        
+        # Clean and deduplicate
+        unique_concepts = []
+        seen = set()
+        for concept in concepts:
+            clean_concept = concept.strip().lower()
+            if clean_concept not in seen and len(clean_concept) > 3:
+                seen.add(clean_concept)
+                unique_concepts.append(concept.strip())
+        
+        return unique_concepts[:3]
+    
+    def _extract_action_oriented_bullets(self, text: str) -> List[str]:
+        """Extract action-oriented content from text"""
+        import re
+        
+        bullets = []
+        
+        # Look for imperatives and instructions
+        action_patterns = [
+            r'(click|select|choose|open|navigate|access|use|try|explore|review)\s+[^.]+',
+            r'you\s+(can|will|should|need to)\s+[^.]+',
+            r'(learn|understand|discover|see|find)\s+[^.]+'
+        ]
+        
+        for pattern in action_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches[:2]:
+                if len(match) > 15:
+                    bullet = match.strip().capitalize()
+                    if not bullet.endswith('.'):
+                        bullet += '.'
+                    bullets.append(bullet)
+        
+        return bullets[:3]
     
     def _extract_key_phrases(self, text: str) -> List[str]:
         """Extract key phrases when sentence splitting doesn't work well"""
