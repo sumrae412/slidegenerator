@@ -2694,12 +2694,12 @@ class SlideGenerator:
                 # Add visual prompt as copyable text on the right side
                 if visual_prompt_text:
                     try:
-                        # Add the visual prompt as copyable text box on the right side
+                        # Add the visual prompt as copyable text box on the right side, aligned with slide top
                         prompt_textbox = slide.shapes.add_textbox(
                             left=Inches(5.2), 
-                            top=Inches(1.5), 
+                            top=Inches(0.5), 
                             width=Inches(4.3), 
-                            height=Inches(5)
+                            height=Inches(6)
                         )
                         prompt_frame = prompt_textbox.text_frame
                         prompt_frame.clear()
