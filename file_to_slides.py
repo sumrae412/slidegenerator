@@ -4159,17 +4159,24 @@ class SlideGenerator:
         """Generate PowerPoint presentation with learner-focused content and optional visual prompts"""
         prs = Presentation()
         
-        # Title slide
-        title_slide_layout = prs.slide_layouts[0]
-        slide = prs.slides.add_slide(title_slide_layout)
-        title = slide.shapes.title
-        subtitle = slide.placeholders[1]
-        
-        title.text = doc_structure.title
-        subtitle.text = f"Generated from {doc_structure.metadata['filename']}\n{datetime.now().strftime('%B %d, %Y')}\n\nOptimized for Google Slides Import"
-        
-        # Organize slides by heading hierarchy
+        # Organize slides by heading hierarchy first to check for H1 headings
         organized_slides = self._organize_slides_by_hierarchy(doc_structure.slides)
+        
+        # Check if there's any H1 heading (presentation_title type) to decide on title slide
+        has_h1_heading = any(section.get('type') == 'presentation_title' for section in organized_slides)
+        
+        # Only create title slide if there's a Heading 1 in the document
+        if has_h1_heading:
+            logger.info("Found H1 heading - creating title slide")
+            title_slide_layout = prs.slide_layouts[0]
+            slide = prs.slides.add_slide(title_slide_layout)
+            title = slide.shapes.title
+            subtitle = slide.placeholders[1]
+            
+            title.text = doc_structure.title
+            subtitle.text = f"Generated from {doc_structure.metadata['filename']}\n{datetime.now().strftime('%B %d, %Y')}\n\nOptimized for Google Slides Import"
+        else:
+            logger.info("No H1 heading found - skipping title slide creation")
         
         logger.info(f"PowerPoint generation: Input has {len(doc_structure.slides)} slides")
         logger.info(f"After organization: {len(organized_slides)} organized sections")
@@ -4433,7 +4440,10 @@ class SlideGenerator:
             
             content_shape.text = summary_text
         
-        logger.info(f"POWERPOINT FINAL: Created {pptx_slides_created} content slides + 1 title slide + 1 summary slide = {pptx_slides_created + 2} total slides")
+        # Calculate total slides including optional title slide
+        title_slide_count = 1 if has_h1_heading else 0
+        total_slides = pptx_slides_created + title_slide_count + 1  # +1 for summary slide
+        logger.info(f"POWERPOINT FINAL: Created {pptx_slides_created} content slides + {title_slide_count} title slide + 1 summary slide = {total_slides} total slides")
         
         # Save presentation
         filename = f"presentation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
