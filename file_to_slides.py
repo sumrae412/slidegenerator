@@ -106,7 +106,10 @@ class DocumentParser:
             else:
                 raise ValueError(f"Only DOCX files are supported. Got: {file_ext}")
             
-            logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from column {script_column}")
+            if script_column == 0:
+                logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from paragraphs")
+            else:
+                logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from column {script_column}")
             
             # Extract title from filename or content
             doc_title = self._extract_title(content, filename)
@@ -134,12 +137,38 @@ class DocumentParser:
     
     
     def _parse_docx(self, file_path: str, script_column: int = 2) -> str:
-        """Parse DOCX file with script column filtering"""
+        """Parse DOCX file with script column filtering or paragraph-based extraction"""
         doc = Document(file_path)
         content = []
         first_table_found = False
         
         logger.info(f"DOCX contains {len(doc.paragraphs)} paragraphs and {len(doc.tables)} tables")
+        
+        # If script_column is 0, use paragraph-based extraction
+        if script_column == 0:
+            logger.info("Using paragraph-based extraction (no table mode)")
+            for paragraph in doc.paragraphs:
+                text = paragraph.text.strip()
+                if text:
+                    # Check if paragraph is a heading
+                    if paragraph.style.name.startswith('Heading'):
+                        level = paragraph.style.name.replace('Heading ', '')
+                        try:
+                            level_num = int(level)
+                            content.append(f"{'#' * level_num} {text}")
+                            logger.info(f"Found heading level {level_num}: {text}")
+                        except ValueError:
+                            content.append(f"# {text}")
+                            logger.info(f"Found heading: {text}")
+                    else:
+                        # Add each paragraph as potential slide content
+                        content.append(text)
+                        logger.info(f"Added paragraph: {text[:50]}...")
+            
+            logger.info(f"Extracted {len(content)} paragraphs for slide generation")
+            return '\n'.join(content)
+        
+        # Original table-based extraction
         logger.info(f"Extracting script text from column {script_column}")
         
         # Process paragraphs and tables in document order
