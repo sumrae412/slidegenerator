@@ -161,9 +161,11 @@ class DocumentParser:
                             content.append(f"# {text}")
                             logger.info(f"Found heading: {text}")
                     else:
-                        # Add each paragraph as potential slide content
-                        content.append(text)
-                        logger.info(f"Added paragraph: {text[:50]}...")
+                        # Clean and add each paragraph as potential slide content
+                        cleaned_text = self._clean_script_text(text)
+                        if cleaned_text:  # Only add if there's content after cleaning
+                            content.append(cleaned_text)
+                            logger.info(f"Added paragraph: {cleaned_text[:50]}...")
             
             logger.info(f"Extracted {len(content)} paragraphs for slide generation")
             return '\n'.join(content)
@@ -228,9 +230,9 @@ class DocumentParser:
         if not text:
             return ""
         
-        # Remove [CLICK] and similar stage directions
-        cleaned = re.sub(r'\[CLICK\]', '', text, flags=re.IGNORECASE)
-        cleaned = re.sub(r'\[.*?\]', '', cleaned)  # Remove any other bracketed content
+        # Remove all-caps bracketed text like [CLICK], [SCREENCAST], [PAUSE], etc.
+        # This pattern matches brackets containing only uppercase letters, numbers, spaces, and common punctuation
+        cleaned = re.sub(r'\[[A-Z0-9\s\-_:]+\]', '', text)
         
         # Remove multiple spaces and clean up
         cleaned = re.sub(r'\s+', ' ', cleaned)
