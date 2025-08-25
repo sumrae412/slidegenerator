@@ -909,49 +909,82 @@ class DocumentParser:
             return []
         
         text = text.strip()
-        logger.info(f"Starting fusion bullet generation for: {text[:100]}...")
+        logger.info(f"Starting unified bullet generation for: {text[:100]}...")
         
         # FUSION APPROACH: Combine NLP + LLM for optimal results
         if self.api_key and not self.force_basic_mode and self.semantic_analyzer.initialized and len(text) >= 30:
+            logger.info("Attempting fusion approach (NLP + LLM)")
             fusion_bullets = self._create_fusion_bullets(text)
             if fusion_bullets and len(fusion_bullets) >= 2:
                 quality_fusion = [b for b in fusion_bullets if self._is_quality_bullet(b)]
                 if len(quality_fusion) >= 2:
-                    logger.info(f"Using fusion bullets (NLP+LLM): {len(quality_fusion)} bullets")
-                    return quality_fusion[:4]
+                    logger.info(f"✅ SUCCESS: Using fusion bullets (NLP+LLM): {len(quality_fusion)} bullets")
+                    # Apply deduplication to prevent similar bullets
+                    unique_fusion = self._deduplicate_bullets(quality_fusion)
+                    return unique_fusion[:4]
+                else:
+                    logger.warning(f"Fusion bullets failed quality check: {len(quality_fusion)} valid out of {len(fusion_bullets)}")
+            else:
+                logger.warning(f"Fusion approach generated insufficient bullets: {len(fusion_bullets) if fusion_bullets else 0}")
+        else:
+            logger.info("Skipping fusion approach - conditions not met")
         
         # Fallback to individual approaches if fusion not possible
         # Strategy 1: Try AI-powered summarization (best quality when available)
         if self.api_key and not self.force_basic_mode and len(text) >= 30:
+            logger.info("Attempting AI-enhanced approach")
             ai_bullets = self._create_ai_enhanced_bullets(text)
             if ai_bullets and len(ai_bullets) >= 2:
                 # Validate AI bullets with quality check
                 quality_ai_bullets = [b for b in ai_bullets if self._is_quality_bullet(b)]
                 if len(quality_ai_bullets) >= 2:
-                    logger.info(f"Using AI-enhanced bullets: {len(quality_ai_bullets)} bullets")
-                    return quality_ai_bullets[:4]
+                    logger.info(f"✅ SUCCESS: Using AI-enhanced bullets: {len(quality_ai_bullets)} bullets")
+                    unique_ai = self._deduplicate_bullets(quality_ai_bullets)
+                    return unique_ai[:4]
+                else:
+                    logger.warning(f"AI bullets failed quality check: {len(quality_ai_bullets)} valid out of {len(ai_bullets)}")
+            else:
+                logger.warning(f"AI approach generated insufficient bullets: {len(ai_bullets) if ai_bullets else 0}")
+        else:
+            logger.info("Skipping AI-enhanced approach - conditions not met")
         
         # Strategy 2: Try enhanced semantic analysis
         if self.semantic_analyzer.initialized:
+            logger.info("Attempting enhanced semantic approach")
             semantic_bullets = self._create_enhanced_semantic_bullets(text)
             if semantic_bullets and len(semantic_bullets) >= 2:
                 quality_semantic = [b for b in semantic_bullets if self._is_quality_bullet(b)]
                 if len(quality_semantic) >= 2:
-                    logger.info(f"Using enhanced semantic bullets: {len(quality_semantic)} bullets")
-                    return quality_semantic[:4]
+                    logger.info(f"✅ SUCCESS: Using enhanced semantic bullets: {len(quality_semantic)} bullets")
+                    unique_semantic = self._deduplicate_bullets(quality_semantic)
+                    return unique_semantic[:4]
+                else:
+                    logger.warning(f"Semantic bullets failed quality check: {len(quality_semantic)} valid out of {len(semantic_bullets)}")
+            else:
+                logger.warning(f"Semantic approach generated insufficient bullets: {len(semantic_bullets) if semantic_bullets else 0}")
+        else:
+            logger.info("Skipping enhanced semantic approach - analyzer not initialized")
         
         # Strategy 3: Advanced text processing (combines multiple techniques)
+        logger.info("Attempting advanced text processing approach")
         advanced_bullets = self._create_advanced_text_bullets(text)
         if advanced_bullets and len(advanced_bullets) >= 2:
             quality_advanced = [b for b in advanced_bullets if self._is_quality_bullet(b)]
             if len(quality_advanced) >= 2:
-                logger.info(f"Using advanced text bullets: {len(quality_advanced)} bullets")
-                return quality_advanced[:4]
+                logger.info(f"✅ SUCCESS: Using advanced text bullets: {len(quality_advanced)} bullets")
+                unique_advanced = self._deduplicate_bullets(quality_advanced)
+                return unique_advanced[:4]
+            else:
+                logger.warning(f"Advanced bullets failed quality check: {len(quality_advanced)} valid out of {len(advanced_bullets)}")
+        else:
+            logger.warning(f"Advanced approach generated insufficient bullets: {len(advanced_bullets) if advanced_bullets else 0}")
         
         # Strategy 4: Fallback to basic approach
+        logger.info("Using basic approach as final fallback")
         basic_bullets = self._create_basic_bullets(text)
-        logger.info(f"Using basic bullets as fallback: {len(basic_bullets)} bullets")
-        return basic_bullets
+        unique_basic = self._deduplicate_bullets(basic_bullets)
+        logger.info(f"✅ FALLBACK: Using basic bullets: {len(unique_basic)} bullets")
+        return unique_basic[:4]
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
         """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
@@ -2747,20 +2780,95 @@ OUTPUT FORMAT - Return exactly this:
         return bullet
     
     def _deduplicate_bullets(self, bullets: List[str]) -> List[str]:
-        """Remove duplicate concepts while preserving order"""
-        seen = set()
+        """Remove duplicate concepts while preserving order with enhanced similarity detection"""
         unique = []
         
         for bullet in bullets:
-            # Create a key for similarity checking
-            key_words = set(bullet.lower().split()[:5])  # First 5 words
-            key = ' '.join(sorted(key_words))
+            bullet = bullet.strip()
+            if len(bullet) < 8:
+                continue
+                
+            # Check if this bullet is too similar to existing ones
+            is_duplicate = False
+            for existing in unique:
+                if self._bullets_are_too_similar(bullet, existing):
+                    logger.info(f"Removing duplicate bullet: '{bullet}' (similar to '{existing}')")
+                    is_duplicate = True
+                    break
             
-            if key not in seen and len(bullet.strip()) > 8:
-                seen.add(key)
-                unique.append(bullet.strip())
+            if not is_duplicate:
+                unique.append(bullet)
         
+        logger.info(f"Deduplication: {len(bullets)} -> {len(unique)} bullets")
         return unique
+    
+    def _bullets_are_too_similar(self, bullet1: str, bullet2: str) -> bool:
+        """Check if two bullets are too similar and should be considered duplicates"""
+        b1_lower = bullet1.lower().strip('.,!?')
+        b2_lower = bullet2.lower().strip('.,!?')
+        
+        # Exact match
+        if b1_lower == b2_lower:
+            return True
+        
+        # Extract key words (skip common words)
+        stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'how', 'what', 'when', 'where', 'why', 'will', 'can', 'be', 'is', 'are', 'was', 'were', 'have', 'has', 'had', 'do', 'does', 'did', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once'}
+        
+        def get_key_words(text):
+            words = text.split()
+            # Filter out common start words and stop words
+            filtered = []
+            for word in words:
+                if word not in stop_words and len(word) > 2:
+                    # Remove common starter patterns
+                    if word not in ['learn', 'understand', 'explore', 'discover', 'find', 'see', 'know', 'get']:
+                        filtered.append(word)
+            return set(filtered)
+        
+        words1 = get_key_words(b1_lower)
+        words2 = get_key_words(b2_lower)
+        
+        # If very few meaningful words, check overlap percentage
+        if len(words1) < 3 or len(words2) < 3:
+            return False
+            
+        # Calculate similarity
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        if len(union) == 0:
+            return False
+            
+        similarity = len(intersection) / len(union)
+        
+        # Consider similar if >70% word overlap
+        if similarity > 0.7:
+            return True
+            
+        # Check for semantic similarity patterns
+        # Similar sentence structures with different subjects
+        structure_patterns = [
+            (r'learn about (.+)', r'understand (.+)'),
+            (r'explore (.+) features', r'discover (.+) capabilities'),
+            (r'(.+) and (.+)', r'(.+) features and (.+)'),
+        ]
+        
+        import re
+        for pattern1, pattern2 in structure_patterns:
+            match1 = re.search(pattern1, b1_lower)
+            match2 = re.search(pattern2, b2_lower)
+            if match1 and match2:
+                # Extract the subject/object
+                subject1 = match1.group(1) if match1.groups() else ''
+                subject2 = match2.group(1) if match2.groups() else ''
+                if subject1 and subject2:
+                    subj_words1 = set(subject1.split())
+                    subj_words2 = set(subject2.split())
+                    subj_overlap = subj_words1.intersection(subj_words2)
+                    if len(subj_overlap) > 0:
+                        return True
+        
+        return False
     
     def _extract_additional_concepts(self, sentences: List[str], existing: List[str]) -> List[str]:
         """Extract additional concepts when we need more bullets"""
