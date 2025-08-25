@@ -787,20 +787,29 @@ class DocumentParser:
             if len(bullets) >= 2:
                 return bullets[:4]
         
-        # Fallback to original strategies
+        # Fallback to original strategies with quality filtering
         strategies = [
             self._extract_perfect_sentences,
+            self._extract_content_specific_bullets,
             self._extract_topic_based_bullets,
             self._create_descriptive_bullets
         ]
         
         for strategy in strategies:
             bullets = strategy(text)
-            if len(bullets) >= 2:  # We found good bullets
-                return bullets[:4]
+            # Filter bullets for quality
+            quality_bullets = [b for b in bullets if self._is_quality_bullet(b)]
+            if len(quality_bullets) >= 2:
+                return quality_bullets[:4]
         
-        # Final fallback
-        return ["Explore the key concepts discussed in this content."]
+        # Final fallback - but only if it passes quality check
+        final_bullet = "Explore the key concepts discussed in this content."
+        if self._is_quality_bullet(final_bullet):
+            return [final_bullet]
+        else:
+            # If even the final fallback fails quality check, return empty
+            # This forces the system to try other content extraction methods
+            return []
     
     def _create_semantic_bullets(self, text: str) -> List[str]:
         """Create bullet points using semantic analysis"""
@@ -843,19 +852,29 @@ class DocumentParser:
             # Create bullets from high-priority chunks
             for chunk in sorted_chunks[:4]:
                 bullet = self._format_semantic_bullet(chunk)
-                if bullet and len(bullet) > 20:
+                if bullet and self._is_quality_bullet(bullet):
                     bullets.append(bullet)
             
-            # If we have fewer than 2 bullets, supplement with topic-based bullets
+            # If we have fewer than 2 bullets, try alternative approaches
             if len(bullets) < 2:
-                topic_bullets = self._extract_topic_based_bullets(text)
-                for bullet in topic_bullets:
-                    if bullet not in bullets:
+                # First try extracting from original text with better processing
+                better_bullets = self._extract_content_specific_bullets(text)
+                for bullet in better_bullets:
+                    if bullet not in bullets and self._is_quality_bullet(bullet):
                         bullets.append(bullet)
                         if len(bullets) >= 4:
                             break
             
-            return bullets[:4]
+            # Only use topic-based bullets as last resort and only if they're meaningful
+            if len(bullets) < 2:
+                topic_bullets = self._extract_topic_based_bullets(text)
+                for bullet in topic_bullets:
+                    if bullet not in bullets and self._is_quality_bullet(bullet):
+                        bullets.append(bullet)
+                        if len(bullets) >= 4:
+                            break
+            
+            return bullets[:4] if bullets else []
             
         except Exception as e:
             logging.error(f"Error in semantic bullet creation: {e}")
@@ -904,6 +923,90 @@ class DocumentParser:
             return text
         
         return ""
+    
+    def _is_quality_bullet(self, bullet: str) -> bool:
+        """Check if a bullet point meets quality standards"""
+        if not bullet or len(bullet) < 25:
+            return False
+        
+        # Check for generic/poor content
+        poor_indicators = [
+            'fundamental concepts related to this',
+            'practical applications of this',
+            'key features and capabilities of this',
+            'apply this knowledge',
+            'related to alright',
+            'applications of alright', 
+            'capabilities of alright',
+            'alright knowledge',
+            'concepts in this section',
+            'information from this content',
+            'explore the key concepts',
+            'learn about the concepts',
+            'this is where you',
+            'this helps with',
+            'understand this is',
+            'this section',
+            'this content'
+        ]
+        
+        bullet_lower = bullet.lower()
+        if any(indicator in bullet_lower for indicator in poor_indicators):
+            return False
+        
+        # Check for meaningful content
+        meaningful_words = ['data', 'system', 'process', 'method', 'algorithm', 'framework', 
+                          'platform', 'application', 'interface', 'network', 'security',
+                          'analysis', 'development', 'programming', 'software', 'database',
+                          'machine learning', 'artificial intelligence', 'neural network',
+                          'snowflake', 'snowsight', 'python', 'sql', 'api', 'cloud']
+        
+        has_meaningful_content = any(word in bullet_lower for word in meaningful_words)
+        
+        # Must have some meaningful content or be a complete, specific sentence
+        word_count = len(bullet.split())
+        if has_meaningful_content or word_count >= 8:
+            return True
+            
+        return False
+    
+    def _extract_content_specific_bullets(self, text: str) -> List[str]:
+        """Extract bullets directly from content with better processing"""
+        import re
+        bullets = []
+        
+        # Look for action-oriented sentences
+        sentences = re.split(r'[.!?]+\s+', text)
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 20:
+                continue
+            
+            # Look for sentences with action verbs or meaningful content
+            action_patterns = [
+                r'\b(learn|understand|explore|discover|build|create|develop|design|implement|apply|use|utilize|manage|analyze|process|configure|setup|install|deploy|monitor|optimize|troubleshoot)\b',
+                r'\b(provides?|enables?|allows?|helps?|supports?|offers?|includes?|features?|contains?)\b',
+                r'\b(data|database|system|platform|application|framework|algorithm|method|process|workflow|pipeline)\b'
+            ]
+            
+            has_action = any(re.search(pattern, sentence, re.IGNORECASE) for pattern in action_patterns)
+            
+            if has_action:
+                # Clean and format the sentence
+                cleaned = re.sub(r'\s+', ' ', sentence).strip()
+                if len(cleaned) > 1:
+                    cleaned = cleaned[0].upper() + cleaned[1:]
+                if not cleaned.endswith(('.', '!', '?')):
+                    cleaned += '.'
+                
+                if self._is_quality_bullet(cleaned):
+                    bullets.append(cleaned)
+                    
+                if len(bullets) >= 4:
+                    break
+        
+        return bullets
     
     def _extract_perfect_sentences(self, text: str) -> List[str]:
         """Extract perfectly formed, complete sentences"""
@@ -994,18 +1097,66 @@ class DocumentParser:
                 "Apply coding skills to build practical solutions."
             ]
         
-        # Generic topic extraction
-        key_nouns = re.findall(r'\b[A-Z][a-z]{3,}\b', text)
-        if key_nouns and len(key_nouns) > 0:
-            primary_topic = key_nouns[0].lower()
+        # Improved topic extraction
+        meaningful_topics = self._extract_meaningful_topics(text)
+        if meaningful_topics:
+            primary_topic = meaningful_topics[0]
             return [
-                f"Learn fundamental concepts related to {primary_topic}.",
-                f"Understand practical applications of {primary_topic}.",
-                f"Explore key features and capabilities of {primary_topic}.",
-                f"Apply {primary_topic} knowledge to relevant scenarios."
+                f"Learn fundamental concepts about {primary_topic}.",
+                f"Understand how {primary_topic} works in practice.",
+                f"Explore {primary_topic} features and applications.",
+                f"Apply {primary_topic} knowledge to solve problems."
             ]
         
         return []
+    
+    def _extract_meaningful_topics(self, text: str) -> List[str]:
+        """Extract meaningful topic words, filtering out generic terms"""
+        import re
+        
+        # Find potential topic words (capitalized words, technical terms)
+        candidates = []
+        
+        # Technical/domain-specific terms (even if not capitalized)
+        technical_terms = re.findall(r'\b(?:api|sql|database|server|client|framework|library|algorithm|method|process|system|platform|application|interface|protocol|network|security|authentication|authorization|configuration|deployment|integration|analytics|visualization|dashboard|workflow|pipeline|architecture|infrastructure|container|microservice|service|endpoint|repository|version|branch|commit|deployment|testing|debugging|monitoring|logging|performance|scalability|availability|reliability|maintainability|automation|orchestration|provisioning|virtualization|containerization|kubernetes|docker|aws|azure|gcp|cloud|serverless|devops|cicd|ci|cd)\b', text, re.IGNORECASE)
+        candidates.extend(technical_terms)
+        
+        # Proper nouns and capitalized words (but filter out common words)
+        capitalized = re.findall(r'\b[A-Z][a-z]{3,}\b', text)
+        
+        # Filter out common words that aren't meaningful topics
+        common_words = {
+            'this', 'that', 'these', 'those', 'here', 'there', 'when', 'where', 'what', 'how', 'why',
+            'first', 'second', 'third', 'next', 'then', 'also', 'however', 'therefore', 'although',
+            'before', 'after', 'during', 'while', 'since', 'until', 'unless', 'because', 'though',
+            'example', 'section', 'chapter', 'part', 'step', 'point', 'item', 'list', 'note',
+            'important', 'main', 'key', 'basic', 'simple', 'complex', 'advanced', 'general',
+            'course', 'lesson', 'tutorial', 'guide', 'overview', 'introduction', 'summary',
+            'alright', 'okay', 'well', 'now', 'today', 'yesterday', 'tomorrow', 'always', 'never',
+            'every', 'each', 'some', 'many', 'most', 'all', 'few', 'several', 'various'
+        }
+        
+        meaningful_caps = [word for word in capitalized 
+                          if word.lower() not in common_words and len(word) >= 4]
+        candidates.extend(meaningful_caps)
+        
+        # Domain-specific compound terms
+        compound_terms = re.findall(r'\b(?:machine learning|data science|artificial intelligence|neural network|deep learning|software engineering|web development|data analysis|business intelligence|user experience|user interface|project management|quality assurance|technical documentation|system design|database design|api design|software architecture|cloud computing|edge computing|big data|data mining|data visualization|natural language processing|computer vision|reinforcement learning)\b', text, re.IGNORECASE)
+        candidates.extend(compound_terms)
+        
+        # Remove duplicates and filter for quality
+        seen = set()
+        topics = []
+        for candidate in candidates:
+            candidate_clean = candidate.lower().strip()
+            if (candidate_clean not in seen and 
+                len(candidate_clean) >= 3 and 
+                candidate_clean not in common_words and
+                not candidate_clean.isdigit()):
+                topics.append(candidate_clean)
+                seen.add(candidate_clean)
+        
+        return topics[:3]  # Return top 3 topics
     
     def _create_descriptive_bullets(self, text: str) -> List[str]:
         """Create descriptive bullets when extraction fails"""
