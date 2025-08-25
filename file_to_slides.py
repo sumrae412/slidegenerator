@@ -770,13 +770,23 @@ class DocumentParser:
         return bullets[:4]  # Limit to 4 bullets for readability
     
     def _create_unified_bullets(self, text: str) -> List[str]:
-        """Unified bullet generation combining AI, semantic analysis, and text processing"""
+        """Unified bullet generation using fusion of NLP semantic analysis + LLM API calls"""
         if not text or len(text.strip()) < 20:
             return []
         
         text = text.strip()
-        logger.info(f"Starting unified bullet generation for: {text[:100]}...")
+        logger.info(f"Starting fusion bullet generation for: {text[:100]}...")
         
+        # FUSION APPROACH: Combine NLP + LLM for optimal results
+        if self.api_key and not self.force_basic_mode and self.semantic_analyzer.initialized and len(text) >= 30:
+            fusion_bullets = self._create_fusion_bullets(text)
+            if fusion_bullets and len(fusion_bullets) >= 2:
+                quality_fusion = [b for b in fusion_bullets if self._is_quality_bullet(b)]
+                if len(quality_fusion) >= 2:
+                    logger.info(f"Using fusion bullets (NLP+LLM): {len(quality_fusion)} bullets")
+                    return quality_fusion[:4]
+        
+        # Fallback to individual approaches if fusion not possible
         # Strategy 1: Try AI-powered summarization (best quality when available)
         if self.api_key and not self.force_basic_mode and len(text) >= 30:
             ai_bullets = self._create_ai_enhanced_bullets(text)
@@ -808,6 +818,248 @@ class DocumentParser:
         basic_bullets = self._create_basic_bullets(text)
         logger.info(f"Using basic bullets as fallback: {len(basic_bullets)} bullets")
         return basic_bullets
+    
+    def _create_fusion_bullets(self, text: str) -> List[str]:
+        """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
+        try:
+            logger.info("Creating fusion bullets using NLP semantic analysis + LLM API")
+            
+            # Step 1: Use NLP to analyze content structure and extract key information
+            semantic_insights = self._extract_semantic_insights(text)
+            
+            # Step 2: Use LLM with semantic insights to generate enhanced bullets
+            fusion_bullets = self._create_llm_guided_by_nlp(text, semantic_insights)
+            
+            # Step 3: Validate and refine results
+            if fusion_bullets:
+                logger.info(f"Fusion approach generated {len(fusion_bullets)} bullets")
+                return fusion_bullets
+            else:
+                logger.warning("Fusion approach failed, falling back to individual methods")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in fusion bullet generation: {e}")
+            return []
+    
+    def _extract_semantic_insights(self, text: str) -> dict:
+        """Extract semantic insights using NLP to guide LLM generation"""
+        insights = {
+            'key_topics': [],
+            'intent_distribution': {},
+            'important_sentences': [],
+            'technical_terms': [],
+            'content_type': 'general'
+        }
+        
+        try:
+            # Analyze with sentence transformers
+            import re
+            sentences = re.split(r'[.!?]+\s+', text)
+            sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+            
+            if sentences:
+                semantic_chunks = self.semantic_analyzer.analyze_chunks(sentences)
+                
+                # Extract key topics from high-importance chunks
+                high_importance = [chunk for chunk in semantic_chunks if chunk.importance_score > 0.3]
+                insights['key_topics'] = [chunk.text for chunk in high_importance[:3]]
+                
+                # Analyze intent distribution
+                intent_counts = {}
+                for chunk in semantic_chunks:
+                    intent_counts[chunk.intent] = intent_counts.get(chunk.intent, 0) + 1
+                insights['intent_distribution'] = intent_counts
+                
+                # Find most important sentences
+                top_chunks = sorted(semantic_chunks, key=lambda x: x.importance_score, reverse=True)
+                insights['important_sentences'] = [chunk.text for chunk in top_chunks[:3]]
+            
+            # Extract technical terms
+            tech_pattern = r'\b(?:API|database|server|system|platform|framework|algorithm|data|analytics|machine learning|neural network|cloud|application|interface|authentication|deployment|container|microservice|architecture|infrastructure|monitoring|security|network|protocol|endpoint|repository|version|testing|debugging|performance|scalability|automation|kubernetes|docker|aws|azure|gcp|python|sql|javascript|react|angular|vue|nodejs|mongodb|postgresql|redis|nginx|apache|linux|windows|macos|ios|android|swift|kotlin|java|cpp|csharp|ruby|php|go|rust|scala)\b'
+            insights['technical_terms'] = list(set(re.findall(tech_pattern, text, re.IGNORECASE)))
+            
+            # Determine content type
+            if len(insights['technical_terms']) > 2:
+                insights['content_type'] = 'technical'
+            elif any(intent in insights['intent_distribution'] for intent in ['process_description', 'definition']):
+                insights['content_type'] = 'instructional'
+            elif 'benefits' in insights['intent_distribution']:
+                insights['content_type'] = 'promotional'
+            
+            logger.info(f"Extracted semantic insights: {len(insights['key_topics'])} topics, {len(insights['technical_terms'])} technical terms, type: {insights['content_type']}")
+            return insights
+            
+        except Exception as e:
+            logger.error(f"Error extracting semantic insights: {e}")
+            return insights
+    
+    def _create_llm_guided_by_nlp(self, text: str, insights: dict) -> List[str]:
+        """Use LLM API with NLP-extracted insights for guided bullet generation"""
+        try:
+            # Create enhanced prompt using semantic insights
+            prompt = f"""You are an expert content summarizer. Create 3-4 high-quality bullet points from this content, guided by the semantic analysis provided.
+
+CONTENT TO ANALYZE:
+{text}
+
+SEMANTIC ANALYSIS INSIGHTS:
+Content Type: {insights['content_type']}
+Key Topics Identified: {', '.join(insights['key_topics'][:3]) if insights['key_topics'] else 'None detected'}
+Technical Terms Present: {', '.join(insights['technical_terms'][:5]) if insights['technical_terms'] else 'None detected'}
+Primary Intents: {', '.join(list(insights['intent_distribution'].keys())[:3]) if insights['intent_distribution'] else 'general_content'}
+Most Important Sentences: {' | '.join(insights['important_sentences'][:2]) if insights['important_sentences'] else 'Not available'}
+
+ENHANCED BULLET REQUIREMENTS:
+✓ Each bullet must be a complete, grammatically correct sentence
+✓ Incorporate the identified key topics and technical terms when relevant
+✓ Match the content type ({insights['content_type']}) with appropriate language
+✓ Start with varied, specific subjects (not generic "Learn" or "Understand")
+✓ 10-20 words per bullet (concise but complete)
+✓ Focus on the most important semantic elements identified above
+
+CONTENT-TYPE SPECIFIC GUIDELINES:
+{self._get_content_type_guidelines(insights['content_type'])}
+
+QUALITY EXAMPLES FOR {insights['content_type'].upper()} CONTENT:
+{self._get_content_type_examples(insights['content_type'])}
+
+CRITICAL REQUIREMENTS:
+- If technical terms are present, use them accurately in context
+- If key topics are identified, ensure they are reflected in the bullets
+- Match the semantic intent distribution (focus on {list(insights['intent_distribution'].keys())[0] if insights['intent_distribution'] else 'general information'})
+- Create bullets that reflect the actual content structure, not generic templates
+
+Return EXACTLY 3-4 bullets using this format:
+- [Specific, complete sentence incorporating key topics/technical terms]
+- [Specific, complete sentence matching content type and intent]
+- [Specific, complete sentence based on important semantic elements]
+- [Fourth bullet if content supports it, following same principles]"""
+
+            # Use direct HTTP request with enhanced parameters for fusion
+            import requests
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,  # Increased for fusion approach
+                "temperature": 0.15,  # Lower for more focused, semantic-guided output
+                "top_p": 0.85,
+                "frequency_penalty": 0.2,  # Reduce repetitive patterns
+                "presence_penalty": 0.1    # Encourage diverse content
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=35)
+            
+            if response.status_code != 200:
+                logger.error(f"Fusion LLM request failed: {response.status_code}")
+                return []
+            
+            result = response.json()
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            
+            # Enhanced parsing for fusion bullets
+            bullets = self._parse_fusion_bullets(content, insights)
+            logger.info(f"Fusion LLM generated {len(bullets)} guided bullets")
+            return bullets
+            
+        except Exception as e:
+            logger.error(f"Error in LLM guided by NLP: {e}")
+            return []
+    
+    def _get_content_type_guidelines(self, content_type: str) -> str:
+        """Get specific guidelines based on content type"""
+        guidelines = {
+            'technical': "Use precise technical terminology. Focus on capabilities, architectures, and implementation details. Avoid oversimplification.",
+            'instructional': "Emphasize processes, steps, and learning outcomes. Use action-oriented language that describes what users will do or achieve.",
+            'promotional': "Highlight benefits, advantages, and value propositions. Focus on what the solution enables or improves.",
+            'general': "Provide clear, factual information. Use straightforward language that captures the main concepts and their significance."
+        }
+        return guidelines.get(content_type, guidelines['general'])
+    
+    def _get_content_type_examples(self, content_type: str) -> str:
+        """Get quality examples based on content type"""
+        examples = {
+            'technical': """- REST APIs provide stateless communication between distributed systems using HTTP protocols
+- Kubernetes orchestrates containerized applications across multiple nodes with automated scaling
+- Database indexing structures improve query performance by creating optimized data access paths""",
+            'instructional': """- Data scientists collect and preprocess raw datasets before applying machine learning algorithms
+- Developers implement authentication flows using OAuth 2.0 to secure user access tokens
+- Teams follow agile methodologies to iterate quickly on product features and user feedback""",
+            'promotional': """- Cloud platforms reduce infrastructure costs by eliminating on-premise server maintenance
+- Automated testing pipelines catch bugs earlier and accelerate deployment cycles
+- Real-time analytics enable businesses to make data-driven decisions within minutes""",
+            'general': """- Machine learning algorithms identify patterns in data without explicit programming instructions
+- Version control systems track changes and coordinate collaboration among development teams
+- Network protocols define communication rules between computers in distributed systems"""
+        }
+        return examples.get(content_type, examples['general'])
+    
+    def _parse_fusion_bullets(self, content: str, insights: dict) -> List[str]:
+        """Parse fusion bullets with enhanced validation using semantic insights"""
+        import re
+        bullets = []
+        
+        for line in content.split('\n'):
+            line = line.strip()
+            
+            # Remove bullet markers
+            line = re.sub(r'^[\-\*\•]\s*', '', line)
+            line = re.sub(r'^\d+\.\s*', '', line)
+            
+            # Skip empty or too short
+            if not line or len(line) < 20:
+                continue
+            
+            # Clean up
+            line = re.sub(r'\s+', ' ', line).strip()
+            
+            # Ensure proper ending
+            if not line.endswith(('.', '!', '?')):
+                line += '.'
+            
+            # Fusion-specific quality checks
+            if self._is_fusion_quality_bullet(line, insights):
+                bullets.append(line)
+        
+        return bullets[:4]
+    
+    def _is_fusion_quality_bullet(self, bullet: str, insights: dict) -> bool:
+        """Enhanced quality check for fusion bullets using semantic insights"""
+        # First apply standard quality check
+        if not self._is_quality_bullet(bullet):
+            return False
+        
+        bullet_lower = bullet.lower()
+        
+        # Bonus validation: Check if bullet incorporates semantic insights
+        
+        # Check for technical term usage if present
+        if insights['technical_terms']:
+            uses_tech_terms = any(term.lower() in bullet_lower for term in insights['technical_terms'])
+            if uses_tech_terms:
+                logger.info(f"Fusion bullet incorporates technical terms: {bullet[:50]}...")
+                return True
+        
+        # Check for key topic incorporation
+        if insights['key_topics']:
+            incorporates_topics = any(
+                len(set(topic.lower().split()) & set(bullet_lower.split())) >= 2
+                for topic in insights['key_topics']
+            )
+            if incorporates_topics:
+                logger.info(f"Fusion bullet incorporates key topics: {bullet[:50]}...")
+                return True
+        
+        # If no semantic insights incorporated, apply stricter standards
+        word_count = len(bullet.split())
+        return word_count >= 12  # Higher bar for non-semantic bullets
+        
+        return True
     
     def _create_ai_enhanced_bullets(self, text: str) -> List[str]:
         """Create bullets using AI with enhanced prompting and processing"""
