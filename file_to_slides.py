@@ -904,87 +904,141 @@ class DocumentParser:
         return bullets[:4]  # Limit to 4 bullets for readability
     
     def _create_unified_bullets(self, text: str) -> List[str]:
-        """Unified bullet generation using fusion of NLP semantic analysis + LLM API calls"""
+        """LLM-only bullet generation for highest quality and content relevance"""
         if not text or len(text.strip()) < 20:
             return []
         
         text = text.strip()
-        logger.info(f"Starting unified bullet generation for: {text[:100]}...")
+        logger.info(f"Starting LLM-only bullet generation for: {text[:100]}...")
         
-        # FUSION APPROACH: Combine NLP + LLM for optimal results
-        if self.api_key and not self.force_basic_mode and self.semantic_analyzer.initialized and len(text) >= 30:
-            logger.info("Attempting fusion approach (NLP + LLM)")
-            fusion_bullets = self._create_fusion_bullets(text)
-            if fusion_bullets and len(fusion_bullets) >= 2:
-                quality_fusion = [b for b in fusion_bullets if self._is_quality_bullet(b)]
-                if len(quality_fusion) >= 2:
-                    logger.info(f"✅ SUCCESS: Using fusion bullets (NLP+LLM): {len(quality_fusion)} bullets")
-                    # Apply deduplication to prevent similar bullets
-                    unique_fusion = self._deduplicate_bullets(quality_fusion)
-                    return unique_fusion[:4]
-                else:
-                    logger.warning(f"Fusion bullets failed quality check: {len(quality_fusion)} valid out of {len(fusion_bullets)}")
+        # ONLY use LLM if API key is available
+        if self.api_key and not self.force_basic_mode:
+            logger.info("Using LLM-only approach for bullet generation")
+            llm_bullets = self._create_llm_only_bullets(text)
+            if llm_bullets and len(llm_bullets) >= 1:
+                logger.info(f"✅ SUCCESS: Generated {len(llm_bullets)} LLM bullets")
+                unique_bullets = self._deduplicate_bullets(llm_bullets)
+                return unique_bullets[:4]
             else:
-                logger.warning(f"Fusion approach generated insufficient bullets: {len(fusion_bullets) if fusion_bullets else 0}")
+                logger.warning("LLM approach failed, trying backup LLM call")
+                # Try one more time with different prompt
+                backup_bullets = self._create_llm_backup_bullets(text)
+                if backup_bullets:
+                    logger.info(f"✅ BACKUP SUCCESS: Generated {len(backup_bullets)} backup LLM bullets")
+                    return backup_bullets[:4]
         else:
-            logger.info("Skipping fusion approach - conditions not met")
+            logger.warning("No API key available - cannot generate quality bullets")
         
-        # Fallback to individual approaches if fusion not possible
-        # Strategy 1: Try AI-powered summarization (best quality when available)
-        if self.api_key and not self.force_basic_mode and len(text) >= 30:
-            logger.info("Attempting AI-enhanced approach")
-            ai_bullets = self._create_ai_enhanced_bullets(text)
-            if ai_bullets and len(ai_bullets) >= 2:
-                # Validate AI bullets with quality check
-                quality_ai_bullets = [b for b in ai_bullets if self._is_quality_bullet(b)]
-                if len(quality_ai_bullets) >= 2:
-                    logger.info(f"✅ SUCCESS: Using AI-enhanced bullets: {len(quality_ai_bullets)} bullets")
-                    unique_ai = self._deduplicate_bullets(quality_ai_bullets)
-                    return unique_ai[:4]
-                else:
-                    logger.warning(f"AI bullets failed quality check: {len(quality_ai_bullets)} valid out of {len(ai_bullets)}")
+        # If no API key or LLM fails completely, return minimal placeholder
+        logger.error("LLM bullet generation failed completely - returning placeholder")
+        return [
+            "Review the key concepts presented in this content.",
+            "Apply the insights gained to your specific use case."
+        ]
+    
+    def _create_llm_only_bullets(self, text: str) -> List[str]:
+        """Create bullets using only LLM with optimized prompt for content relevance"""
+        try:
+            # Enhanced prompt focused on extracting specific, actionable insights
+            prompt = f"""Based on the following content, create 3-4 specific, actionable bullet points that capture the most important learning outcomes or insights. Each bullet should:
+
+1. Be specific to the actual content (not generic)
+2. Start with an action word (Learn, Understand, Master, Implement, etc.)
+3. Include concrete details from the text
+4. Focus on practical applications or key concepts
+5. Be 8-15 words long
+6. Avoid generic phrases like "fundamental concepts" or "practical applications"
+
+Content: {text}
+
+Return only the bullet points, one per line, without bullet symbols or numbering."""
+
+            response = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {self.api_key}',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    'model': 'gpt-3.5-turbo',
+                    'messages': [
+                        {'role': 'system', 'content': 'You are an expert at creating specific, content-focused learning objectives from educational material.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'max_tokens': 300,
+                    'temperature': 0.3
+                },
+                timeout=15
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                
+                # Parse bullets from response
+                bullets = []
+                for line in content.split('\n'):
+                    line = line.strip()
+                    if line and len(line) > 15:
+                        # Clean up any formatting
+                        line = line.lstrip('•-*123456789. ')
+                        if line and not line.startswith('(') and len(line) > 15:
+                            bullets.append(line)
+                
+                logger.info(f"LLM generated {len(bullets)} content-specific bullets")
+                return bullets
             else:
-                logger.warning(f"AI approach generated insufficient bullets: {len(ai_bullets) if ai_bullets else 0}")
-        else:
-            logger.info("Skipping AI-enhanced approach - conditions not met")
-        
-        # Strategy 2: Try enhanced semantic analysis
-        if self.semantic_analyzer.initialized:
-            logger.info("Attempting enhanced semantic approach")
-            semantic_bullets = self._create_enhanced_semantic_bullets(text)
-            if semantic_bullets and len(semantic_bullets) >= 2:
-                quality_semantic = [b for b in semantic_bullets if self._is_quality_bullet(b)]
-                if len(quality_semantic) >= 2:
-                    logger.info(f"✅ SUCCESS: Using enhanced semantic bullets: {len(quality_semantic)} bullets")
-                    unique_semantic = self._deduplicate_bullets(quality_semantic)
-                    return unique_semantic[:4]
-                else:
-                    logger.warning(f"Semantic bullets failed quality check: {len(quality_semantic)} valid out of {len(semantic_bullets)}")
+                logger.error(f"LLM API call failed: {response.status_code} - {response.text}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in LLM bullet generation: {e}")
+            return []
+    
+    def _create_llm_backup_bullets(self, text: str) -> List[str]:
+        """Backup LLM call with simpler prompt if main approach fails"""
+        try:
+            # Simpler, more direct prompt
+            prompt = f"""Create 3 specific bullet points about this content. Make each bullet point concrete and actionable, focusing on what someone would learn or do. Avoid generic phrases.
+
+Content: {text}
+
+Format: Just return 3 lines, no bullets or numbers."""
+
+            response = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {self.api_key}',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    'model': 'gpt-3.5-turbo',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 200,
+                    'temperature': 0.4
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                
+                bullets = []
+                for line in content.split('\n'):
+                    line = line.strip().lstrip('•-*123456789. ')
+                    if line and len(line) > 10:
+                        bullets.append(line)
+                
+                logger.info(f"Backup LLM generated {len(bullets)} bullets")
+                return bullets[:3]
             else:
-                logger.warning(f"Semantic approach generated insufficient bullets: {len(semantic_bullets) if semantic_bullets else 0}")
-        else:
-            logger.info("Skipping enhanced semantic approach - analyzer not initialized")
-        
-        # Strategy 3: Advanced text processing (combines multiple techniques)
-        logger.info("Attempting advanced text processing approach")
-        advanced_bullets = self._create_advanced_text_bullets(text)
-        if advanced_bullets and len(advanced_bullets) >= 2:
-            quality_advanced = [b for b in advanced_bullets if self._is_quality_bullet(b)]
-            if len(quality_advanced) >= 2:
-                logger.info(f"✅ SUCCESS: Using advanced text bullets: {len(quality_advanced)} bullets")
-                unique_advanced = self._deduplicate_bullets(quality_advanced)
-                return unique_advanced[:4]
-            else:
-                logger.warning(f"Advanced bullets failed quality check: {len(quality_advanced)} valid out of {len(advanced_bullets)}")
-        else:
-            logger.warning(f"Advanced approach generated insufficient bullets: {len(advanced_bullets) if advanced_bullets else 0}")
-        
-        # Strategy 4: Fallback to basic approach
-        logger.info("Using basic approach as final fallback")
-        basic_bullets = self._create_basic_bullets(text)
-        unique_basic = self._deduplicate_bullets(basic_bullets)
-        logger.info(f"✅ FALLBACK: Using basic bullets: {len(unique_basic)} bullets")
-        return unique_basic[:4]
+                logger.error(f"Backup LLM API call failed: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in backup LLM bullet generation: {e}")
+            return []
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
         """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
