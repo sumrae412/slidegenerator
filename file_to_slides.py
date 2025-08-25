@@ -752,7 +752,7 @@ class DocumentParser:
         return slides
     
     def _create_bullet_points(self, text: str, fast_mode: bool = False) -> List[str]:
-        """Convert content into clear, complete sentence bullet points using dedicated API calls"""
+        """Convert content into high-quality bullet points using unified approach"""
         text = text.strip()
         if not text:
             return []  # Leave blank for empty content
@@ -761,14 +761,300 @@ class DocumentParser:
         if fast_mode:
             return self._create_fast_bullets(text)
         
-        logger.info(f"Creating complete sentence bullets from text: {text[:100]}...")
+        logger.info(f"Creating unified high-quality bullets from text: {text[:100]}...")
         
-        # Make a dedicated API call to summarize this specific paragraph
-        bullets = self._summarize_paragraph_to_bullets(text)
+        # Use unified bullet generation that combines best approaches
+        bullets = self._create_unified_bullets(text)
         
-        # Don't pad with generic bullets - return what we actually got
-        logger.info(f"Final complete sentence bullets: {bullets}")
+        logger.info(f"Final unified bullets: {bullets}")
         return bullets[:4]  # Limit to 4 bullets for readability
+    
+    def _create_unified_bullets(self, text: str) -> List[str]:
+        """Unified bullet generation combining AI, semantic analysis, and text processing"""
+        if not text or len(text.strip()) < 20:
+            return []
+        
+        text = text.strip()
+        logger.info(f"Starting unified bullet generation for: {text[:100]}...")
+        
+        # Strategy 1: Try AI-powered summarization (best quality when available)
+        if self.api_key and not self.force_basic_mode and len(text) >= 30:
+            ai_bullets = self._create_ai_enhanced_bullets(text)
+            if ai_bullets and len(ai_bullets) >= 2:
+                # Validate AI bullets with quality check
+                quality_ai_bullets = [b for b in ai_bullets if self._is_quality_bullet(b)]
+                if len(quality_ai_bullets) >= 2:
+                    logger.info(f"Using AI-enhanced bullets: {len(quality_ai_bullets)} bullets")
+                    return quality_ai_bullets[:4]
+        
+        # Strategy 2: Try enhanced semantic analysis
+        if self.semantic_analyzer.initialized:
+            semantic_bullets = self._create_enhanced_semantic_bullets(text)
+            if semantic_bullets and len(semantic_bullets) >= 2:
+                quality_semantic = [b for b in semantic_bullets if self._is_quality_bullet(b)]
+                if len(quality_semantic) >= 2:
+                    logger.info(f"Using enhanced semantic bullets: {len(quality_semantic)} bullets")
+                    return quality_semantic[:4]
+        
+        # Strategy 3: Advanced text processing (combines multiple techniques)
+        advanced_bullets = self._create_advanced_text_bullets(text)
+        if advanced_bullets and len(advanced_bullets) >= 2:
+            quality_advanced = [b for b in advanced_bullets if self._is_quality_bullet(b)]
+            if len(quality_advanced) >= 2:
+                logger.info(f"Using advanced text bullets: {len(quality_advanced)} bullets")
+                return quality_advanced[:4]
+        
+        # Strategy 4: Fallback to basic approach
+        basic_bullets = self._create_basic_bullets(text)
+        logger.info(f"Using basic bullets as fallback: {len(basic_bullets)} bullets")
+        return basic_bullets
+    
+    def _create_ai_enhanced_bullets(self, text: str) -> List[str]:
+        """Create bullets using AI with enhanced prompting and processing"""
+        try:
+            # Enhanced prompt that combines table and paragraph techniques
+            prompt = f"""You are an expert content summarizer. Create 3-4 high-quality bullet points from this content.
+
+CONTENT TO ANALYZE:
+{text}
+
+BULLET POINT REQUIREMENTS:
+✓ Each bullet must be a complete, grammatically correct sentence
+✓ Start with clear subjects (facts, concepts, or actions - not "You will" or "Understand")
+✓ 10-20 words per bullet (concise but complete)
+✓ Focus on specific, actionable information
+✓ Use varied sentence structures and starting words
+✓ Write in present tense when possible
+
+QUALITY EXAMPLES:
+- Prototypes help teams validate ideas quickly before full development
+- Machine learning algorithms identify patterns in large datasets automatically
+- Snowflake's architecture separates storage and compute for flexible scaling
+- API endpoints enable secure data access through authentication protocols
+- Version control systems track changes and enable team collaboration
+
+AVOID THESE PATTERNS:
+✗ Generic phrases like "Learn about key concepts"
+✗ Incomplete fragments like "Understanding d to user input"  
+✗ Starting every bullet identically
+✗ Vague terms like "important information" or "various aspects"
+✗ References to "this section" or "this content"
+
+SPECIAL INSTRUCTIONS:
+- If content mentions specific technologies, tools, or processes - name them
+- If content describes benefits or capabilities - be specific about what they enable
+- If content explains steps or procedures - focus on the key actions
+- If content defines terms - explain what they actually do or mean
+
+Return EXACTLY 3-4 bullets using this format:
+- [Specific, complete sentence about key point 1]
+- [Specific, complete sentence about key point 2]
+- [Specific, complete sentence about key point 3]
+- [Specific, complete sentence about key point 4 if content supports it]"""
+
+            # Use direct HTTP request
+            import requests
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 250,  # Increased for better responses
+                "temperature": 0.2,  # Lower for more focused output
+                "top_p": 0.9
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"AI bullet request failed: {response.status_code}")
+                return []
+            
+            result = response.json()
+            content = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            
+            # Enhanced bullet parsing
+            bullets = self._parse_ai_bullets(content)
+            logger.info(f"AI generated {len(bullets)} enhanced bullets")
+            return bullets
+            
+        except Exception as e:
+            logger.error(f"Error in AI-enhanced bullet generation: {e}")
+            return []
+    
+    def _parse_ai_bullets(self, content: str) -> List[str]:
+        """Parse and clean AI-generated bullets with enhanced validation"""
+        import re
+        bullets = []
+        
+        for line in content.split('\n'):
+            line = line.strip()
+            
+            # Remove bullet markers
+            line = re.sub(r'^[\-\*\•]\s*', '', line)
+            line = re.sub(r'^\d+\.\s*', '', line)
+            
+            # Skip empty lines or very short content
+            if not line or len(line) < 20:
+                continue
+            
+            # Clean up the text
+            line = re.sub(r'\s+', ' ', line).strip()
+            
+            # Ensure proper sentence ending
+            if not line.endswith(('.', '!', '?')):
+                line += '.'
+            
+            # Additional AI-specific quality checks
+            if self._is_high_quality_ai_bullet(line):
+                bullets.append(line)
+        
+        return bullets[:4]
+    
+    def _is_high_quality_ai_bullet(self, bullet: str) -> bool:
+        """Additional quality checks specific to AI-generated bullets"""
+        if not self._is_quality_bullet(bullet):
+            return False
+        
+        # AI-specific quality indicators
+        good_starters = [
+            # Specific subjects
+            r'^[A-Z][a-z]+\s+(helps?|enables?|allows?|provides?|offers?|includes?)',
+            r'^[A-Z][a-z]+\s+(algorithms?|systems?|platforms?|tools?|methods?)',
+            r'^(APIs?|Databases?|Servers?|Applications?|Frameworks?)',
+            r'^(Machine learning|Data science|Neural networks?|Cloud computing)',
+            # Specific actions/facts
+            r'^(Teams|Users|Developers|Organizations)\s+can',
+            r'^(This|These)\s+(algorithms?|systems?|tools?|methods?|approaches?)',
+            # Technical descriptions
+            r'^[A-Z][a-z]+\s+(architecture|infrastructure|framework|protocol)'
+        ]
+        
+        has_good_start = any(re.match(pattern, bullet, re.IGNORECASE) for pattern in good_starters)
+        
+        # Avoid problematic patterns that AI sometimes generates
+        bad_patterns = [
+            r'learn how to',
+            r'understand the',
+            r'explore the',
+            r'this will help',
+            r'you will be able',
+            r'it is important'
+        ]
+        
+        has_bad_pattern = any(re.search(pattern, bullet, re.IGNORECASE) for pattern in bad_patterns)
+        
+        return has_good_start or (not has_bad_pattern and len(bullet.split()) >= 8)
+    
+    def _create_enhanced_semantic_bullets(self, text: str) -> List[str]:
+        """Enhanced semantic analysis combining clustering with content extraction"""
+        try:
+            # First, try the existing semantic approach
+            semantic_bullets = self._create_semantic_bullets(text)
+            if semantic_bullets and len(semantic_bullets) >= 3:
+                return semantic_bullets
+            
+            # Enhanced approach: combine semantic chunks with better text processing
+            import re
+            sentences = re.split(r'[.!?]+\s+', text)
+            sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
+            
+            if not sentences:
+                return []
+            
+            # Get semantic analysis
+            semantic_chunks = self.semantic_analyzer.analyze_chunks(sentences)
+            
+            # Create bullets using combined approach
+            bullets = []
+            
+            # Method 1: Use highest importance chunks
+            high_importance = [chunk for chunk in semantic_chunks if chunk.importance_score > 0.3]
+            for chunk in sorted(high_importance, key=lambda x: x.importance_score, reverse=True)[:2]:
+                bullet = self._format_semantic_bullet(chunk)
+                if bullet and self._is_quality_bullet(bullet):
+                    bullets.append(bullet)
+            
+            # Method 2: Extract from different intent types for variety
+            intent_samples = {}
+            for chunk in semantic_chunks:
+                if chunk.intent not in intent_samples and chunk.importance_score > 0.2:
+                    intent_samples[chunk.intent] = chunk
+            
+            for chunk in intent_samples.values():
+                bullet = self._format_semantic_bullet(chunk)
+                if bullet and self._is_quality_bullet(bullet) and bullet not in bullets:
+                    bullets.append(bullet)
+                    if len(bullets) >= 4:
+                        break
+            
+            return bullets
+            
+        except Exception as e:
+            logger.error(f"Error in enhanced semantic bullets: {e}")
+            return []
+    
+    def _create_advanced_text_bullets(self, text: str) -> List[str]:
+        """Advanced text processing combining multiple extraction techniques"""
+        bullets = []
+        
+        # Technique 1: Extract from the best semantic approach we have
+        if hasattr(self, '_create_content_specific_bullets'):
+            content_bullets = self._extract_content_specific_bullets(text)
+            bullets.extend([b for b in content_bullets if self._is_quality_bullet(b)])
+        
+        # Technique 2: Extract perfect sentences
+        perfect_bullets = self._extract_perfect_sentences(text)
+        for bullet in perfect_bullets:
+            if self._is_quality_bullet(bullet) and bullet not in bullets:
+                bullets.append(bullet)
+        
+        # Technique 3: Domain-specific extraction based on content type
+        domain_bullets = self._extract_domain_specific_bullets(text)
+        for bullet in domain_bullets:
+            if self._is_quality_bullet(bullet) and bullet not in bullets:
+                bullets.append(bullet)
+        
+        return bullets[:4]
+    
+    def _extract_domain_specific_bullets(self, text: str) -> List[str]:
+        """Extract bullets based on domain-specific patterns"""
+        import re
+        bullets = []
+        text_lower = text.lower()
+        
+        # Technical/Software domain
+        if any(term in text_lower for term in ['api', 'database', 'server', 'application', 'framework', 'algorithm']):
+            patterns = [
+                r'([A-Z][a-z]+\s+(?:provides?|enables?|allows?|supports?)\s+[^.!?]{20,100})',
+                r'((?:The|This)\s+(?:API|database|system|platform|framework)\s+[^.!?]{20,100})',
+                r'((?:Users|Developers|Teams)\s+can\s+[^.!?]{20,100})'
+            ]
+            for pattern in patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 25:
+                        bullet = match[0].upper() + match[1:] + '.'
+                        bullets.append(bullet)
+        
+        # Data/Analytics domain
+        elif any(term in text_lower for term in ['data', 'analytics', 'analysis', 'insights', 'metrics']):
+            patterns = [
+                r'([A-Z][a-z]+\s+(?:analyzes?|processes?|tracks?|measures?)\s+[^.!?]{20,100})',
+                r'((?:Data|Analytics|Metrics)\s+[^.!?]{20,100})',
+                r'((?:Organizations|Companies|Teams)\s+use\s+[^.!?]{20,100})'
+            ]
+            for pattern in patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 25:
+                        bullet = match[0].upper() + match[1:] + '.'
+                        bullets.append(bullet)
+        
+        return bullets[:4]
     
     def _create_basic_bullets(self, text: str) -> List[str]:
         """Create basic bullet points using semantic analysis and text processing"""
