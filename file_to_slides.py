@@ -594,21 +594,134 @@ class DocumentParser:
         return bullets[:4]  # Limit to 4 bullets for readability
     
     def _create_basic_bullets(self, text: str) -> List[str]:
-        """Create basic bullet points without AI - split by sentences"""
+        """Create basic bullet points without AI - enhanced text processing"""
         if not text or len(text.strip()) < 20:
             return []
         
-        # Split into sentences and clean up
         import re
-        sentences = re.split(r'[.!?]+', text)
+        
+        # Clean up the text first - preserve important words
+        text = text.strip()
+        
+        # Remove common filler phrases with more precision
+        filler_patterns = [
+            r'\b(um|uh|like|you know|basically|actually)\b',
+            r'\b(and then|ok|okay)\b(?=\s)',  # Removed "so" and "next" which can be important
+        ]
+        for pattern in filler_patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+        
+        # Split into sentences with improved logic
+        text = re.sub(r'\b(Mr|Mrs|Dr|Prof|vs|etc|Inc|Ltd|Corp)\.\s+', r'\1_DOT_ ', text)
+        sentences = re.split(r'[.!?]+(?=\s+[A-Z]|\s*$)', text)
+        sentences = [re.sub(r'_DOT_', '.', sentence) for sentence in sentences]
         bullets = []
         
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) > 15:  # Only include substantial sentences
-                bullets.append(sentence.capitalize() + '.')
+            
+            # Skip very short sentences
+            if len(sentence) < 15:
+                continue
+                
+            # Clean up the sentence
+            sentence = re.sub(r'\s+', ' ', sentence)
+            sentence = sentence.strip(' ,;')
+            
+            # More precise transition filtering - avoid cutting off important content
+            transition_patterns = [
+                r'^(and|but|then|also|however|furthermore|moreover)[\s,]',
+                r'^(in conclusion|to summarize|finally)[\s,]',
+                r'^(they|this|these)\s+(?:are|is|will|can|should|must)\s',  # More specific
+            ]
+            is_transition = any(re.match(pattern, sentence, re.IGNORECASE) for pattern in transition_patterns)
+            
+            # Better content validation
+            words = sentence.split()
+            has_meaningful_content = (len(words) >= 4 and 
+                                    any(len(word) > 3 for word in words) and
+                                    not all(word.lower() in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'] for word in words[:3]))
+            
+            # Keep sentences that start with important concepts
+            starts_with_concept = any(sentence.lower().startswith(concept) for concept in [
+                'data science', 'machine learning', 'neural networks', 'deep learning',
+                'artificial intelligence', 'computer science', 'software', 'technology',
+                'programming', 'development', 'system', 'application', 'platform'
+            ])
+            
+            if (not is_transition and has_meaningful_content and len(sentence) > 20) or starts_with_concept:
+                # Ensure proper capitalization and punctuation
+                if len(sentence) > 1:
+                    sentence = sentence[0].upper() + sentence[1:]
+                else:
+                    sentence = sentence.upper()
+                    
+                if not sentence.endswith(('.', '!', '?')):
+                    sentence += '.'
+                    
+                bullets.append(sentence)
+                
+                if len(bullets) >= 4:
+                    break
         
-        return bullets[:4]  # Limit to 4 bullets
+        # If we don't have good sentences, try splitting by key phrases
+        if len(bullets) < 2:
+            bullets = self._extract_key_phrases(text)
+        
+        return bullets[:4]
+    
+    def _extract_key_phrases(self, text: str) -> List[str]:
+        """Extract key phrases when sentence splitting doesn't work well"""
+        import re
+        
+        bullets = []
+        
+        # Look for phrases with key indicators - improved patterns
+        key_indicators = [
+            r'([A-Z][a-z]+ (?:is|are|will|can|must|should) [^.!?]{10,100})',
+            r'([A-Z][a-z]+ (?:helps|enables|provides|offers|includes) [^.!?]{10,100})',
+            r'([A-Z][a-z]+ (?:features?|benefits?|advantages?|capabilities?) [^.!?]{10,100})',
+            r'((?:The|This|These) [a-z]+ [^.!?]{10,100})',
+            r'([A-Z][a-z]+ (?:combines|involves|requires|contains) [^.!?]{10,100})',
+            r'((?:First|Second|Third|Next|Finally),?\s+[a-z][^.!?]{10,100})',
+            r'(Data science [^.!?]{10,100})',  # Specific fix for data science content
+            r'(Machine learning [^.!?]{10,100})',
+            r'(Neural networks [^.!?]{10,100})',
+        ]
+        
+        for pattern in key_indicators:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if len(match) > 20 and len(match) < 150:  # Reasonable length
+                    phrase = match.strip()
+                    phrase = phrase[0].upper() + phrase[1:] if len(phrase) > 1 else phrase.upper()
+                    if not phrase.endswith(('.', '!', '?')):
+                        phrase += '.'
+                    bullets.append(phrase)
+                    
+                    if len(bullets) >= 4:
+                        break
+            if len(bullets) >= 4:
+                break
+        
+        # If still no good bullets, split by common separators
+        if len(bullets) < 2:
+            separators = [';', ':', ',', ' and ', ' or ', ' but ']
+            for sep in separators:
+                if sep in text:
+                    parts = text.split(sep)
+                    for part in parts:
+                        part = part.strip()
+                        if len(part) > 20:
+                            part = part[0].upper() + part[1:] if len(part) > 1 else part.upper()
+                            if not part.endswith(('.', '!', '?')):
+                                part += '.'
+                            bullets.append(part)
+                            if len(bullets) >= 4:
+                                break
+                    break
+        
+        return bullets[:4]
     
     def _summarize_paragraph_to_bullets(self, text: str) -> List[str]:
         """Make a dedicated API call to convert a paragraph into clear bullet points"""
