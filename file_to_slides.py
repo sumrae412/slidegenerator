@@ -20,7 +20,33 @@ from math import cos, sin
 import requests
 import warnings
 
-# Semantic analysis libraries
+# Semantic analysis libraries - lightweight fallback approach
+try:
+    import nltk
+    import textstat
+    from collections import Counter
+    LIGHTWEIGHT_SEMANTIC = True
+    
+    # Try to download required NLTK data if not present
+    try:
+        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('corpora/stopwords')
+        nltk.data.find('taggers/averaged_perceptron_tagger')
+    except LookupError:
+        logger = logging.getLogger(__name__)
+        logger.info("Downloading required NLTK data...")
+        try:
+            nltk.download('punkt', quiet=True)
+            nltk.download('stopwords', quiet=True)  
+            nltk.download('averaged_perceptron_tagger', quiet=True)
+        except:
+            logger.warning("Could not download NLTK data - basic analysis only")
+            
+except ImportError:
+    logging.warning("Lightweight semantic libraries not available - using basic fallback")
+    LIGHTWEIGHT_SEMANTIC = False
+
+# Heavy ML libraries (optional for enhanced semantic analysis)
 try:
     from sentence_transformers import SentenceTransformer
     from sklearn.cluster import KMeans
@@ -30,7 +56,7 @@ try:
     warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
 except ImportError:
     SEMANTIC_AVAILABLE = False
-    logging.warning("Sentence transformers not available - falling back to basic text processing")
+    logging.info("Heavy semantic analysis not available - using lightweight approach")
 
 import flask
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
@@ -95,25 +121,39 @@ class DocumentStructure:
 class SemanticChunk:
     """Represents a semantically coherent chunk of text"""
     text: str
-    embedding: Optional[np.ndarray] = None
+    embedding: Optional[object] = None  # Changed from np.ndarray to object for compatibility
     topic_cluster: Optional[int] = None
     intent: Optional[str] = None
     importance_score: float = 0.0
 
 class SemanticAnalyzer:
-    """Handles semantic analysis of document content using sentence transformers"""
+    """Handles semantic analysis of document content - supports both heavy and lightweight approaches"""
     
     def __init__(self):
         self.model = None
         self.initialized = False
+        self.use_heavy_analysis = False
+        
+        # Try heavy ML approach first
         if SEMANTIC_AVAILABLE:
             try:
                 # Use a lightweight model for better performance
                 self.model = SentenceTransformer('all-MiniLM-L6-v2')
                 self.initialized = True
-                logging.info("Semantic analyzer initialized with all-MiniLM-L6-v2")
+                self.use_heavy_analysis = True
+                logging.info("Semantic analyzer initialized with sentence transformers")
             except Exception as e:
-                logging.warning(f"Failed to initialize semantic analyzer: {e}")
+                logging.warning(f"Failed to initialize heavy semantic analyzer: {e}")
+                self.initialized = False
+        
+        # Fall back to lightweight approach
+        if not self.initialized and LIGHTWEIGHT_SEMANTIC:
+            try:
+                self.initialized = True
+                self.use_heavy_analysis = False
+                logging.info("Semantic analyzer initialized with lightweight NLTK approach")
+            except Exception as e:
+                logging.warning(f"Failed to initialize lightweight semantic analyzer: {e}")
                 self.initialized = False
     
     def analyze_chunks(self, text_chunks: List[str]) -> List[SemanticChunk]:
@@ -122,15 +162,21 @@ class SemanticAnalyzer:
             return [SemanticChunk(text=chunk) for chunk in text_chunks]
         
         try:
-            # Create semantic chunks with embeddings
             chunks = []
             for text in text_chunks:
                 if len(text.strip()) < 10:  # Skip very short chunks
                     continue
-                    
-                embedding = self.model.encode([text])[0]
-                intent = self._classify_intent(text)
-                importance = self._calculate_importance(text)
+                
+                if self.use_heavy_analysis:
+                    # Heavy analysis with sentence transformers
+                    embedding = self.model.encode([text])[0]
+                    intent = self._classify_intent_heavy(text)
+                    importance = self._calculate_importance_heavy(text)
+                else:
+                    # Lightweight analysis with NLTK
+                    embedding = None
+                    intent = self._classify_intent_light(text)
+                    importance = self._calculate_importance_light(text)
                 
                 chunks.append(SemanticChunk(
                     text=text,
@@ -141,7 +187,10 @@ class SemanticAnalyzer:
             
             # Cluster chunks by topic similarity
             if len(chunks) > 2:
-                chunks = self._cluster_chunks(chunks)
+                if self.use_heavy_analysis:
+                    chunks = self._cluster_chunks_heavy(chunks)
+                else:
+                    chunks = self._cluster_chunks_light(chunks)
             
             return chunks
             
@@ -149,8 +198,12 @@ class SemanticAnalyzer:
             logging.error(f"Error in semantic analysis: {e}")
             return [SemanticChunk(text=chunk) for chunk in text_chunks]
     
-    def _classify_intent(self, text: str) -> str:
-        """Classify the intent/purpose of a text chunk"""
+    def _classify_intent_heavy(self, text: str) -> str:
+        """Classify the intent/purpose of a text chunk using heavy analysis"""
+        return self._classify_intent_light(text)  # Use same logic for now
+    
+    def _classify_intent_light(self, text: str) -> str:
+        """Classify the intent/purpose of a text chunk using lightweight analysis"""
         text_lower = text.lower()
         
         # Intent classification based on content patterns
@@ -171,8 +224,12 @@ class SemanticAnalyzer:
         else:
             return 'general_content'
     
-    def _calculate_importance(self, text: str) -> float:
-        """Calculate importance score based on content characteristics"""
+    def _calculate_importance_heavy(self, text: str) -> float:
+        """Calculate importance score using heavy analysis"""
+        return self._calculate_importance_light(text)  # Use same logic for now
+    
+    def _calculate_importance_light(self, text: str) -> float:
+        """Calculate importance score using lightweight analysis"""
         score = 0.0
         text_lower = text.lower()
         
@@ -190,11 +247,23 @@ class SemanticAnalyzer:
         if any(term in text_lower for term in tech_terms):
             score += 0.3
         
+        # Use textstat if available for readability scoring
+        if LIGHTWEIGHT_SEMANTIC:
+            try:
+                readability = textstat.flesch_reading_ease(text)
+                if 30 <= readability <= 60:  # Moderate complexity preferred
+                    score += 0.2
+            except:
+                pass  # Skip if textstat fails
+        
         return min(score, 1.0)
     
-    def _cluster_chunks(self, chunks: List[SemanticChunk]) -> List[SemanticChunk]:
-        """Cluster chunks by topic similarity"""
+    def _cluster_chunks_heavy(self, chunks: List[SemanticChunk]) -> List[SemanticChunk]:
+        """Cluster chunks by topic similarity using heavy ML analysis"""
         try:
+            import numpy as np
+            from sklearn.cluster import KMeans
+            
             embeddings = np.array([chunk.embedding for chunk in chunks])
             
             # Determine optimal number of clusters (max 5, min 2)
@@ -210,7 +279,72 @@ class SemanticAnalyzer:
             return chunks
             
         except Exception as e:
-            logging.error(f"Error in clustering: {e}")
+            logging.error(f"Error in heavy clustering: {e}")
+            return chunks
+    
+    def _cluster_chunks_light(self, chunks: List[SemanticChunk]) -> List[SemanticChunk]:
+        """Cluster chunks by topic similarity using lightweight text analysis"""
+        try:
+            if not LIGHTWEIGHT_SEMANTIC:
+                return chunks
+            
+            from nltk.corpus import stopwords
+            from nltk.tokenize import word_tokenize
+            from collections import defaultdict
+            
+            # Simple clustering based on common keywords
+            stop_words = set(stopwords.words('english'))
+            
+            # Extract keywords from each chunk
+            chunk_keywords = []
+            for chunk in chunks:
+                try:
+                    words = word_tokenize(chunk.text.lower())
+                    keywords = [word for word in words if word.isalpha() and word not in stop_words and len(word) > 3]
+                    chunk_keywords.append(set(keywords))
+                except:
+                    chunk_keywords.append(set())
+            
+            # Group chunks by keyword similarity
+            clusters = defaultdict(list)
+            for i, keywords in enumerate(chunk_keywords):
+                # Find best cluster based on keyword overlap
+                best_cluster = 0
+                max_overlap = 0
+                
+                for cluster_id, existing_indices in clusters.items():
+                    if not existing_indices:
+                        continue
+                    
+                    # Calculate overlap with existing cluster
+                    cluster_keywords = set()
+                    for idx in existing_indices:
+                        cluster_keywords.update(chunk_keywords[idx])
+                    
+                    overlap = len(keywords.intersection(cluster_keywords))
+                    if overlap > max_overlap:
+                        max_overlap = overlap
+                        best_cluster = cluster_id
+                
+                if max_overlap == 0:
+                    # Create new cluster
+                    best_cluster = len(clusters)
+                
+                clusters[best_cluster].append(i)
+            
+            # Assign cluster labels
+            for cluster_id, indices in clusters.items():
+                for idx in indices:
+                    chunks[idx].topic_cluster = cluster_id
+            
+            return chunks
+            
+        except Exception as e:
+            logging.error(f"Error in lightweight clustering: {e}")
+            # Simple fallback: assign clusters based on position
+            cluster_size = max(len(chunks) // 3, 1)
+            for i, chunk in enumerate(chunks):
+                chunk.topic_cluster = i // cluster_size
             return chunks
     
     def get_slide_break_suggestions(self, chunks: List[SemanticChunk]) -> List[int]:
