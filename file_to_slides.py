@@ -911,20 +911,35 @@ class DocumentParser:
         text = text.strip()
         logger.info(f"Starting LLM-only bullet generation for: {text[:100]}...")
         
-        # ONLY use LLM if API key is available
+        # Try LLM first if API key is available
         if self.api_key and not self.force_basic_mode:
-            logger.info("Using LLM-only approach for bullet generation")
+            logger.info("Using LLM approach for bullet generation")
             llm_bullets = self._create_llm_only_bullets(text)
             if llm_bullets and len(llm_bullets) >= 1:
-                logger.info(f"✅ SUCCESS: Generated {len(llm_bullets)} LLM bullets")
+                logger.info(f"✅ LLM SUCCESS: Generated {len(llm_bullets)} LLM bullets")
                 unique_bullets = self._deduplicate_bullets(llm_bullets)
                 return unique_bullets[:4]
             else:
-                logger.warning("LLM approach failed - returning empty bullets")
-                return []
+                logger.warning("LLM approach failed - falling back to lightweight NLP")
         else:
-            logger.warning("No API key available - returning empty bullets")
-            return []
+            logger.info("No API key available - using lightweight NLP approach")
+        
+        # Fallback to lightweight NLP approach
+        if self.semantic_analyzer.initialized:
+            logger.info("Using lightweight NLP bullet generation")
+            nlp_bullets = self._create_lightweight_nlp_bullets(text)
+            if nlp_bullets and len(nlp_bullets) >= 1:
+                logger.info(f"✅ NLP SUCCESS: Generated {len(nlp_bullets)} NLP bullets")
+                unique_bullets = self._deduplicate_bullets(nlp_bullets)
+                return unique_bullets[:4]
+            else:
+                logger.warning("Lightweight NLP approach also failed")
+        else:
+            logger.warning("Lightweight NLP not available")
+        
+        # If both approaches fail, return empty
+        logger.warning("All bullet generation approaches failed - returning empty bullets")
+        return []
     
     def _create_llm_only_bullets(self, text: str) -> List[str]:
         """Create bullets using only LLM with optimized prompt for content relevance"""
@@ -984,6 +999,166 @@ Return only the bullet points, one per line, without bullet symbols or numbering
         except Exception as e:
             logger.error(f"Error in LLM bullet generation: {e}")
             return []
+    
+    def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
+        """Create bullets using lightweight NLP analysis without templates"""
+        try:
+            import re
+            from collections import Counter
+            
+            # Clean the text
+            text = re.sub(r'\[.*?\]', '', text)  # Remove stage directions
+            text = re.sub(r'^(so|well|now|alright|okay),?\s*', '', text, flags=re.IGNORECASE)
+            text = text.strip()
+            
+            if len(text) < 30:
+                return []
+            
+            bullets = []
+            
+            # Strategy 1: Extract key sentences and convert to learning outcomes
+            sentences = re.split(r'[.!?]+', text)
+            meaningful_sentences = [s.strip() for s in sentences if len(s.strip()) > 20 and len(s.strip()) < 200]
+            
+            for sentence in meaningful_sentences[:3]:
+                bullet = self._convert_sentence_to_nlp_bullet(sentence)
+                if bullet and len(bullet) > 20:
+                    bullets.append(bullet)
+            
+            # Strategy 2: Extract technical concepts and processes
+            if len(bullets) < 3:
+                concepts = self._extract_nlp_concepts(text)
+                for concept in concepts[:2]:
+                    if concept and len(concept) > 4:
+                        bullet = f"Work with {concept} in your implementation."
+                        bullets.append(bullet)
+            
+            # Strategy 3: Extract actionable items from text
+            if len(bullets) < 2:
+                actions = self._extract_nlp_actions(text)
+                bullets.extend(actions[:2])
+            
+            # Filter for quality
+            quality_bullets = []
+            for bullet in bullets:
+                if self._is_quality_nlp_bullet(bullet):
+                    quality_bullets.append(bullet)
+            
+            logger.info(f"Lightweight NLP generated {len(quality_bullets)} bullets from {len(bullets)} candidates")
+            return quality_bullets
+            
+        except Exception as e:
+            logger.error(f"Error in lightweight NLP bullet generation: {e}")
+            return []
+    
+    def _convert_sentence_to_nlp_bullet(self, sentence: str) -> str:
+        """Convert a sentence to an actionable bullet using NLP techniques"""
+        sentence = sentence.strip()
+        
+        # Skip sentences that are too generic or contain problematic words
+        skip_words = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well']
+        if any(word in sentence.lower() for word in skip_words):
+            return ""
+        
+        # Look for sentences with concrete information
+        if any(indicator in sentence.lower() for indicator in ['database', 'interface', 'system', 'platform', 'feature', 'tool', 'method', 'process']):
+            # Convert to actionable format
+            if 'you' in sentence.lower():
+                # Remove "you will/can" and make it actionable
+                sentence = re.sub(r'you (will|can|\'ll)\s*', '', sentence, flags=re.IGNORECASE)
+                sentence = sentence.strip()
+                if len(sentence) > 10:
+                    return f"Learn to {sentence.lower()}."
+            else:
+                # Add action verb to declarative sentences
+                return f"Understand how {sentence.lower()}."
+        
+        return ""
+    
+    def _extract_nlp_concepts(self, text: str) -> List[str]:
+        """Extract technical concepts using lightweight NLP"""
+        import re
+        
+        concepts = []
+        
+        # Extract proper nouns and technical terms
+        tech_patterns = [
+            r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',  # Proper nouns
+            r'\b(?:API|SQL|JSON|XML|HTTP|HTTPS|REST|GraphQL)\b',  # Technical acronyms
+            r'\b(?:database|interface|platform|system|framework|library|service)\b',  # Technical terms
+            r'\b(?:data|query|table|schema|endpoint|authentication|authorization)\b'  # Domain terms
+        ]
+        
+        for pattern in tech_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            concepts.extend(matches[:2])
+        
+        # Clean and deduplicate
+        unique_concepts = []
+        seen = set()
+        for concept in concepts:
+            clean = concept.strip().lower()
+            if clean not in seen and len(clean) > 3 and clean not in ['this', 'that', 'well', 'okay']:
+                seen.add(clean)
+                unique_concepts.append(concept.strip())
+        
+        return unique_concepts[:3]
+    
+    def _extract_nlp_actions(self, text: str) -> List[str]:
+        """Extract actionable content using NLP pattern matching"""
+        import re
+        
+        actions = []
+        
+        # Look for imperative patterns
+        action_patterns = [
+            r'(click|select|open|navigate|access|use|configure|setup|install|create|build)\s+[^.]{10,50}',
+            r'(learn|understand|explore|discover|master)\s+(?:how\s+to\s+)?[^.]{10,50}',
+            r'you\s+(?:can|will|should|need to)\s+([^.]{15,60})'
+        ]
+        
+        for pattern in action_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches[:2]:
+                if isinstance(match, tuple):
+                    action_text = match[-1]  # Get the last group
+                else:
+                    action_text = match
+                
+                if len(action_text) > 15 and len(action_text) < 80:
+                    bullet = action_text.strip().capitalize()
+                    if not bullet.endswith('.'):
+                        bullet += '.'
+                    actions.append(bullet)
+        
+        return actions[:3]
+    
+    def _is_quality_nlp_bullet(self, bullet: str) -> bool:
+        """Check if NLP-generated bullet meets quality standards"""
+        if not bullet or len(bullet) < 15:
+            return False
+        
+        bullet_lower = bullet.lower()
+        
+        # Reject bullets with problematic words
+        bad_words = ['alright', 'okay', 'well', 'this', 'that', 'these', 'those']
+        if any(word in bullet_lower for word in bad_words):
+            return False
+        
+        # Reject overly generic patterns
+        generic_patterns = [
+            r'fundamental concepts',
+            r'practical applications',
+            r'key features and',
+            r'learn about \w+\.$',  # Too generic
+            r'understand how \w+ works\.$'  # Too generic
+        ]
+        
+        for pattern in generic_patterns:
+            if re.search(pattern, bullet_lower):
+                return False
+        
+        return True
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
         """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
