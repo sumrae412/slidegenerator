@@ -586,7 +586,7 @@ class DocumentParser:
         
         # Add small delay to avoid rate limiting
         import time
-        time.sleep(0.1)  # 100ms delay between API calls
+        time.sleep(0.05)  # 50ms delay for faster processing
         
         try:
             prompt = f"""Read this content and create 3-4 clear bullet points that summarize the key information.

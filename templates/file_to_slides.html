@@ -471,7 +471,7 @@
 
                 // Create abort controller for timeout handling
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+                const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
                 
                 const response = await fetch('/upload', {
                     method: 'POST',
