@@ -1124,12 +1124,12 @@ Return only the bullet points, one per line, without bullet symbols or numbering
             for sentence in sentences:
                 sentence = sentence.strip()
                 
-                # Only process sentences with sufficient length and meaningful content
-                if 30 <= len(sentence) <= 150 and self._is_meaningful_sentence(sentence):
+                # Only process sentences with sufficient length and meaningful content (relaxed limits)
+                if 20 <= len(sentence) <= 200 and self._is_meaningful_sentence(sentence):
                     bullet = self._convert_meaningful_sentence_to_bullet(sentence)
                     if bullet:
                         bullets.append(bullet)
-                        if len(bullets) >= 3:  # Limit to 3 quality bullets
+                        if len(bullets) >= 5:  # Increased to 5 quality bullets for more content
                             break
             
             # Strategy 2: Extract direct instructional content (only if no sentences worked)
@@ -1171,8 +1171,16 @@ Return only the bullet points, one per line, without bullet symbols or numbering
         if not any(indicator in sentence_lower for indicator in content_indicators):
             return False
         
-        # Check for complete thoughts (has verb and object)
-        has_verb = any(verb in sentence_lower for verb in ['can', 'will', 'allows', 'enables', 'provides', 'uses', 'supports', 'handles', 'processes', 'manages', 'creates', 'builds'])
+        # Check for complete thoughts (has verb and object) - expanded verb list
+        action_verbs = [
+            'can', 'will', 'allows', 'enables', 'provides', 'uses', 'supports', 'handles', 'processes', 'manages', 'creates', 'builds',
+            'design', 'designs', 'retrieves', 'retrieve', 'clean', 'cleans', 'validate', 'validates', 'restructure', 'restructures',
+            'involves', 'involve', 'insert', 'inserts', 'extract', 'extracts', 'transform', 'transforms', 'load', 'loads',
+            'configure', 'configures', 'setup', 'setups', 'implement', 'implements', 'access', 'accesses', 'query', 'queries',
+            'analyze', 'analyzes', 'process', 'optimize', 'optimizes', 'scale', 'scales', 'deploy', 'deploys',
+            'generate', 'generates', 'execute', 'executes', 'monitor', 'monitors', 'track', 'tracks'
+        ]
+        has_verb = any(verb in sentence_lower for verb in action_verbs)
         if not has_verb:
             return False
         
