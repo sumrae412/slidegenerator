@@ -181,11 +181,36 @@
                 <!-- How It Works -->
                 <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                     <h3 class="text-sm font-medium text-gray-800 mb-2">💡 How It Works</h3>
-                    <p class="text-sm text-gray-600">
-                        This tool analyzes your Word document structure and converts it into professional PowerPoint slides. 
-                        Each content block becomes a slide with concise bullet points, and we generate visual prompt suggestions 
-                        you can copy and use with any AI image generator to create custom graphics for your presentation.
-                    </p>
+                    
+                    <!-- No Table Mode -->
+                    <div id="how-it-works-no-table" class="text-sm text-gray-600">
+                        <p class="mb-2">
+                            <strong>Paragraph-Based Processing:</strong> Your document will be analyzed using intelligent chunking with overlap to create substantial slides.
+                        </p>
+                        <ul class="list-disc list-inside space-y-1 text-xs">
+                            <li>Each paragraph and heading is processed in document order</li>
+                            <li>Related content is grouped into comprehensive chunks (200-800 characters)</li>
+                            <li>15% overlap between chunks maintains context and flow</li>
+                            <li>H4 headings become slide titles paired with following content</li>
+                            <li>AI generates contextually relevant bullet points for each chunk</li>
+                            <li>Visual prompts are created for custom graphics and diagrams</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Table Mode -->
+                    <div id="how-it-works-table" class="text-sm text-gray-600 hidden">
+                        <p class="mb-2">
+                            <strong>Table Column Processing:</strong> Content from your selected table column will be converted into slides.
+                        </p>
+                        <ul class="list-disc list-inside space-y-1 text-xs">
+                            <li>Each row in the selected table column becomes one slide</li>
+                            <li>Document headings (H1-H4) create title and section slides</li>
+                            <li>Table content is processed with AI bullet generation</li>
+                            <li>Visual prompts are generated for each content slide</li>
+                            <li>Maintains document hierarchy and structure</li>
+                        </ul>
+                    </div>
+                    
                     <!-- Hidden input for backward compatibility -->
                     <input type="hidden" id="skip-visuals" name="skip_visuals" value="false">
                 </div>
@@ -196,9 +221,9 @@
                         📝 Script Column (Optional)
                     </label>
                     <select id="script-column" name="script_column" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <option value="0">No table - Use paragraphs for slides</option>
+                        <option value="0" selected>No table - Use paragraphs for slides (recommended)</option>
                         <option value="1">Column 1 - First column</option>
-                        <option value="2" selected>Column 2 - Second column (default)</option>
+                        <option value="2">Column 2 - Second column</option>
                         <option value="3">Column 3 - Third column</option>
                         <option value="4">Column 4 - Fourth column</option>
                         <option value="5">Column 5 - Fifth column</option>
@@ -310,6 +335,29 @@
         const progressBar = document.getElementById('progress-bar');
         const results = document.getElementById('results');
         const error = document.getElementById('error');
+        const scriptColumnSelect = document.getElementById('script-column');
+        const howItWorksNoTable = document.getElementById('how-it-works-no-table');
+        const howItWorksTable = document.getElementById('how-it-works-table');
+
+        // How It Works section toggle based on script column selection
+        function updateHowItWorks() {
+            const selectedColumn = scriptColumnSelect.value;
+            if (selectedColumn === '0') {
+                // No table mode
+                howItWorksNoTable.classList.remove('hidden');
+                howItWorksTable.classList.add('hidden');
+            } else {
+                // Table mode
+                howItWorksNoTable.classList.add('hidden');
+                howItWorksTable.classList.remove('hidden');
+            }
+        }
+        
+        // Initialize How It Works section based on default selection
+        updateHowItWorks();
+        
+        // Listen for script column changes
+        scriptColumnSelect.addEventListener('change', updateHowItWorks);
 
         // File upload handling
         uploadArea.addEventListener('click', () => fileInput.click());
