@@ -564,6 +564,38 @@ class DocumentParser:
         logger.info(f"Intelligent chunking: {len(content_elements)} elements -> {len(chunked_content)} chunks with {OVERLAP_PERCENTAGE*100}% overlap")
         return chunked_content
     
+    def _parse_docx_raw_for_title(self, file_path: str) -> str:
+        """Parse DOCX file to get raw content for title extraction (no chunking)"""
+        doc = Document(file_path)
+        content = []
+        
+        # Get first few elements without any processing for clean title extraction
+        element_count = 0
+        for element in doc.element.body:
+            if element_count >= 5:  # Only check first 5 elements
+                break
+                
+            if element.tag.endswith('p'):  # Paragraph
+                for paragraph in doc.paragraphs:
+                    if paragraph._element == element:
+                        text = paragraph.text.strip()
+                        if text:
+                            # Check if paragraph is a heading
+                            if paragraph.style.name.startswith('Heading'):
+                                level = paragraph.style.name.replace('Heading ', '')
+                                try:
+                                    level_num = int(level)
+                                    content.append(f"{'#' * level_num} {text}")
+                                except ValueError:
+                                    content.append(f"# {text}")
+                            else:
+                                # Add raw paragraph without cleaning for title detection
+                                content.append(text)
+                        element_count += 1
+                        break
+        
+        return '\n'.join(content)
+    
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
@@ -579,8 +611,14 @@ class DocumentParser:
             else:
                 logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from column {script_column}")
             
-            # Extract title from filename or content
-            doc_title = self._extract_title(content, filename)
+            # Extract title from filename or raw content (before any processing)
+            if script_column == 0:
+                # For paragraph mode, extract title from raw content before chunking affects it
+                raw_content = self._parse_docx_raw_for_title(file_path)
+                doc_title = self._extract_title(raw_content, filename)
+            else:
+                # For table mode, use processed content
+                doc_title = self._extract_title(content, filename)
             
             # Convert content to slides
             slides = self._content_to_slides(content, fast_mode)
@@ -679,6 +717,9 @@ class DocumentParser:
             # Apply intelligent chunking with overlap like advanced pipeline
             chunked_content = self._apply_intelligent_chunking(content)
             logger.info(f"After intelligent chunking: {len(chunked_content)} optimized chunks")
+            
+            # Store original first elements for title extraction before chunking
+            original_content = '\n'.join(content)
             
             return '\n'.join(chunked_content)
         
