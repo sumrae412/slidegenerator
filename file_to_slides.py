@@ -467,6 +467,97 @@ class DocumentParser:
         
         return False
     
+    def _apply_intelligent_chunking(self, content_elements: List[str]) -> List[str]:
+        """Apply intelligent chunking with overlap inspired by advanced LLM pipelines"""
+        if not content_elements:
+            return []
+        
+        chunked_content = []
+        heading_stack = []  # Track heading hierarchy
+        current_chunk = []
+        current_chunk_size = 0
+        
+        # Configuration based on LLM context windows and slide readability
+        MAX_CHUNK_SIZE = 800  # characters - optimal for slide content
+        MIN_CHUNK_SIZE = 200  # minimum before forcing break
+        OVERLAP_PERCENTAGE = 0.15  # 15% overlap between chunks
+        
+        logger.info("Applying intelligent chunking with overlap strategy")
+        
+        for element in content_elements:
+            element = element.strip()
+            if not element:
+                continue
+            
+            # Track headings for context
+            if element.startswith('#'):
+                # Save current chunk before starting new section
+                if current_chunk and current_chunk_size >= MIN_CHUNK_SIZE:
+                    chunk_text = ' '.join(current_chunk)
+                    chunked_content.append(chunk_text)
+                    logger.debug(f"Created chunk: {len(chunk_text)} chars")
+                    
+                    # Apply overlap: keep last portion of chunk for context
+                    if len(current_chunk) > 1:
+                        overlap_size = max(1, int(len(current_chunk) * OVERLAP_PERCENTAGE))
+                        current_chunk = current_chunk[-overlap_size:]
+                        current_chunk_size = sum(len(item) for item in current_chunk)
+                    else:
+                        current_chunk = []
+                        current_chunk_size = 0
+                
+                # Add heading to chunk and update stack
+                level = len(element) - len(element.lstrip('#'))
+                heading_text = element.lstrip('#').strip()
+                
+                # Maintain heading context stack
+                heading_stack = heading_stack[:level-1]  # Remove deeper levels
+                if len(heading_stack) >= level:
+                    heading_stack = heading_stack[:level-1]
+                heading_stack.append(heading_text)
+                
+                current_chunk.append(element)
+                current_chunk_size += len(element)
+                
+            else:
+                # Regular content - check if chunk is getting too large
+                if current_chunk_size + len(element) > MAX_CHUNK_SIZE and current_chunk_size >= MIN_CHUNK_SIZE:
+                    # Save current chunk
+                    chunk_text = ' '.join(current_chunk)
+                    chunked_content.append(chunk_text)
+                    logger.debug(f"Created chunk: {len(chunk_text)} chars")
+                    
+                    # Apply overlap: keep last portion + headings for context
+                    overlap_elements = []
+                    
+                    # Always include relevant headings for context
+                    for heading in heading_stack:
+                        level = 1  # Default to H1, could be improved
+                        overlap_elements.append(f"{'#' * level} {heading}")
+                    
+                    # Add overlap from content
+                    if len(current_chunk) > len(heading_stack):
+                        content_items = [item for item in current_chunk if not item.startswith('#')]
+                        if content_items:
+                            overlap_size = max(1, int(len(content_items) * OVERLAP_PERCENTAGE))
+                            overlap_elements.extend(content_items[-overlap_size:])
+                    
+                    current_chunk = overlap_elements
+                    current_chunk_size = sum(len(item) for item in current_chunk)
+                
+                # Add current element
+                current_chunk.append(element)
+                current_chunk_size += len(element)
+        
+        # Add final chunk
+        if current_chunk:
+            chunk_text = ' '.join(current_chunk)
+            chunked_content.append(chunk_text)
+            logger.debug(f"Created final chunk: {len(chunk_text)} chars")
+        
+        logger.info(f"Intelligent chunking: {len(content_elements)} elements -> {len(chunked_content)} chunks with {OVERLAP_PERCENTAGE*100}% overlap")
+        return chunked_content
+    
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
@@ -578,7 +669,12 @@ class DocumentParser:
                             break
             
             logger.info(f"Comprehensive extraction found {len(content)} content elements")
-            return '\n'.join(content)
+            
+            # Apply intelligent chunking with overlap like advanced pipeline
+            chunked_content = self._apply_intelligent_chunking(content)
+            logger.info(f"After intelligent chunking: {len(chunked_content)} optimized chunks")
+            
+            return '\n'.join(chunked_content)
         
         # Original table-based extraction
         logger.info(f"Extracting script text from column {script_column}")
@@ -1048,19 +1144,25 @@ class DocumentParser:
     def _create_llm_only_bullets(self, text: str) -> List[str]:
         """Create bullets using only LLM with optimized prompt for content relevance"""
         try:
-            # Enhanced prompt focused on extracting specific, actionable insights
-            prompt = f"""Based on the following content, create 3-4 specific, actionable bullet points that capture the most important learning outcomes or insights. Each bullet should:
+            # Advanced pipeline-inspired prompt with context-aware summarization
+            word_count = len(text.split())
+            content_type = "technical" if any(term in text.lower() for term in ["data", "system", "process", "framework", "pipeline", "model"]) else "general"
+            
+            prompt = f"""You are an expert at creating slide content from educational material. Analyze the following {content_type} content ({word_count} words) and create 3-5 specific bullet points.
 
-1. Be specific to the actual content (not generic)
-2. Start with an action word (Learn, Understand, Master, Implement, etc.)
-3. Include concrete details from the text
-4. Focus on practical applications or key concepts
-5. Be 8-15 words long
-6. Avoid generic phrases like "fundamental concepts" or "practical applications"
+CONTEXT-AWARE INSTRUCTIONS:
+• Focus on the most actionable insights and key concepts
+• Each bullet should be self-contained and specific to this content
+• Use concise, professional language (8-15 words per bullet)
+• Start bullets with action verbs when describing processes or skills
+• Include concrete details, tools, or examples mentioned in the text
+• Avoid generic phrases - be specific to what's actually discussed
 
-Content: {text}
+CONTENT TO SUMMARIZE:
+{text}
 
-Return only the bullet points, one per line, without bullet symbols or numbering."""
+OUTPUT FORMAT:
+Return only the bullet points, one per line, without symbols or numbering."""
 
             response = requests.post(
                 'https://api.openai.com/v1/chat/completions',
@@ -1071,7 +1173,7 @@ Return only the bullet points, one per line, without bullet symbols or numbering
                 json={
                     'model': 'gpt-3.5-turbo',
                     'messages': [
-                        {'role': 'system', 'content': 'You are an expert at creating specific, content-focused learning objectives from educational material.'},
+                        {'role': 'system', 'content': 'You are an advanced document summarization system that creates precise, actionable slide content. Use context-aware analysis to extract the most valuable insights from each content chunk.'},
                         {'role': 'user', 'content': prompt}
                     ],
                     'max_tokens': 300,
