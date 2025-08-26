@@ -515,36 +515,69 @@ class DocumentParser:
         
         logger.info(f"DOCX contains {len(doc.paragraphs)} paragraphs and {len(doc.tables)} tables")
         
-        # If script_column is 0, use paragraph-based extraction
+        # Comprehensive extraction for paragraph-based documents (no table mode)
         if script_column == 0:
-            logger.info("Using paragraph-based extraction (no table mode)")
-            for paragraph in doc.paragraphs:
-                text = paragraph.text.strip()
-                if text:
-                    # Check if paragraph is a heading
-                    if paragraph.style.name.startswith('Heading'):
-                        level = paragraph.style.name.replace('Heading ', '')
-                        try:
-                            level_num = int(level)
-                            # Filter out conversational H1 headings that shouldn't be title slides
-                            if level_num == 1 and self._is_conversational_heading(text):
-                                logger.info(f"Skipping conversational H1: {text}")
-                                # Treat as regular content instead of heading
-                                content.append(text)
-                            else:
-                                content.append(f"{'#' * level_num} {text}")
-                                logger.info(f"Found heading level {level_num}: {text}")
-                        except ValueError:
-                            content.append(f"# {text}")
-                            logger.info(f"Found heading: {text}")
-                    else:
-                        # Clean and add each paragraph as potential slide content
-                        cleaned_text = self._clean_script_text(text)
-                        if cleaned_text:  # Only add if there's content after cleaning
-                            content.append(cleaned_text)
-                            logger.info(f"Added paragraph: {cleaned_text[:50]}...")
+            logger.info("Using comprehensive paragraph-based extraction (no table mode)")
             
-            logger.info(f"Extracted {len(content)} paragraphs for slide generation")
+            # Process all elements in document order to maintain structure
+            for element in doc.element.body:
+                if element.tag.endswith('p'):  # Paragraph
+                    for paragraph in doc.paragraphs:
+                        if paragraph._element == element:
+                            text = paragraph.text.strip()
+                            if text:
+                                # Check if paragraph is a heading
+                                if paragraph.style.name.startswith('Heading'):
+                                    level = paragraph.style.name.replace('Heading ', '')
+                                    try:
+                                        level_num = int(level)
+                                        # Filter out conversational H1 headings that shouldn't be title slides
+                                        if level_num == 1 and self._is_conversational_heading(text):
+                                            logger.info(f"Skipping conversational H1: {text}")
+                                            # Treat as regular content instead of heading
+                                            cleaned_text = self._clean_script_text(text)
+                                            if cleaned_text:
+                                                content.append(cleaned_text)
+                                        else:
+                                            content.append(f"{'#' * level_num} {text}")
+                                            logger.info(f"Found heading level {level_num}: {text}")
+                                    except ValueError:
+                                        content.append(f"# {text}")
+                                        logger.info(f"Found heading: {text}")
+                                else:
+                                    # Clean and add each paragraph as potential slide content
+                                    cleaned_text = self._clean_script_text(text)
+                                    if cleaned_text:  # Only add if there's content after cleaning
+                                        content.append(cleaned_text)
+                                        logger.debug(f"Added paragraph: {cleaned_text[:50]}...")
+                            break
+                            
+                elif element.tag.endswith('tbl'):  # Also process tables even in paragraph mode
+                    for table in doc.tables:
+                        if table._element == element:
+                            logger.info(f"Processing embedded table with {len(table.rows)} rows")
+                            
+                            # Extract all text from tables for comprehensive content
+                            for row_idx, row in enumerate(table.rows):
+                                row_texts = []
+                                for cell in row.cells:
+                                    cell_text = cell.text.strip()
+                                    if cell_text:
+                                        cleaned_text = self._clean_script_text(cell_text)
+                                        if cleaned_text:
+                                            row_texts.append(cleaned_text)
+                                
+                                # Combine cell texts from the row
+                                if row_texts:
+                                    combined = ' | '.join(row_texts)  # Join cells with separator
+                                    content.append(combined)
+                                    logger.debug(f"Added table row {row_idx}: {combined[:50]}...")
+                            
+                            # Add separator after table
+                            content.append("")
+                            break
+            
+            logger.info(f"Comprehensive extraction found {len(content)} content elements")
             return '\n'.join(content)
         
         # Original table-based extraction
