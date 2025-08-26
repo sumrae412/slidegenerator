@@ -1001,164 +1001,169 @@ Return only the bullet points, one per line, without bullet symbols or numbering
             return []
     
     def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
-        """Create bullets using lightweight NLP analysis without templates"""
+        """Create bullets using conservative NLP analysis - only extract high-quality content"""
         try:
             import re
-            from collections import Counter
             
             # Clean the text
             text = re.sub(r'\[.*?\]', '', text)  # Remove stage directions
             text = re.sub(r'^(so|well|now|alright|okay),?\s*', '', text, flags=re.IGNORECASE)
             text = text.strip()
             
-            if len(text) < 30:
+            if len(text) < 40:  # Require more substantial content
                 return []
             
             bullets = []
             
-            # Strategy 1: Extract key sentences and convert to learning outcomes
+            # Strategy 1: Extract complete, meaningful sentences only
             sentences = re.split(r'[.!?]+', text)
-            meaningful_sentences = [s.strip() for s in sentences if len(s.strip()) > 20 and len(s.strip()) < 200]
-            
-            for sentence in meaningful_sentences[:3]:
-                bullet = self._convert_sentence_to_nlp_bullet(sentence)
-                if bullet and len(bullet) > 20:
-                    bullets.append(bullet)
-            
-            # Strategy 2: Extract technical concepts and processes
-            if len(bullets) < 3:
-                concepts = self._extract_nlp_concepts(text)
-                for concept in concepts[:2]:
-                    if concept and len(concept) > 4:
-                        bullet = f"Work with {concept} in your implementation."
+            for sentence in sentences:
+                sentence = sentence.strip()
+                
+                # Only process sentences with sufficient length and meaningful content
+                if 30 <= len(sentence) <= 150 and self._is_meaningful_sentence(sentence):
+                    bullet = self._convert_meaningful_sentence_to_bullet(sentence)
+                    if bullet:
                         bullets.append(bullet)
+                        if len(bullets) >= 3:  # Limit to 3 quality bullets
+                            break
             
-            # Strategy 3: Extract actionable items from text
-            if len(bullets) < 2:
-                actions = self._extract_nlp_actions(text)
-                bullets.extend(actions[:2])
+            # Strategy 2: Extract direct instructional content (only if no sentences worked)
+            if len(bullets) == 0:
+                instructions = self._extract_direct_instructions(text)
+                bullets.extend(instructions[:2])
             
-            # Filter for quality
+            # Final quality filter - be very strict
             quality_bullets = []
             for bullet in bullets:
-                if self._is_quality_nlp_bullet(bullet):
+                if self._is_high_quality_nlp_bullet(bullet):
                     quality_bullets.append(bullet)
             
-            logger.info(f"Lightweight NLP generated {len(quality_bullets)} bullets from {len(bullets)} candidates")
+            logger.info(f"Conservative NLP generated {len(quality_bullets)} high-quality bullets from text of length {len(text)}")
             return quality_bullets
             
         except Exception as e:
-            logger.error(f"Error in lightweight NLP bullet generation: {e}")
+            logger.error(f"Error in conservative NLP bullet generation: {e}")
             return []
     
-    def _convert_sentence_to_nlp_bullet(self, sentence: str) -> str:
-        """Convert a sentence to an actionable bullet using NLP techniques"""
+    def _is_meaningful_sentence(self, sentence: str) -> bool:
+        """Check if a sentence contains meaningful, specific content"""
+        sentence_lower = sentence.lower()
+        
+        # Reject sentences with vague words
+        vague_words = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well', 'stuff', 'things', 'something']
+        if any(word in sentence_lower for word in vague_words):
+            return False
+        
+        # Require specific content indicators
+        content_indicators = [
+            'database', 'interface', 'system', 'platform', 'feature', 'tool', 'method', 'process',
+            'configure', 'setup', 'create', 'build', 'implement', 'access', 'manage', 'query',
+            'data', 'table', 'schema', 'warehouse', 'compute', 'storage', 'security', 'authentication',
+            'api', 'endpoint', 'request', 'response', 'application', 'service', 'workflow'
+        ]
+        
+        # Must have at least one specific content indicator
+        if not any(indicator in sentence_lower for indicator in content_indicators):
+            return False
+        
+        # Check for complete thoughts (has verb and object)
+        has_verb = any(verb in sentence_lower for verb in ['can', 'will', 'allows', 'enables', 'provides', 'uses', 'supports', 'handles', 'processes', 'manages', 'creates', 'builds'])
+        if not has_verb:
+            return False
+        
+        return True
+    
+    def _convert_meaningful_sentence_to_bullet(self, sentence: str) -> str:
+        """Convert a meaningful sentence to a clean bullet point"""
+        import re
+        
         sentence = sentence.strip()
         
-        # Skip sentences that are too generic or contain problematic words
-        skip_words = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well']
-        if any(word in sentence.lower() for word in skip_words):
-            return ""
+        # If sentence starts with "you", make it more direct
+        if sentence.lower().startswith('you '):
+            # Remove "you can/will/should" patterns
+            sentence = re.sub(r'^you (can|will|should|are able to|need to)\s+', '', sentence, flags=re.IGNORECASE)
+            sentence = sentence.strip()
+            # Capitalize first letter
+            sentence = sentence[0].upper() + sentence[1:] if len(sentence) > 1 else sentence.upper()
         
-        # Look for sentences with concrete information
-        if any(indicator in sentence.lower() for indicator in ['database', 'interface', 'system', 'platform', 'feature', 'tool', 'method', 'process']):
-            # Convert to actionable format
-            if 'you' in sentence.lower():
-                # Remove "you will/can" and make it actionable
-                sentence = re.sub(r'you (will|can|\'ll)\s*', '', sentence, flags=re.IGNORECASE)
-                sentence = sentence.strip()
-                if len(sentence) > 10:
-                    return f"Learn to {sentence.lower()}."
-            else:
-                # Add action verb to declarative sentences
-                return f"Understand how {sentence.lower()}."
+        # Ensure proper capitalization and punctuation
+        if not sentence.endswith('.'):
+            sentence += '.'
         
-        return ""
+        return sentence
     
-    def _extract_nlp_concepts(self, text: str) -> List[str]:
-        """Extract technical concepts using lightweight NLP"""
+    def _extract_direct_instructions(self, text: str) -> List[str]:
+        """Extract direct instructional content as a last resort"""
         import re
         
-        concepts = []
+        instructions = []
         
-        # Extract proper nouns and technical terms
-        tech_patterns = [
-            r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',  # Proper nouns
-            r'\b(?:API|SQL|JSON|XML|HTTP|HTTPS|REST|GraphQL)\b',  # Technical acronyms
-            r'\b(?:database|interface|platform|system|framework|library|service)\b',  # Technical terms
-            r'\b(?:data|query|table|schema|endpoint|authentication|authorization)\b'  # Domain terms
+        # Look for clear imperative sentences
+        imperative_patterns = [
+            r'(configure|setup|create|build|access|open|select|click|navigate to)\s+[^.]{15,80}',
         ]
         
-        for pattern in tech_patterns:
+        for pattern in imperative_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            concepts.extend(matches[:2])
+            for match in matches[:2]:  # Very limited
+                if len(match) > 20 and self._is_clear_instruction(match):
+                    instruction = match.strip().capitalize()
+                    if not instruction.endswith('.'):
+                        instruction += '.'
+                    instructions.append(instruction)
         
-        # Clean and deduplicate
-        unique_concepts = []
-        seen = set()
-        for concept in concepts:
-            clean = concept.strip().lower()
-            if clean not in seen and len(clean) > 3 and clean not in ['this', 'that', 'well', 'okay']:
-                seen.add(clean)
-                unique_concepts.append(concept.strip())
-        
-        return unique_concepts[:3]
+        return instructions
     
-    def _extract_nlp_actions(self, text: str) -> List[str]:
-        """Extract actionable content using NLP pattern matching"""
-        import re
+    def _is_clear_instruction(self, instruction: str) -> bool:
+        """Check if an instruction is clear and specific"""
+        instruction_lower = instruction.lower()
         
-        actions = []
+        # Must not contain vague words
+        vague_words = ['this', 'that', 'stuff', 'things', 'something', 'alright', 'okay']
+        if any(word in instruction_lower for word in vague_words):
+            return False
         
-        # Look for imperative patterns
-        action_patterns = [
-            r'(click|select|open|navigate|access|use|configure|setup|install|create|build)\s+[^.]{10,50}',
-            r'(learn|understand|explore|discover|master)\s+(?:how\s+to\s+)?[^.]{10,50}',
-            r'you\s+(?:can|will|should|need to)\s+([^.]{15,60})'
-        ]
-        
-        for pattern in action_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches[:2]:
-                if isinstance(match, tuple):
-                    action_text = match[-1]  # Get the last group
-                else:
-                    action_text = match
-                
-                if len(action_text) > 15 and len(action_text) < 80:
-                    bullet = action_text.strip().capitalize()
-                    if not bullet.endswith('.'):
-                        bullet += '.'
-                    actions.append(bullet)
-        
-        return actions[:3]
+        # Must have specific content
+        specific_terms = ['database', 'interface', 'warehouse', 'schema', 'table', 'query', 'data', 'system']
+        return any(term in instruction_lower for term in specific_terms)
     
-    def _is_quality_nlp_bullet(self, bullet: str) -> bool:
-        """Check if NLP-generated bullet meets quality standards"""
-        if not bullet or len(bullet) < 15:
+    def _is_high_quality_nlp_bullet(self, bullet: str) -> bool:
+        """Strict quality check for NLP bullets"""
+        if not bullet or len(bullet) < 20:
             return False
         
         bullet_lower = bullet.lower()
         
-        # Reject bullets with problematic words
-        bad_words = ['alright', 'okay', 'well', 'this', 'that', 'these', 'those']
-        if any(word in bullet_lower for word in bad_words):
-            return False
-        
-        # Reject overly generic patterns
-        generic_patterns = [
-            r'fundamental concepts',
-            r'practical applications',
-            r'key features and',
-            r'learn about \w+\.$',  # Too generic
-            r'understand how \w+ works\.$'  # Too generic
+        # Reject bullets with any problematic patterns
+        bad_patterns = [
+            'work with.*in your implementation',  # Our terrible template
+            'behind the scenes',
+            'all in',
+            'uses in your',
+            'this', 'that', 'these', 'those',
+            'alright', 'okay', 'well',
+            'fundamental concepts',
+            'practical applications',
         ]
         
-        for pattern in generic_patterns:
-            if re.search(pattern, bullet_lower):
+        for pattern in bad_patterns:
+            if pattern in bullet_lower:
                 return False
         
+        # Must contain meaningful content
+        meaningful_content = [
+            'database', 'warehouse', 'compute', 'storage', 'schema', 'table', 'query',
+            'configure', 'create', 'access', 'manage', 'implement', 'setup',
+            'data', 'system', 'platform', 'interface', 'application', 'service'
+        ]
+        
+        if not any(content in bullet_lower for content in meaningful_content):
+            return False
+        
         return True
+    
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
         """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
