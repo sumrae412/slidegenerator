@@ -954,10 +954,61 @@ class DocumentParser:
             if len(line) > 3 and not line.startswith(('---', '===', 'Page')):
                 # Skip conversational openings that shouldn't be titles
                 if not self._is_conversational_heading(line):
-                    return line
+                    # Extract just the title portion, not the entire chunk
+                    title_part = self._extract_title_from_line(line)
+                    return title_part
         
         # Fallback to filename
         return os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
+    
+    def _extract_title_from_line(self, line: str) -> str:
+        """Extract just the title portion from a line that may contain more content"""
+        import re
+        
+        # Look for module/lesson ID patterns like "M2L1V3:" at the start
+        module_match = re.match(r'^([A-Z]\d+[A-Z]\d+[A-Z]\d+:\s*)?(.+)', line)
+        if module_match:
+            content = module_match.group(2)  # Content after module ID
+        else:
+            content = line
+        
+        # Split on common title delimiters and take the first substantial part
+        # Look for patterns that indicate the end of a title:
+        title_endings = [
+            r'\s+If\s+you',      # "Title If you've worked..."
+            r'\s+This\s+',       # "Title This section covers..."
+            r'\s+In\s+this\s+',  # "Title In this module..."
+            r'\s+Welcome\s+',    # "Title Welcome to..."
+            r'\s+Before\s+',     # "Title Before we start..."
+            r'\s+Let\'?s\s+',    # "Title Let's begin..."
+            r'\s+We\s+will\s+',  # "Title We will cover..."
+            r'\s+Here\s+',       # "Title Here we discuss..."
+        ]
+        
+        for pattern in title_endings:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                # Return everything before the pattern
+                title = content[:match.start()].strip()
+                if len(title) > 10:  # Ensure we have a substantial title
+                    return title
+        
+        # If no clear ending found, look for sentence boundaries
+        sentences = re.split(r'[.!?]+', content)
+        if sentences and len(sentences) > 1:
+            first_sentence = sentences[0].strip()
+            # If first sentence looks like a title (reasonable length, not too short)
+            if 10 <= len(first_sentence) <= 100:
+                return first_sentence
+        
+        # Fallback: take first 100 characters and find last word boundary
+        if len(content) > 100:
+            truncated = content[:100]
+            last_space = truncated.rfind(' ')
+            if last_space > 50:  # Ensure we don't cut too short
+                return truncated[:last_space].strip()
+        
+        return content.strip()
     
     def _process_click_markers(self, content: str) -> str:
         """Process [CLICK] markers to create separate content blocks for new slides"""
