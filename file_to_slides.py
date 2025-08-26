@@ -956,7 +956,8 @@ class DocumentParser:
                 if not self._is_conversational_heading(line):
                     # Extract just the title portion, not the entire chunk
                     title_part = self._extract_title_from_line(line)
-                    return title_part
+                    if title_part is not None:  # Only return if we found a valid title
+                        return title_part
         
         # Fallback to filename
         return os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
@@ -973,6 +974,25 @@ class DocumentParser:
             content = line
         
         # Split on common title delimiters and take the first substantial part
+        # First check if content looks like educational narrative (not a title)
+        educational_indicators = [
+            'behind the scenes',
+            'these are',
+            'which means',
+            'your data itself',
+            'the part of',
+            'process your work',
+            'multiple tasks can',
+            'without slowing',
+            'lives in cloud storage',
+            'stored in an optimized'
+        ]
+        
+        content_lower = content.lower()
+        if any(indicator in content_lower for indicator in educational_indicators):
+            # This looks like educational content, not a title - reject it
+            return None  # Signal that this is not a valid title
+        
         # Look for patterns that indicate the end of a title:
         title_endings = [
             r'\s+If\s+you',      # "Title If you've worked..."
@@ -983,6 +1003,7 @@ class DocumentParser:
             r'\s+Let\'?s\s+',    # "Title Let's begin..."
             r'\s+We\s+will\s+',  # "Title We will cover..."
             r'\s+Here\s+',       # "Title Here we discuss..."
+            r'\s+Behind\s+the\s+scenes',  # "Title Behind the scenes..."
         ]
         
         for pattern in title_endings:
