@@ -414,6 +414,12 @@ class DocumentParser:
         
         # Conversational starters that indicate it's not a real title
         conversational_patterns = [
+            'alright',
+            'alright,',
+            'alright—',
+            'alright -',
+            'okay',
+            'okay,',
             'now let\'s',
             'let\'s take',
             'let\'s look',
@@ -944,9 +950,11 @@ class DocumentParser:
             if line.startswith('#'):
                 return line.lstrip('#').strip()
             
-            # Check for underlined heading
+            # Check for underlined heading, but skip conversational text
             if len(line) > 3 and not line.startswith(('---', '===', 'Page')):
-                return line
+                # Skip conversational openings that shouldn't be titles
+                if not self._is_conversational_heading(line):
+                    return line
         
         # Fallback to filename
         return os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
