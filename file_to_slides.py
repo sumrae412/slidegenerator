@@ -408,6 +408,65 @@ class DocumentParser:
         if not self.api_key:
             logger.warning("No OpenAI API key found - bullet generation will use fallback method")
     
+    def _is_conversational_heading(self, text: str) -> bool:
+        """Check if a heading is conversational and shouldn't be a title slide"""
+        text_lower = text.lower()
+        
+        # Conversational starters that indicate it's not a real title
+        conversational_patterns = [
+            'now let\'s',
+            'let\'s take',
+            'let\'s look',
+            'let\'s explore',
+            'let\'s dive',
+            'let\'s get',
+            'let\'s start',
+            'next, we\'ll',
+            'next we\'ll',
+            'here\'s what',
+            'here we',
+            'first, let\'s',
+            'before we',
+            'after that',
+            'in this section',
+            'now we\'ll',
+            'now we will',
+            'we\'ll look',
+            'we\'ll explore',
+            'we will look',
+            'you\'ll see',
+            'you\'ll learn',
+            'you will see',
+            'you will learn'
+        ]
+        
+        # Check if the heading starts with conversational patterns
+        for pattern in conversational_patterns:
+            if text_lower.startswith(pattern):
+                return True
+        
+        # Check if it ends with module count like "(3 Modules)"
+        import re
+        if re.search(r'\(\d+\s+[Mm]odules?\)', text):
+            return True
+        
+        # Check if it's a transitional sentence (contains "other parts", "few more", etc.)
+        transitional_phrases = [
+            'other parts',
+            'few other',
+            'few more',
+            'quick look',
+            'brief look',
+            'quick tour',
+            'let me show'
+        ]
+        
+        for phrase in transitional_phrases:
+            if phrase in text_lower:
+                return True
+        
+        return False
+    
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
@@ -467,8 +526,14 @@ class DocumentParser:
                         level = paragraph.style.name.replace('Heading ', '')
                         try:
                             level_num = int(level)
-                            content.append(f"{'#' * level_num} {text}")
-                            logger.info(f"Found heading level {level_num}: {text}")
+                            # Filter out conversational H1 headings that shouldn't be title slides
+                            if level_num == 1 and self._is_conversational_heading(text):
+                                logger.info(f"Skipping conversational H1: {text}")
+                                # Treat as regular content instead of heading
+                                content.append(text)
+                            else:
+                                content.append(f"{'#' * level_num} {text}")
+                                logger.info(f"Found heading level {level_num}: {text}")
                         except ValueError:
                             content.append(f"# {text}")
                             logger.info(f"Found heading: {text}")
@@ -497,8 +562,14 @@ class DocumentParser:
                                 level = paragraph.style.name.replace('Heading ', '')
                                 try:
                                     level_num = int(level)
-                                    content.append(f"{'#' * level_num} {text}")
-                                    logger.info(f"Found heading level {level_num}: {text}")
+                                    # Filter out conversational H1 headings that shouldn't be title slides
+                                    if level_num == 1 and self._is_conversational_heading(text):
+                                        logger.info(f"Skipping conversational H1: {text}")
+                                        # Treat as regular content instead of heading
+                                        content.append(text)
+                                    else:
+                                        content.append(f"{'#' * level_num} {text}")
+                                        logger.info(f"Found heading level {level_num}: {text}")
                                 except ValueError:
                                     content.append(f"# {text}")
                                     logger.info(f"Found heading: {text}")
