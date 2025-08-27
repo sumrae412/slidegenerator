@@ -409,8 +409,21 @@ class DocumentParser:
             logger.warning("No OpenAI API key found - bullet generation will use fallback method")
     
     def _is_conversational_heading(self, text: str) -> bool:
-        """Check if a heading is conversational and shouldn't be a title slide"""
+        """Check if a heading is conversational/instructional content and shouldn't be a title slide"""
         text_lower = text.lower()
+        
+        # Module/course ID patterns indicate instructional content, not headings
+        import re
+        if re.match(r'^[A-Z]\d+[A-Z]\d+[A-Z]\d+:\s+.+', text):
+            # This is a module/lesson identifier with content - likely instructional
+            return True
+        
+        # Long content with these patterns is likely instructional, not a heading
+        if len(text) > 100 and any(pattern in text_lower for pattern in [
+            'if you\'ve', 'in the next', 'behind the scenes', 'and now you',
+            'before we', 'now that you', 'let\'s quickly', 'your data'
+        ]):
+            return True
         
         # Conversational starters that indicate it's not a real title
         conversational_patterns = [
@@ -1111,6 +1124,65 @@ class DocumentParser:
         
         return content.strip()
     
+    def _extract_slide_title_from_content(self, content_line: str) -> str:
+        """Extract a clean slide title from a content line (not full chunk)"""
+        if not content_line or len(content_line.strip()) == 0:
+            return ""
+            
+        line = content_line.strip()
+        
+        # Handle module ID patterns like "M2L1V3: From CSV to Cloud- Using Notebooks..."
+        module_match = re.match(r'^([A-Z]\d+[A-Z]\d+[A-Z]\d+:\s*)?(.+)', line)
+        if module_match:
+            # Keep the module ID and clean title portion
+            module_id = module_match.group(1) or ""
+            content = module_match.group(2)
+        else:
+            module_id = ""
+            content = line
+        
+        # Look for natural title boundaries
+        title_endings = [
+            r'\s+If\s+you',      # "Title If you've worked..."
+            r'\s+This\s+',       # "Title This section covers..."
+            r'\s+In\s+this\s+',  # "Title In this module..."
+            r'\s+Welcome\s+',    # "Title Welcome to..."
+            r'\s+Before\s+',     # "Title Before we start..."
+            r'\s+Let\'?s\s+',    # "Title Let's begin..."
+            r'\s+We\s+will\s+',  # "Title We will cover..."
+            r'\s+Here\s+',       # "Title Here we discuss..."
+            r'\s+Behind\s+the\s+scenes',  # "Title Behind the scenes..."
+            r'\s+Alright',       # "Title Alright, now..."
+            r'\s+Now\s+',        # "Title Now we'll..."
+            r'\s+Next\s+',       # "Title Next, you'll..."
+        ]
+        
+        for pattern in title_endings:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                # Return module ID + everything before the pattern
+                title_part = content[:match.start()].strip()
+                if len(title_part) > 10:  # Ensure substantial title
+                    return (module_id + title_part).strip()
+        
+        # If no clear ending, look for sentence boundaries
+        sentences = re.split(r'[.!?]+', content)
+        if sentences and len(sentences) > 1:
+            first_sentence = sentences[0].strip()
+            # If first sentence is a reasonable title length
+            if 10 <= len(first_sentence) <= 80:
+                return (module_id + first_sentence).strip()
+        
+        # Fallback: take first reasonable portion (50-80 chars) ending at word boundary
+        if len(content) > 80:
+            truncated = content[:80]
+            last_space = truncated.rfind(' ')
+            if last_space > 20:  # Don't cut too short
+                return (module_id + truncated[:last_space]).strip()
+        
+        # If content is already short, return as-is
+        return (module_id + content).strip()
+    
     def _process_click_markers(self, content: str) -> str:
         """Process [CLICK] markers to create separate content blocks for new slides"""
         if '[CLICK]' not in content:
@@ -1189,13 +1261,26 @@ class DocumentParser:
                 heading_level = len(line) - len(line.lstrip('#'))
                 heading_text = line.lstrip('#').strip()
             else:
-                # Check other heading patterns
-                for pattern in self.heading_patterns:
-                    match = re.match(pattern, line, re.MULTILINE)
-                    if match:
-                        is_heading = True
-                        heading_text = match.group(1).strip()
-                        break
+                # Check other heading patterns - but be very restrictive for content-rich lines
+                # Skip heading detection for lines that are clearly content paragraphs
+                if len(line) > 200:  # Long lines are likely content, not headings
+                    is_heading = False
+                else:
+                    for pattern in self.heading_patterns:
+                        match = re.match(pattern, line, re.MULTILINE)
+                        if match:
+                            # Additional validation: don't treat educational content as headings
+                            potential_heading = match.group(1).strip()
+                            # Check if this looks like instructional content rather than a heading
+                            content_indicators = ['if you', 'behind the scenes', 'in the next', 'alright', 'now that you']
+                            if any(indicator in potential_heading.lower() for indicator in content_indicators):
+                                is_heading = False
+                                break
+                            else:
+                                is_heading = True
+                                heading_text = potential_heading
+                                heading_level = 1  # Set default level for pattern-matched headings
+                                break
             
             if is_heading:
                 if heading_level == 4:
@@ -1218,8 +1303,12 @@ class DocumentParser:
                 # This is content - create a slide with bullet points
                 bullet_points = self._create_bullet_points(line, fast_mode)
                 
-                # Use pending H4 title if available, otherwise blank title
-                slide_title = pending_h4_title if pending_h4_title else ""
+                # Use pending H4 title if available, otherwise extract title from content
+                if pending_h4_title:
+                    slide_title = pending_h4_title
+                else:
+                    # Extract a clean title from the content line
+                    slide_title = self._extract_slide_title_from_content(line)
                 
                 slides.append(SlideContent(
                     title=slide_title,
