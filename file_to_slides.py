@@ -1178,19 +1178,64 @@ class DocumentParser:
         sentences = re.split(r'[.!?]+', content)
         if sentences and len(sentences) > 1:
             first_sentence = sentences[0].strip()
-            # If first sentence is a reasonable title length
-            if 10 <= len(first_sentence) <= 80:
+            # If first sentence is a reasonable title length (much shorter now)
+            if 10 <= len(first_sentence) <= 50:
                 return (module_id + first_sentence).strip()
         
-        # Fallback: take first reasonable portion (50-80 chars) ending at word boundary
-        if len(content) > 80:
-            truncated = content[:80]
+        # Also try splitting on commas for shorter phrases
+        comma_parts = content.split(',')
+        if len(comma_parts) > 1:
+            first_part = comma_parts[0].strip()
+            if 10 <= len(first_part) <= 50:
+                return (module_id + first_part).strip()
+        
+        # Fallback: take first reasonable portion (30-50 chars max) ending at word boundary
+        if len(content) > 50:
+            truncated = content[:50]
             last_space = truncated.rfind(' ')
-            if last_space > 20:  # Don't cut too short
+            if last_space > 15:  # Don't cut too short
                 return (module_id + truncated[:last_space]).strip()
+            else:
+                # If no good word boundary, just cut at 50 chars
+                return (module_id + content[:50]).strip()
         
         # If content is already short, return as-is
         return (module_id + content).strip()
+    
+    def _create_simple_content_title(self, content_line: str) -> str:
+        """Create a simple, short title for regular content slides (not headings)"""
+        if not content_line or len(content_line.strip()) == 0:
+            return "Content Slide"
+            
+        line = content_line.strip()
+        
+        # Remove markdown prefixes if present
+        if line.startswith('#'):
+            line = line.lstrip('#').strip()
+        
+        # For content slides, we want very simple, short titles
+        # First 3-5 words, or up to 30 characters max
+        
+        words = line.split()
+        if len(words) <= 5:
+            # If it's already short, take up to 30 chars
+            if len(line) <= 30:
+                return line
+            else:
+                return line[:30].strip()
+        
+        # Take first 3-5 words
+        short_title = ' '.join(words[:4])
+        
+        # If still too long, cut at 30 chars
+        if len(short_title) > 30:
+            short_title = short_title[:30]
+            # Find last space to avoid cutting mid-word
+            last_space = short_title.rfind(' ')
+            if last_space > 10:
+                short_title = short_title[:last_space]
+        
+        return short_title.strip()
     
     def _process_click_markers(self, content: str) -> str:
         """Process [CLICK] markers to create separate content blocks for new slides"""
@@ -1305,12 +1350,12 @@ class DocumentParser:
                 # This is content - create a slide with bullet points
                 bullet_points = self._create_bullet_points(line, fast_mode)
                 
-                # Use pending H4 title if available, otherwise extract title from content
+                # Use pending H4 title if available, otherwise use simple content-based title
                 if pending_h4_title:
                     slide_title = pending_h4_title
                 else:
-                    # Extract a clean title from the content line
-                    slide_title = self._extract_slide_title_from_content(line)
+                    # For regular content slides, create a simple descriptive title
+                    slide_title = self._create_simple_content_title(line)
                 
                 slides.append(SlideContent(
                     title=slide_title,
