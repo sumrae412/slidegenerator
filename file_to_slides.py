@@ -566,6 +566,7 @@ class DocumentParser:
     
     def _parse_docx_raw_for_title(self, file_path: str) -> str:
         """Parse DOCX file to get raw content for title extraction (no chunking)"""
+        logger.info("_parse_docx_raw_for_title called")
         doc = Document(file_path)
         content = []
         
@@ -580,21 +581,27 @@ class DocumentParser:
                     if paragraph._element == element:
                         text = paragraph.text.strip()
                         if text:
+                            logger.debug(f"Found paragraph {element_count}: {text[:50]}...")
                             # Check if paragraph is a heading
                             if paragraph.style.name.startswith('Heading'):
                                 level = paragraph.style.name.replace('Heading ', '')
                                 try:
                                     level_num = int(level)
                                     content.append(f"{'#' * level_num} {text}")
+                                    logger.debug(f"  -> Added as heading level {level_num}")
                                 except ValueError:
                                     content.append(f"# {text}")
+                                    logger.debug(f"  -> Added as default heading")
                             else:
                                 # Add raw paragraph without cleaning for title detection
                                 content.append(text)
+                                logger.debug(f"  -> Added as regular paragraph")
                         element_count += 1
                         break
         
-        return '\n'.join(content)
+        result = '\n'.join(content)
+        logger.info(f"_parse_docx_raw_for_title returning {len(result)} chars")
+        return result
     
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX file and convert to slide structure"""
@@ -612,13 +619,20 @@ class DocumentParser:
                 logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from column {script_column}")
             
             # Extract title from filename or raw content (before any processing)
+            logger.info(f"Title extraction starting - script_column={script_column}")
             if script_column == 0:
                 # For paragraph mode, extract title from raw content before chunking affects it
+                logger.info("Using raw content extraction for title (paragraph mode)")
                 raw_content = self._parse_docx_raw_for_title(file_path)
+                logger.info(f"Raw content extracted: {len(raw_content)} chars")
+                logger.info(f"Raw content preview: {raw_content[:200]}...")
                 doc_title = self._extract_title(raw_content, filename)
+                logger.info(f"Title extracted from raw: '{doc_title}' (length: {len(doc_title)})")
             else:
                 # For table mode, use processed content
+                logger.info(f"Using processed content for title (table mode - column {script_column})")
                 doc_title = self._extract_title(content, filename)
+                logger.info(f"Title extracted from processed: '{doc_title}' (length: {len(doc_title)})")
             
             # Convert content to slides
             slides = self._content_to_slides(content, fast_mode)
@@ -7337,9 +7351,13 @@ def upload_file():
         return jsonify({'error': 'No file selected'}), 400
     
     # Get form data first
-    script_column = int(request.form.get('script_column', '2'))  # Default to column 2
+    script_column_raw = request.form.get('script_column', '2')
+    logger.info(f"📊 Received script_column value from form: '{script_column_raw}'")
+    script_column = int(script_column_raw)  # Default to column 2
+    logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
     openai_api_key = request.form.get('openai_key', '').strip()  # Optional OpenAI API key
+    logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
     
     # FIRST: Validate OpenAI API key if provided - do this before any file processing
     if openai_api_key:
