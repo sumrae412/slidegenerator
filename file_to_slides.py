@@ -569,6 +569,7 @@ class DocumentParser:
         logger.info("_parse_docx_raw_for_title called")
         doc = Document(file_path)
         content = []
+        has_heading = False  # Track if we found any actual headings
         
         # Get first few elements without any processing for clean title extraction
         element_count = 0
@@ -584,6 +585,7 @@ class DocumentParser:
                             logger.debug(f"Found paragraph {element_count}: {text[:50]}...")
                             # Check if paragraph is a heading
                             if paragraph.style.name.startswith('Heading'):
+                                has_heading = True
                                 level = paragraph.style.name.replace('Heading ', '')
                                 try:
                                     level_num = int(level)
@@ -598,6 +600,24 @@ class DocumentParser:
                                 logger.debug(f"  -> Added as regular paragraph")
                         element_count += 1
                         break
+        
+        # If no headings found, check if this looks like a script/transcript
+        if not has_heading and content:
+            # Check if content appears to be conversational/instructional script
+            script_indicators = [
+                'alright', 'in this video', 'in this module', 'in this section',
+                'you will learn', 'we will cover', "you'll get", "you'll see",
+                "let's talk", "let's look", "before we dive", "now you're going",
+                "this is where", "[click]", "[pause]", "[screencast]"
+            ]
+            
+            # Check first few lines for script/transcript indicators
+            first_lines_text = ' '.join(content[:3]).lower()
+            has_script_indicators = any(indicator in first_lines_text for indicator in script_indicators)
+            
+            if has_script_indicators:
+                logger.info("Document appears to be a script/transcript with no proper headings - returning empty for filename fallback")
+                return ""  # Return empty to trigger filename fallback
         
         result = '\n'.join(content)
         logger.info(f"_parse_docx_raw_for_title returning {len(result)} chars")
@@ -962,6 +982,11 @@ class DocumentParser:
     
     def _extract_title(self, content: str, filename: str) -> str:
         """Extract document title from content or filename"""
+        # If content is empty or None, fallback to filename
+        if not content or not content.strip():
+            logger.info("No content provided for title extraction - falling back to filename")
+            return os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
+            
         lines = content.split('\n')
         
         # Collect all major headings/modules to create a comprehensive title
