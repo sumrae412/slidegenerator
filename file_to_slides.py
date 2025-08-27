@@ -1636,6 +1636,15 @@ Return only the bullet points, one per line, without symbols or numbering."""
         """Check if a sentence contains meaningful, specific content"""
         sentence_lower = sentence.lower()
         
+        # Reject contextless fragments and problematic starters
+        problematic_starters = ['which means', 'for example', 'it stores', 'that means', 'this means', 'these are', 'what stores']
+        if any(sentence_lower.startswith(starter) for starter in problematic_starters):
+            return False
+        
+        # Reject sentences ending with etc or incomplete phrases
+        if sentence_lower.endswith(('etc', 'etc.', 'and more', 'and so on')):
+            return False
+        
         # Reject sentences with vague words
         vague_words = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well', 'stuff', 'things', 'something']
         if any(word in sentence_lower for word in vague_words):
