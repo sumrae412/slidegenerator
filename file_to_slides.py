@@ -1460,10 +1460,11 @@ class DocumentParser:
             
             for sentence in sentences:
                 sentence = sentence.strip()
-                # Filter for substantial, meaningful sentences
+                # Filter for substantial, meaningful sentences that can stand alone
                 if (len(sentence) > 15 and len(sentence) < 120 and
-                    not sentence.lower().startswith(('so', 'well', 'now', 'alright', 'okay', 'um', 'uh')) and
-                    any(word in sentence.lower() for word in ['will', 'can', 'use', 'create', 'make', 'help', 'provide', 'enable', 'allow', 'support', 'includes', 'features', 'contains'])):
+                    not sentence.lower().startswith(('so', 'well', 'now', 'alright', 'okay', 'um', 'uh', 'which means', 'for example', 'it stores', 'that means', 'this means')) and
+                    any(word in sentence.lower() for word in ['will', 'can', 'use', 'create', 'make', 'help', 'provide', 'enable', 'allow', 'support', 'includes', 'features', 'contains', 'snowflake', 'system', 'data', 'platform']) and
+                    not sentence.lower().endswith(('etc', 'etc.', 'and more'))):
                     meaningful_sentences.append(sentence.strip())
             
             # Take best sentences as bullets (up to 3)
@@ -1476,29 +1477,32 @@ class DocumentParser:
                         bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
                         bullets.append(bullet)
             
-            # Strategy 2: If not enough meaningful sentences, extract key phrases
+            # Strategy 2: If not enough meaningful sentences, extract topic-focused statements  
             if len(bullets) < 2:
-                # Look for key phrases and concepts
-                key_phrases = []
-                words = text.split()
+                # Look for complete topic statements and main concepts
+                topic_statements = []
                 
-                # Extract phrases around important action words
-                action_words = ['create', 'build', 'make', 'use', 'provide', 'enable', 'support', 'include', 'feature', 'help', 'design', 'develop']
-                for i, word in enumerate(words):
-                    if word.lower() in action_words and i > 0 and i < len(words) - 3:
-                        # Take a few words before and after the action word
-                        start = max(0, i - 2)
-                        end = min(len(words), i + 4)
-                        phrase = ' '.join(words[start:end])
-                        if len(phrase) > 10 and len(phrase) < 80:
-                            key_phrases.append(phrase.strip())
+                # Find statements about the main subject (Snowflake, system, platform, etc.)
+                subjects = ['snowflake', 'system', 'platform', 'data', 'warehouse', 'database', 'application', 'tool', 'service']
                 
-                # Add key phrases as bullets
-                for phrase in key_phrases[:2]:
-                    if phrase and phrase not in bullets:
+                # Split by common connectors to find independent statements
+                segments = re.split(r',\s*(?:which|that|and)\s+', text)
+                for segment in segments:
+                    segment = segment.strip()
+                    if (len(segment) > 20 and len(segment) < 100 and
+                        any(subject in segment.lower() for subject in subjects) and
+                        not segment.lower().startswith(('which', 'that', 'and', 'it stores', 'for example'))):
+                        # Clean up the segment to make it a complete statement
+                        if not segment.endswith('.'):
+                            segment = segment.rstrip(',;:') + '.'
+                        topic_statements.append(segment)
+                
+                # Add topic statements as bullets
+                for statement in topic_statements[:2]:
+                    if statement and statement not in [b.rstrip('.') for b in bullets]:
                         # Clean and capitalize
-                        clean_phrase = phrase[0].upper() + phrase[1:] if len(phrase) > 1 else phrase.upper()
-                        bullets.append(clean_phrase)
+                        clean_statement = statement[0].upper() + statement[1:] if len(statement) > 1 else statement.upper()
+                        bullets.append(clean_statement.rstrip('.'))  # Remove trailing period for bullet format
             
             # Ensure we have at least one bullet
             if not bullets:
