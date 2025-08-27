@@ -1131,6 +1131,10 @@ class DocumentParser:
             
         line = content_line.strip()
         
+        # Remove markdown prefixes if present
+        if line.startswith('#'):
+            line = line.lstrip('#').strip()
+        
         # Handle module ID patterns like "M2L1V3: From CSV to Cloud- Using Notebooks..."
         module_match = re.match(r'^([A-Z]\d+[A-Z]\d+[A-Z]\d+:\s*)?(.+)', line)
         if module_match:
@@ -1141,11 +1145,12 @@ class DocumentParser:
             module_id = ""
             content = line
         
-        # Look for natural title boundaries
+        # Look for natural title boundaries - be more aggressive
         title_endings = [
             r'\s+If\s+you',      # "Title If you've worked..."
             r'\s+This\s+',       # "Title This section covers..."
             r'\s+In\s+this\s+',  # "Title In this module..."
+            r'\s+In\s+the\s+next',  # "Title In the next video..."
             r'\s+Welcome\s+',    # "Title Welcome to..."
             r'\s+Before\s+',     # "Title Before we start..."
             r'\s+Let\'?s\s+',    # "Title Let's begin..."
@@ -1155,6 +1160,10 @@ class DocumentParser:
             r'\s+Alright',       # "Title Alright, now..."
             r'\s+Now\s+',        # "Title Now we'll..."
             r'\s+Next\s+',       # "Title Next, you'll..."
+            r'\s+And\s+now\s+you', # "Title And now you're going..."
+            r'\s+You\'ll\s+',     # "Title You'll start by..."
+            r'\s+From\s+the\s+',  # "Title From the Create Stage..."
+            r'\s+Drag\s+and\s+',  # "Title Drag and drop..."
         ]
         
         for pattern in title_endings:
@@ -1255,32 +1264,25 @@ class DocumentParser:
             heading_text = line
             heading_level = None
             
-            # Markdown heading
+            # In no-table mode, be much more restrictive about what counts as headings
+            # Only treat obvious markdown headings as headings, treat everything else as content
             if line.startswith('#'):
-                is_heading = True
-                heading_level = len(line) - len(line.lstrip('#'))
-                heading_text = line.lstrip('#').strip()
-            else:
-                # Check other heading patterns - but be very restrictive for content-rich lines
-                # Skip heading detection for lines that are clearly content paragraphs
-                if len(line) > 200:  # Long lines are likely content, not headings
+                # Even with markdown, be restrictive for educational content
+                potential_heading_level = len(line) - len(line.lstrip('#'))
+                potential_heading_text = line.lstrip('#').strip()
+                
+                # Check if this is educational/instructional content that should be treated as content
+                if potential_heading_level == 1 and self._is_conversational_heading(potential_heading_text):
+                    # Treat as content, not heading
                     is_heading = False
                 else:
-                    for pattern in self.heading_patterns:
-                        match = re.match(pattern, line, re.MULTILINE)
-                        if match:
-                            # Additional validation: don't treat educational content as headings
-                            potential_heading = match.group(1).strip()
-                            # Check if this looks like instructional content rather than a heading
-                            content_indicators = ['if you', 'behind the scenes', 'in the next', 'alright', 'now that you']
-                            if any(indicator in potential_heading.lower() for indicator in content_indicators):
-                                is_heading = False
-                                break
-                            else:
-                                is_heading = True
-                                heading_text = potential_heading
-                                heading_level = 1  # Set default level for pattern-matched headings
-                                break
+                    is_heading = True
+                    heading_level = potential_heading_level
+                    heading_text = potential_heading_text
+            else:
+                # For all non-markdown content, treat as content slides with extracted titles
+                # Do NOT use heading patterns for content in no-table mode
+                is_heading = False
             
             if is_heading:
                 if heading_level == 4:
