@@ -1433,9 +1433,89 @@ class DocumentParser:
         else:
             logger.warning("Lightweight NLP not available")
         
-        # If both approaches fail, return empty
-        logger.warning("All bullet generation approaches failed - returning empty bullets")
-        return []
+        # If both approaches fail, use basic text extraction as last resort
+        logger.warning("All advanced approaches failed - using basic text extraction")
+        return self._create_basic_fallback_bullets(text)
+    
+    def _create_basic_fallback_bullets(self, text: str) -> List[str]:
+        """Basic text-based bullet generation when all other methods fail"""
+        try:
+            import re
+            
+            # Clean and prepare text
+            text = text.strip()
+            if len(text) < 20:
+                return ["Key content point"]
+            
+            # Remove markdown and stage directions
+            text = re.sub(r'#+\s*', '', text)  # Remove markdown headers
+            text = re.sub(r'\[.*?\]', '', text)  # Remove stage directions
+            text = text.strip()
+            
+            bullets = []
+            
+            # Strategy 1: Split by sentences and take the most meaningful ones
+            sentences = re.split(r'[.!?]+', text)
+            meaningful_sentences = []
+            
+            for sentence in sentences:
+                sentence = sentence.strip()
+                # Filter for substantial, meaningful sentences
+                if (len(sentence) > 15 and len(sentence) < 120 and
+                    not sentence.lower().startswith(('so', 'well', 'now', 'alright', 'okay', 'um', 'uh')) and
+                    any(word in sentence.lower() for word in ['will', 'can', 'use', 'create', 'make', 'help', 'provide', 'enable', 'allow', 'support', 'includes', 'features', 'contains'])):
+                    meaningful_sentences.append(sentence.strip())
+            
+            # Take best sentences as bullets (up to 3)
+            for sentence in meaningful_sentences[:3]:
+                if sentence:
+                    # Clean up the sentence for bullet format
+                    bullet = sentence.strip()
+                    # Capitalize first word
+                    if bullet:
+                        bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
+                        bullets.append(bullet)
+            
+            # Strategy 2: If not enough meaningful sentences, extract key phrases
+            if len(bullets) < 2:
+                # Look for key phrases and concepts
+                key_phrases = []
+                words = text.split()
+                
+                # Extract phrases around important action words
+                action_words = ['create', 'build', 'make', 'use', 'provide', 'enable', 'support', 'include', 'feature', 'help', 'design', 'develop']
+                for i, word in enumerate(words):
+                    if word.lower() in action_words and i > 0 and i < len(words) - 3:
+                        # Take a few words before and after the action word
+                        start = max(0, i - 2)
+                        end = min(len(words), i + 4)
+                        phrase = ' '.join(words[start:end])
+                        if len(phrase) > 10 and len(phrase) < 80:
+                            key_phrases.append(phrase.strip())
+                
+                # Add key phrases as bullets
+                for phrase in key_phrases[:2]:
+                    if phrase and phrase not in bullets:
+                        # Clean and capitalize
+                        clean_phrase = phrase[0].upper() + phrase[1:] if len(phrase) > 1 else phrase.upper()
+                        bullets.append(clean_phrase)
+            
+            # Ensure we have at least one bullet
+            if not bullets:
+                # Extract first meaningful chunk of text
+                words = text.split()
+                if len(words) >= 5:
+                    first_chunk = ' '.join(words[:8])
+                    if len(first_chunk) > 20:
+                        bullets.append(first_chunk)
+                else:
+                    bullets.append("Key information from content")
+            
+            return bullets[:3]  # Maximum 3 bullets
+            
+        except Exception as e:
+            logger.error(f"Basic fallback bullet generation failed: {e}")
+            return ["Content summary point"]
     
     def _create_llm_only_bullets(self, text: str) -> List[str]:
         """Create bullets using only LLM with optimized prompt for content relevance"""
