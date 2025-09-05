@@ -1462,9 +1462,9 @@ class DocumentParser:
                 sentence = sentence.strip()
                 # Filter for substantial, meaningful sentences that can stand alone
                 if (len(sentence) > 15 and len(sentence) < 120 and
-                    not sentence.lower().startswith(('so', 'well', 'now', 'alright', 'okay', 'um', 'uh', 'which means', 'for example', 'it stores', 'that means', 'this means')) and
+                    not sentence.lower().startswith(('so', 'well', 'now', 'alright', 'okay', 'um', 'uh', 'which means', 'for example', 'it stores', 'that means', 'this means', 'these are', 'what stores', 'they are', 'this is')) and
                     any(word in sentence.lower() for word in ['will', 'can', 'use', 'create', 'make', 'help', 'provide', 'enable', 'allow', 'support', 'includes', 'features', 'contains', 'snowflake', 'system', 'data', 'platform']) and
-                    not sentence.lower().endswith(('etc', 'etc.', 'and more'))):
+                    not sentence.lower().endswith(('etc', 'etc.', 'and more', 'and so on'))):
                     meaningful_sentences.append(sentence.strip())
             
             # Take best sentences as bullets (up to 3)
@@ -1506,14 +1506,27 @@ class DocumentParser:
             
             # Ensure we have at least one bullet
             if not bullets:
-                # Extract first meaningful chunk of text
-                words = text.split()
-                if len(words) >= 5:
-                    first_chunk = ' '.join(words[:8])
-                    if len(first_chunk) > 20:
-                        bullets.append(first_chunk)
+                # Extract first complete sentence or meaningful chunk
+                first_sentence = re.split(r'[.!?]+', text)[0].strip()
+                if len(first_sentence) > 20 and len(first_sentence) < 120:
+                    # Use first complete sentence if it's good
+                    bullets.append(first_sentence)
                 else:
-                    bullets.append("Key information from content")
+                    # Otherwise create a descriptive summary
+                    words = text.split()
+                    if len(words) >= 10:
+                        # Take enough words to form a complete thought, but find sentence boundary
+                        potential_chunk = ' '.join(words[:15])
+                        # Look for natural stopping points
+                        if ',' in potential_chunk:
+                            chunk_parts = potential_chunk.split(',')
+                            first_part = chunk_parts[0].strip()
+                            if len(first_part) > 15:
+                                bullets.append(first_part + " capabilities")
+                        else:
+                            bullets.append("Key content about " + ' '.join(words[:4]))
+                    else:
+                        bullets.append("Key information from content")
             
             return bullets[:3]  # Maximum 3 bullets
             
@@ -1637,7 +1650,7 @@ Return only the bullet points, one per line, without symbols or numbering."""
         sentence_lower = sentence.lower()
         
         # Reject contextless fragments and problematic starters
-        problematic_starters = ['which means', 'for example', 'it stores', 'that means', 'this means', 'these are', 'what stores']
+        problematic_starters = ['which means', 'for example', 'it stores', 'that means', 'this means', 'these are', 'what stores', 'they are', 'this is']
         if any(sentence_lower.startswith(starter) for starter in problematic_starters):
             return False
         

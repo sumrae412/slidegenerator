@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script to Slides Generator - Professional PowerPoint Creator</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .upload-zone {
+            border: 3px dashed #e5e7eb;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .upload-zone.dragover {
+            border-color: var(--primary-color);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+            transform: scale(1.02);
+        }
+        
+        .upload-zone.uploading {
+            border-color: var(--success-color);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        
+        .upload-zone.has-file {
+            border-color: var(--success-color);
+            border-style: solid;
+            background: rgba(16, 185, 129, 0.02);
+        }
+        
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            transition: width 0.3s ease;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .template-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .template-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .template-card.selected {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateX(4px);
+        }
+        
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .tooltip {
+            position: relative;
+        }
+        
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1f2937;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            white-space: nowrap;
+            z-index: 1000;
+            transition: opacity 0.3s;
+        }
+        
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1f2937 transparent transparent transparent;
+        }
+        
+        .custom-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+        }
+        
+        .custom-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 30px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+    </style>
+</head>
+<body class="font-sans">
+    <!-- Header -->
+    <header class="glass-effect shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-file-powerpoint text-3xl text-purple-600"></i>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                        Script to Slides Pro
+                    </h1>
+                </div>
+                <nav class="flex items-center space-x-6">
+                    <button class="tooltip">
+                        <i class="fas fa-question-circle text-gray-600 hover:text-purple-600 transition"></i>
+                        <span class="tooltip-text">Get help and documentation</span>
+                    </button>
+                    <button onclick="toggleDarkMode()" class="tooltip">
+                        <i class="fas fa-moon text-gray-600 hover:text-purple-600 transition"></i>
+                        <span class="tooltip-text">Toggle dark mode</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- Progress Steps -->
+        <div class="mb-8">
+            <div class="flex items-center justify-center space-x-4">
+                <div class="flex items-center">
+                    <div id="step1" class="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold">1</div>
+                    <span class="ml-2 font-medium">Upload</span>
+                </div>
+                <div class="w-20 h-1 bg-gray-300"></div>
+                <div class="flex items-center">
+                    <div id="step2" class="w-10 h-10 rounded-full bg-gray-300 text-gray-600 flex items-center justify-center font-bold">2</div>
+                    <span class="ml-2 text-gray-600">Configure</span>
+                </div>
+                <div class="w-20 h-1 bg-gray-300"></div>
+                <div class="flex items-center">
+                    <div id="step3" class="w-10 h-10 rounded-full bg-gray-300 text-gray-600 flex items-center justify-center font-bold">3</div>
+                    <span class="ml-2 text-gray-600">Download</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid lg:grid-cols-3 gap-6">
+            <!-- Left Column - Upload & Settings -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Upload Card -->
+                <div class="glass-effect rounded-2xl p-8 shadow-xl slide-in">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <i class="fas fa-cloud-upload-alt mr-3 text-purple-600"></i>
+                        Upload Document
+                    </h2>
+                    
+                    <div id="uploadZone" class="upload-zone rounded-xl p-12 text-center cursor-pointer hover:bg-gray-50 transition">
+                        <div id="uploadContent">
+                            <i class="fas fa-file-upload text-6xl text-gray-400 mb-4"></i>
+                            <h3 class="text-xl font-semibold mb-2">Drop your file here or click to browse</h3>
+                            <p class="text-gray-600 mb-4">Supports .docx, .pdf, and .txt files</p>
+                            <div class="flex justify-center space-x-4 text-sm text-gray-500">
+                                <span><i class="fas fa-check-circle text-green-500"></i> Max 16MB</span>
+                                <span><i class="fas fa-check-circle text-green-500"></i> Secure upload</span>
+                                <span><i class="fas fa-check-circle text-green-500"></i> Fast processing</span>
+                            </div>
+                        </div>
+                        <div id="filePreview" class="hidden">
+                            <div class="flex items-center justify-center space-x-4">
+                                <i class="fas fa-file-word text-4xl text-blue-500"></i>
+                                <div class="text-left">
+                                    <p class="font-semibold" id="fileName"></p>
+                                    <p class="text-sm text-gray-500" id="fileSize"></p>
+                                </div>
+                                <button onclick="removeFile()" class="ml-auto text-red-500 hover:text-red-700">
+                                    <i class="fas fa-times-circle text-2xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <input type="file" id="fileInput" accept=".docx,.pdf,.txt" class="hidden">
+                        <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- Sample Document -->
+                    <div class="mt-4 flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                            <span class="text-sm">Need a sample? Download our example document</span>
+                        </div>
+                        <button onclick="downloadSample()" class="text-blue-600 hover:text-blue-800 font-medium text-sm">
+                            Download Sample <i class="fas fa-download ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Template Selection -->
+                <div class="glass-effect rounded-2xl p-8 shadow-xl slide-in" style="animation-delay: 0.1s;">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <i class="fas fa-palette mr-3 text-purple-600"></i>
+                        Choose Template
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="template-card selected rounded-lg p-4 border-2" onclick="selectTemplate('custom')">
+                            <div class="aspect-video bg-gradient-to-br from-blue-600 to-indigo-700 rounded mb-2 flex items-center justify-center">
+                                <i class="fas fa-star text-white text-xl"></i>
+                            </div>
+                            <p class="font-medium">Custom Template</p>
+                            <p class="text-xs text-gray-500">Professional design</p>
+                        </div>
+                        <div class="template-card rounded-lg p-4 border-2" onclick="selectTemplate('professional')">
+                            <div class="aspect-video bg-gradient-to-br from-gray-800 to-gray-900 rounded mb-2"></div>
+                            <p class="font-medium">Professional</p>
+                            <p class="text-xs text-gray-500">Clean & modern</p>
+                        </div>
+                        <div class="template-card rounded-lg p-4 border-2" onclick="selectTemplate('creative')">
+                            <div class="aspect-video bg-gradient-to-br from-purple-400 to-pink-400 rounded mb-2"></div>
+                            <p class="font-medium">Creative</p>
+                            <p class="text-xs text-gray-500">Bold & colorful</p>
+                        </div>
+                        <div class="template-card rounded-lg p-4 border-2" onclick="selectTemplate('minimal')">
+                            <div class="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 rounded mb-2"></div>
+                            <p class="font-medium">Minimal</p>
+                            <p class="text-xs text-gray-500">Simple & elegant</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Settings -->
+                <div class="glass-effect rounded-2xl p-8 shadow-xl slide-in" style="animation-delay: 0.2s;">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <i class="fas fa-cog mr-3 text-purple-600"></i>
+                        Advanced Settings
+                    </h2>
+                    
+                    <div class="space-y-6">
+                        <!-- Column Selection -->
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Script Column</label>
+                            <select id="columnSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent">
+                                <option value="0">No table - Use paragraphs (recommended)</option>
+                                <option value="1">Column 1 - First column</option>
+                                <option value="2">Column 2 - Second column</option>
+                                <option value="3">Column 3 - Third column</option>
+                            </select>
+                        </div>
+
+                        <!-- API Key -->
+                        <div>
+                            <label class="block text-sm font-medium mb-2">
+                                OpenAI API Key 
+                                <span class="text-xs text-gray-500">(Optional but recommended)</span>
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="apiKey" placeholder="sk-..." 
+                                    class="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent">
+                                <button onclick="toggleApiKeyVisibility()" class="absolute right-3 top-3.5 text-gray-500 hover:text-gray-700">
+                                    <i id="apiKeyToggle" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">
+                                <i class="fas fa-lock mr-1"></i>
+                                Your API key is encrypted and never stored
+                            </p>
+                        </div>
+
+                        <!-- Additional Options -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Bullet Density</label>
+                                <input type="range" min="1" max="5" value="3" class="w-full" id="bulletDensity">
+                                <div class="flex justify-between text-xs text-gray-500">
+                                    <span>Minimal</span>
+                                    <span>Balanced</span>
+                                    <span>Detailed</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Slides per Section</label>
+                                <input type="number" min="1" max="10" value="5" 
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600">
+                            </div>
+                        </div>
+
+                        <!-- Toggle Options -->
+                        <div class="space-y-3">
+                            <label class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Include visual prompts</span>
+                                <label class="custom-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+                            <label class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Generate speaker notes</span>
+                                <label class="custom-switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+                            <label class="flex items-center justify-between">
+                                <span class="text-sm font-medium">Add slide numbers</span>
+                                <label class="custom-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Info & Actions -->
+            <div class="space-y-6">
+                <!-- Conversion Stats -->
+                <div class="glass-effect rounded-2xl p-6 shadow-xl slide-in" style="animation-delay: 0.3s;">
+                    <h3 class="font-bold mb-4 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-purple-600"></i>
+                        Conversion Estimate
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">Estimated slides:</span>
+                            <span class="font-medium" id="estimatedSlides">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">Processing time:</span>
+                            <span class="font-medium" id="processingTime">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">Output size:</span>
+                            <span class="font-medium" id="outputSize">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How It Works -->
+                <div class="glass-effect rounded-2xl p-6 shadow-xl slide-in" style="animation-delay: 0.4s;">
+                    <h3 class="font-bold mb-4 flex items-center">
+                        <i class="fas fa-magic mr-2 text-purple-600"></i>
+                        How It Works
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="feature-card flex items-start">
+                            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-sm font-bold text-purple-600">1</span>
+                            </div>
+                            <div>
+                                <p class="font-medium text-sm">Upload Document</p>
+                                <p class="text-xs text-gray-500">Your .docx file is securely processed</p>
+                            </div>
+                        </div>
+                        <div class="feature-card flex items-start">
+                            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-sm font-bold text-purple-600">2</span>
+                            </div>
+                            <div>
+                                <p class="font-medium text-sm">AI Processing</p>
+                                <p class="text-xs text-gray-500">Content is analyzed and organized</p>
+                            </div>
+                        </div>
+                        <div class="feature-card flex items-start">
+                            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-sm font-bold text-purple-600">3</span>
+                            </div>
+                            <div>
+                                <p class="font-medium text-sm">Generate Slides</p>
+                                <p class="text-xs text-gray-500">Professional PowerPoint created</p>
+                            </div>
+                        </div>
+                        <div class="feature-card flex items-start">
+                            <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3 mt-0.5">
+                                <span class="text-sm font-bold text-purple-600">4</span>
+                            </div>
+                            <div>
+                                <p class="font-medium text-sm">Download Ready</p>
+                                <p class="text-xs text-gray-500">Get your presentation instantly</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Convert Button -->
+                <button id="convertBtn" onclick="convertToSlides()" 
+                    class="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:shadow-lg transform hover:scale-105 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    disabled>
+                    <i class="fas fa-magic mr-2"></i>
+                    Convert to PowerPoint
+                </button>
+
+                <!-- Processing Status -->
+                <div id="processingStatus" class="hidden glass-effect rounded-2xl p-6 shadow-xl">
+                    <div class="flex flex-col items-center">
+                        <div class="spinner mb-4"></div>
+                        <p class="font-medium" id="statusText">Processing your document...</p>
+                        <p class="text-sm text-gray-500 mt-2" id="statusDetail">This may take a few moments</p>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-4">
+                            <div id="conversionProgress" class="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Success Message -->
+                <div id="successMessage" class="hidden glass-effect rounded-2xl p-6 shadow-xl bg-green-50 border-2 border-green-500">
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-5xl text-green-500 mb-4"></i>
+                        <h3 class="font-bold text-lg mb-2">Conversion Complete!</h3>
+                        <p class="text-sm text-gray-600 mb-4">Your presentation is ready</p>
+                        <button id="downloadBtn" class="w-full py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition">
+                            <i class="fas fa-download mr-2"></i>
+                            Download PowerPoint
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-16 py-8 text-center text-gray-600">
+        <p>&copy; 2024 Script to Slides Pro. All rights reserved.</p>
+        <div class="mt-4 flex justify-center space-x-6">
+            <a href="#" class="hover:text-purple-600 transition">Privacy Policy</a>
+            <a href="#" class="hover:text-purple-600 transition">Terms of Service</a>
+            <a href="#" class="hover:text-purple-600 transition">Contact</a>
+        </div>
+    </footer>
+
+    <script>
+        let selectedFile = null;
+        let selectedTemplate = 'custom';
+        let conversionTimeout = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadZone = document.getElementById('uploadZone');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadZone.addEventListener('click', () => fileInput.click());
+            
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileSelect(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFileSelect(e.target.files[0]);
+                }
+            });
+        });
+
+        function handleFileSelect(file) {
+            const maxSize = 16 * 1024 * 1024; // 16MB
+            const allowedTypes = ['.docx', '.pdf', '.txt'];
+            const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+
+            if (!allowedTypes.includes(fileExt)) {
+                showError('Please upload a .docx, .pdf, or .txt file');
+                return;
+            }
+
+            if (file.size > maxSize) {
+                showError('File size must be less than 16MB');
+                return;
+            }
+
+            selectedFile = file;
+            displayFile(file);
+            updateEstimates(file);
+            document.getElementById('convertBtn').disabled = false;
+            document.getElementById('uploadZone').classList.add('has-file');
+            document.getElementById('step1').classList.add('bg-green-500');
+            document.getElementById('step2').classList.remove('bg-gray-300');
+            document.getElementById('step2').classList.add('bg-purple-600', 'text-white');
+        }
+
+        function displayFile(file) {
+            document.getElementById('uploadContent').classList.add('hidden');
+            document.getElementById('filePreview').classList.remove('hidden');
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+        }
+
+        function removeFile() {
+            selectedFile = null;
+            document.getElementById('uploadContent').classList.remove('hidden');
+            document.getElementById('filePreview').classList.add('hidden');
+            document.getElementById('convertBtn').disabled = true;
+            document.getElementById('uploadZone').classList.remove('has-file');
+            document.getElementById('estimatedSlides').textContent = '-';
+            document.getElementById('processingTime').textContent = '-';
+            document.getElementById('outputSize').textContent = '-';
+        }
+
+        function updateEstimates(file) {
+            // Estimate based on file size
+            const fileSizeKB = file.size / 1024;
+            const estimatedSlides = Math.max(5, Math.min(50, Math.floor(fileSizeKB / 10)));
+            const processingTime = Math.max(5, Math.min(30, Math.floor(fileSizeKB / 50)));
+            const outputSize = Math.floor(estimatedSlides * 50); // ~50KB per slide
+
+            document.getElementById('estimatedSlides').textContent = `${estimatedSlides} slides`;
+            document.getElementById('processingTime').textContent = `~${processingTime} seconds`;
+            document.getElementById('outputSize').textContent = `~${formatFileSize(outputSize * 1024)}`;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function selectTemplate(template) {
+            selectedTemplate = template;
+            document.querySelectorAll('.template-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+        }
+
+        function toggleApiKeyVisibility() {
+            const input = document.getElementById('apiKey');
+            const icon = document.getElementById('apiKeyToggle');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        async function convertToSlides() {
+            if (!selectedFile) return;
+
+            // Show processing status
+            document.getElementById('convertBtn').classList.add('hidden');
+            document.getElementById('processingStatus').classList.remove('hidden');
+            
+            // Update progress steps
+            document.getElementById('step2').classList.add('bg-green-500');
+            document.getElementById('step3').classList.remove('bg-gray-300');
+            document.getElementById('step3').classList.add('bg-purple-600', 'text-white');
+
+            // Simulate progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                document.getElementById('conversionProgress').style.width = progress + '%';
+            }, 500);
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('column_index', document.getElementById('columnSelect').value);
+            formData.append('api_key', document.getElementById('apiKey').value);
+            formData.append('template', selectedTemplate);
+            formData.append('bullet_density', document.getElementById('bulletDensity').value);
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(progressInterval);
+                document.getElementById('conversionProgress').style.width = '100%';
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    
+                    // Show success message
+                    setTimeout(() => {
+                        document.getElementById('processingStatus').classList.add('hidden');
+                        document.getElementById('successMessage').classList.remove('hidden');
+                        document.getElementById('step3').classList.add('bg-green-500');
+                        
+                        // Setup download button
+                        document.getElementById('downloadBtn').onclick = () => {
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = selectedFile.name.replace(/\.[^/.]+$/, '') + '_presentation.pptx';
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                        };
+                    }, 500);
+                } else {
+                    throw new Error('Conversion failed');
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                showError('Conversion failed. Please try again.');
+                document.getElementById('processingStatus').classList.add('hidden');
+                document.getElementById('convertBtn').classList.remove('hidden');
+            }
+        }
+
+        function showError(message) {
+            const uploadZone = document.getElementById('uploadZone');
+            uploadZone.classList.add('error');
+            setTimeout(() => uploadZone.classList.remove('error'), 500);
+            
+            // Show error toast
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function downloadSample() {
+            // Create sample document content
+            const sampleContent = `Sample Presentation Document
+
+H1: Welcome to Script to Slides Pro
+
+H2: Introduction Section
+
+H3: About This Tool
+
+H4: Key Features
+This tool converts your documents into professional PowerPoint presentations using AI technology.
+
+H4: Benefits
+Save time and effort by automatically generating slides from your content.
+
+H2: How It Works
+
+H3: Step-by-Step Process
+
+H4: Upload Your Document
+Simply drag and drop your Word document into the upload area.
+
+H4: Configure Settings
+Choose your preferred template and customize the output options.
+
+H4: Generate Presentation
+Our AI processes your content and creates a professional presentation.
+
+This is a sample paragraph that will be converted into bullet points on a slide.`;
+
+            const blob = new Blob([sampleContent], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sample_document.txt';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            // Implementation for dark mode styles
+        }
+    </script>
+</body>
+</html>

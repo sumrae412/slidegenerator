@@ -1,4 +1,5 @@
 Flask==2.3.3
+Flask-CORS==4.0.0
 python-docx==0.8.11
 python-pptx==0.6.21
 requests==2.31.0
@@ -11,3 +12,5 @@ beautifulsoup4==4.12.2
 # Lightweight alternatives for semantic analysis
 nltk==3.8.1
 textstat==0.7.3
+# Additional enhancements
+cryptography==41.0.7
