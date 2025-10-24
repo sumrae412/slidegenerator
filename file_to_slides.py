@@ -80,8 +80,8 @@ from pptx.dml.color import RGBColor
 from PIL import Image, ImageDraw, ImageFont
 import io
 
-# OpenAI for bullet point generation
-import openai
+# Anthropic Claude for bullet point generation and content analysis
+import anthropic
 
 # Additional utilities
 import io
@@ -389,25 +389,94 @@ class SemanticAnalyzer:
 class DocumentParser:
     """Handles parsing of various document formats"""
     
-    def __init__(self, openai_api_key=None):
+    def __init__(self, claude_api_key=None):
         self.heading_patterns = [
             r'^#{1,6}\s+(.+)$',  # Markdown headings
             r'^(.+)\n[=-]{3,}$',  # Underlined headings
             r'^\d+\.\s+(.+)$',   # Numbered headings
             r'^([A-Z][A-Z\s]{5,})$',  # ALL CAPS headings
         ]
-        
-        # Store API key for direct HTTP requests (avoid OpenAI client proxy issues)
-        self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
-        self.client = None  # Don't use OpenAI client due to proxy conflicts
+
+        # Store API key for Claude
+        self.api_key = claude_api_key or os.getenv('ANTHROPIC_API_KEY')
+        self.client = None
+        if self.api_key:
+            try:
+                self.client = anthropic.Anthropic(api_key=self.api_key)
+                logger.info("✅ Claude API client initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Claude client: {e}")
+                self.client = None
+
         self.force_basic_mode = False  # Flag to override AI processing for large files
-        
+
         # Initialize semantic analyzer
         self.semantic_analyzer = SemanticAnalyzer()
-        
+
         if not self.api_key:
-            logger.warning("No OpenAI API key found - bullet generation will use fallback method")
-    
+            logger.warning("No Claude API key found - bullet generation will use fallback method")
+
+    def analyze_content_structure(self, content: str) -> Dict[str, Any]:
+        """Use Claude to analyze document structure and suggest improvements"""
+        if not self.client:
+            return {"analysis": "No Claude API available", "suggestions": []}
+
+        try:
+            prompt = f"""Analyze this document content and provide intelligent restructuring suggestions for creating a presentation.
+
+DOCUMENT CONTENT:
+{content[:8000]}
+
+Please analyze:
+1. **Content density**: Are any sections too dense for a single slide?
+2. **Hierarchy issues**: Does the heading structure match content importance?
+3. **Visual opportunities**: Where would diagrams/charts be more effective than text?
+4. **Split/merge recommendations**: Which sections should be split or combined?
+5. **Missing context**: Are there sections that lack setup or explanation?
+
+Return your analysis as a JSON object with:
+- "overall_quality": score 1-10
+- "density_issues": list of sections that are too dense
+- "hierarchy_suggestions": list of heading adjustments needed
+- "visual_recommendations": list of where visuals would help
+- "split_recommendations": list of sections to split
+- "merge_recommendations": list of sections to combine
+- "summary": brief overview of main issues"""
+
+            message = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=1500,
+                temperature=0.3,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            analysis_text = message.content[0].text.strip()
+            logger.info(f"Content structure analysis completed: {analysis_text[:200]}...")
+
+            # Try to parse JSON response
+            try:
+                import json
+                # Extract JSON from markdown code blocks if present
+                if "```json" in analysis_text:
+                    analysis_text = analysis_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in analysis_text:
+                    analysis_text = analysis_text.split("```")[1].split("```")[0].strip()
+
+                analysis = json.loads(analysis_text)
+                return analysis
+            except:
+                # If JSON parsing fails, return text analysis
+                return {
+                    "analysis": analysis_text,
+                    "suggestions": []
+                }
+
+        except Exception as e:
+            logger.error(f"Error in content structure analysis: {e}")
+            return {"analysis": "Analysis failed", "suggestions": []}
+
     def _is_conversational_heading(self, text: str) -> bool:
         """Check if a heading is conversational/instructional content and shouldn't be a title slide"""
         text_lower = text.lower()
@@ -1535,12 +1604,15 @@ class DocumentParser:
             return ["Content summary point"]
     
     def _create_llm_only_bullets(self, text: str) -> List[str]:
-        """Create bullets using only LLM with optimized prompt for content relevance"""
+        """Create bullets using Claude with optimized prompt for content relevance"""
+        if not self.client:
+            return []
+
         try:
-            # Advanced pipeline-inspired prompt with context-aware summarization
+            # Advanced prompt with context-aware summarization
             word_count = len(text.split())
             content_type = "technical" if any(term in text.lower() for term in ["data", "system", "process", "framework", "pipeline", "model"]) else "general"
-            
+
             prompt = f"""You are an expert at creating slide content from educational material. Analyze the following {content_type} content ({word_count} words) and create 3-5 specific bullet points.
 
 CONTEXT-AWARE INSTRUCTIONS:
@@ -1557,46 +1629,32 @@ CONTENT TO SUMMARIZE:
 OUTPUT FORMAT:
 Return only the bullet points, one per line, without symbols or numbering."""
 
-            response = requests.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {self.api_key}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'model': 'gpt-3.5-turbo',
-                    'messages': [
-                        {'role': 'system', 'content': 'You are an advanced document summarization system that creates precise, actionable slide content. Use context-aware analysis to extract the most valuable insights from each content chunk.'},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    'max_tokens': 300,
-                    'temperature': 0.3
-                },
-                timeout=15
+            message = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=500,
+                temperature=0.3,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
             )
-            
-            if response.status_code == 200:
-                result = response.json()
-                content = result['choices'][0]['message']['content'].strip()
-                
-                # Parse bullets from response
-                bullets = []
-                for line in content.split('\n'):
-                    line = line.strip()
-                    if line and len(line) > 15:
-                        # Clean up any formatting
-                        line = line.lstrip('•-*123456789. ')
-                        if line and not line.startswith('(') and len(line) > 15:
-                            bullets.append(line)
-                
-                logger.info(f"LLM generated {len(bullets)} content-specific bullets")
-                return bullets
-            else:
-                logger.error(f"LLM API call failed: {response.status_code} - {response.text}")
-                return []
-                
+
+            content = message.content[0].text.strip()
+
+            # Parse bullets from response
+            bullets = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line and len(line) > 15:
+                    # Clean up any formatting
+                    line = line.lstrip('•-*123456789. ')
+                    if line and not line.startswith('(') and len(line) > 15:
+                        bullets.append(line)
+
+            logger.info(f"Claude generated {len(bullets)} content-specific bullets")
+            return bullets
+
         except Exception as e:
-            logger.error(f"Error in LLM bullet generation: {e}")
+            logger.error(f"Error in Claude bullet generation: {e}")
             return []
     
     def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
@@ -2909,23 +2967,22 @@ Return EXACTLY 3-4 bullets using this format:
     
     def _summarize_paragraph_to_bullets(self, text: str) -> List[str]:
         """Make a dedicated API call to convert a paragraph into clear bullet points"""
-        if not self.api_key or self.force_basic_mode:
-            # No OpenAI API key or forced basic mode for large files
+        if not self.client or self.force_basic_mode:
             if self.force_basic_mode:
                 logger.info("Using basic bullet extraction (forced for large file)")
             else:
-                logger.info("No OpenAI API key, using basic bullet extraction")
+                logger.info("No Claude API key, using basic bullet extraction")
             return self._create_basic_bullets(text)
-        
+
         # Skip API call if text is too short - leave blank
         if not text or len(text.strip()) < 20:
             logger.info(f"Text too short for API call, leaving blank: '{text}'")
             return []
-        
+
         # Add small delay to avoid rate limiting
         import time
         time.sleep(0.05)  # 50ms delay for faster processing
-        
+
         try:
             prompt = f"""Read this content and create 3-4 clear bullet points that summarize the key information.
 
@@ -2953,34 +3010,22 @@ AVOID:
 
 Return exactly 3-4 bullets in this format:
 - [Complete sentence about key point 1]
-- [Complete sentence about key point 2]  
+- [Complete sentence about key point 2]
 - [Complete sentence about key point 3]
 - [Complete sentence about key point 4 if applicable]"""
 
-            # Use direct HTTP request to avoid client initialization issues
-            import requests
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "model": "gpt-3.5-turbo",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 200,
-                "temperature": 0.3
-            }
-            
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-            
-            if response.status_code != 200:
-                logger.error(f"API request failed with status {response.status_code}: {response.text}")
-                return []
-            
-            result = response.json()
-            content = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            logger.info(f"OpenAI paragraph summary response: {content}")
-            
+            message = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=400,
+                temperature=0.3,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            content = message.content[0].text.strip()
+            logger.info(f"Claude paragraph summary response: {content}")
+
             # Parse bullets from response
             bullets = []
             for line in content.split('\n'):
@@ -2988,21 +3033,21 @@ Return exactly 3-4 bullets in this format:
                 # Remove bullet markers and clean up
                 line = re.sub(r'^[\-\*\•]\s*', '', line)
                 line = re.sub(r'^\d+\.\s*', '', line)  # Remove numbered lists
-                
+
                 # Keep substantial sentences - be more lenient
                 if line and len(line) > 15:
                     # Add period if missing
                     if not line.endswith(('.', '!', '?')):
                         line += '.'
                     bullets.append(line)
-            
+
             if len(bullets) >= 2:
                 logger.info(f"Successfully extracted {len(bullets)} quality bullets")
                 return bullets[:4]
             else:
-                logger.warning(f"OpenAI didn't return enough quality bullets. Got {len(bullets)} bullets: {bullets}. Returning what we have.")
+                logger.warning(f"Claude didn't return enough quality bullets. Got {len(bullets)} bullets: {bullets}. Returning what we have.")
                 return bullets  # Return whatever we got, even if it's just 1 bullet or empty
-                
+
         except Exception as e:
             logger.error(f"Error in paragraph summarization: {e}")
             # Leave blank instead of generic fallback
@@ -7546,59 +7591,43 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def _validate_openai_api_key(api_key: str) -> bool:
-    """Validate OpenAI API key by making a simple test request"""
+def _validate_claude_api_key(api_key: str) -> bool:
+    """Validate Claude API key by making a simple test request"""
     if not api_key:
         logger.info("No API key provided - will use fallback bullet generation")
         return True  # Empty key is valid (uses fallback)
-        
-    if not api_key.startswith('sk-'):
-        logger.warning("API key format invalid - must start with 'sk-'")
+
+    if not api_key.startswith('sk-ant-'):
+        logger.warning("API key format invalid - must start with 'sk-ant-'")
         return False
-    
-    logger.info("Validating OpenAI API key with test request...")
-    
+
+    logger.info("Validating Claude API key with test request...")
+
     try:
-        # Use direct HTTP request to bypass OpenAI client initialization issues
-        import requests
-        import json
-        
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": "test"}],
-            "max_tokens": 1
-        }
-        
-        logger.info("Making direct HTTP request to validate API key...")
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        
-        if response.status_code == 200:
-            logger.info("✅ OpenAI API key validation successful")
-            return True
-        elif response.status_code == 401:
-            logger.warning("❌ OpenAI API key authentication failed")
-            return False
-        elif response.status_code == 429:
-            logger.info("✅ OpenAI API key valid but rate limited")
-            return True
-        elif response.status_code == 403:
-            logger.info("✅ OpenAI API key valid but insufficient permissions")
-            return True
-        else:
-            logger.warning(f"❌ Unexpected response from OpenAI API: {response.status_code}")
-            return False
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Network error during API key validation: {e}")
+        client = anthropic.Anthropic(api_key=api_key)
+        # Make a minimal test request
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=10,
+            messages=[
+                {"role": "user", "content": "test"}
+            ]
+        )
+
+        logger.info("✅ Claude API key validation successful")
+        return True
+
+    except anthropic.AuthenticationError:
+        logger.warning("❌ Claude API key authentication failed")
         return False
+    except anthropic.RateLimitError:
+        logger.info("✅ Claude API key valid but rate limited")
+        return True
+    except anthropic.PermissionDeniedError:
+        logger.info("✅ Claude API key valid but insufficient permissions")
+        return True
     except Exception as e:
-        logger.error(f"❌ OpenAI API key validation failed: {e}")
+        logger.error(f"❌ Claude API key validation failed: {e}")
         return False
 
 # Flask routes
@@ -7623,15 +7652,15 @@ def upload_file():
     script_column = int(script_column_raw)  # Default to column 2
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
-    openai_api_key = request.form.get('openai_key', '').strip()  # Optional OpenAI API key
+    claude_api_key = request.form.get('claude_key', '').strip()  # Optional Claude API key
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
-    
-    # FIRST: Validate OpenAI API key if provided - do this before any file processing
-    if openai_api_key:
-        logger.info("Validating OpenAI API key before processing...")
-        if not _validate_openai_api_key(openai_api_key):
-            return jsonify({'error': 'Invalid OpenAI API key. Please check your key and try again.'}), 400
-        logger.info("✅ OpenAI API key validation successful")
+
+    # FIRST: Validate Claude API key if provided - do this before any file processing
+    if claude_api_key:
+        logger.info("Validating Claude API key before processing...")
+        if not _validate_claude_api_key(claude_api_key):
+            return jsonify({'error': 'Invalid Claude API key. Please check your key and try again.'}), 400
+        logger.info("✅ Claude API key validation successful")
     
     # Now check file size to prevent timeouts on huge files
     file.seek(0, 2)  # Seek to end to get size
@@ -7657,7 +7686,7 @@ def upload_file():
         
         # Parse document
         parse_start = time.time()
-        parser = DocumentParser(openai_api_key=openai_api_key if openai_api_key else None)
+        parser = DocumentParser(claude_api_key=claude_api_key if claude_api_key else None)
         doc_structure = parser.parse_file(filepath, filename, script_column, skip_visuals)
         logger.info(f"Document parsed in {time.time() - parse_start:.1f}s - {len(doc_structure.slides)} slides")
         

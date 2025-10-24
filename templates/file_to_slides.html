@@ -235,25 +235,25 @@
                     </p>
                 </div>
 
-                <!-- OpenAI API Key -->
-                <div id="openai-key-section" class="mb-6">
-                    <label for="openai-key" class="block text-sm font-medium text-gray-700 mb-2">
-                        🔑 OpenAI API Key (Optional, but recommended)
+                <!-- Claude API Key -->
+                <div id="claude-key-section" class="mb-6">
+                    <label for="claude-key" class="block text-sm font-medium text-gray-700 mb-2">
+                        🔑 Claude API Key (Optional, but recommended)
                     </label>
-                    <input type="password" id="openai-key" name="openai_key" 
+                    <input type="password" id="claude-key" name="claude_key"
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="sk-... (optional - for enhanced bullet generation)">
+                           placeholder="sk-ant-... (optional - for enhanced bullet generation)">
                     <div id="key-validation" class="mt-1 text-xs hidden">
                         <span id="key-status"></span>
                     </div>
                     <p class="text-sm text-gray-500 mt-1">
-                        Enter your OpenAI API key for enhanced AI-powered bullet generation. 
+                        Enter your Claude API key for enhanced AI-powered bullet generation and content analysis.
                         <span class="text-blue-600">Recommended for higher quality, more contextually relevant bullets.</span>
                     </p>
                     <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p class="text-xs text-blue-800">
-                            <strong>🔒 Privacy:</strong> Your API key is only used for this session and is not stored or logged. 
-                            Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" class="underline">platform.openai.com/api-keys</a>
+                            <strong>🔒 Privacy:</strong> Your API key is only used for this session and is not stored or logged.
+                            Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" class="underline">console.anthropic.com/settings/keys</a>
                         </p>
                     </div>
                 </div>
@@ -468,22 +468,22 @@
         // No processing mode selection needed - always use regular mode
 
         // API Key validation
-        document.getElementById('openai-key').addEventListener('input', (e) => {
+        document.getElementById('claude-key').addEventListener('input', (e) => {
             const key = e.target.value.trim();
             const validationDiv = document.getElementById('key-validation');
             const statusSpan = document.getElementById('key-status');
-            
+
             if (key === '') {
                 validationDiv.classList.add('hidden');
                 return;
             }
-            
-            if (key.startsWith('sk-') && key.length > 10) {
+
+            if (key.startsWith('sk-ant-') && key.length > 20) {
                 statusSpan.textContent = '✓ API key format looks valid';
                 statusSpan.className = 'text-green-600';
                 validationDiv.classList.remove('hidden');
             } else {
-                statusSpan.textContent = '⚠ API key should start with "sk-" and be longer';
+                statusSpan.textContent = '⚠ Claude API key should start with "sk-ant-"';
                 statusSpan.className = 'text-orange-600';
                 validationDiv.classList.remove('hidden');
             }
@@ -505,11 +505,11 @@
             const formData = new FormData();
             formData.append('file', selectedFile);
             formData.append('script_column', document.getElementById('script-column').value);
-            
-            // Add OpenAI API key if provided
-            const openaiKey = document.getElementById('openai-key').value.trim();
-            if (openaiKey) {
-                formData.append('openai_key', openaiKey);
+
+            // Add Claude API key if provided
+            const claudeKey = document.getElementById('claude-key').value.trim();
+            if (claudeKey) {
+                formData.append('claude_key', claudeKey);
             }
             
             // Always use regular mode (no skip_visuals)
