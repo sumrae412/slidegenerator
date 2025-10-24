@@ -102,9 +102,27 @@ MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Google OAuth configuration
-GOOGLE_CLIENT_SECRETS_FILE = os.environ.get('GOOGLE_CLIENT_SECRETS_FILE', 'credentials.json')
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/presentations']
 GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'http://localhost:5000/oauth2callback')
+
+# Load Google credentials from environment or file
+def get_google_client_config():
+    """Get Google OAuth client configuration from env var or file"""
+    # Try environment variable first (for Heroku)
+    credentials_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+    if credentials_json:
+        import json
+        return json.loads(credentials_json)
+
+    # Fall back to credentials.json file (for local dev)
+    credentials_file = os.environ.get('GOOGLE_CLIENT_SECRETS_FILE', 'credentials.json')
+    if os.path.exists(credentials_file):
+        import json
+        with open(credentials_file, 'r') as f:
+            return json.load(f)
+
+    return None
+
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 @dataclass
@@ -7852,15 +7870,16 @@ def google_auth():
     try:
         from google_auth_oauthlib.flow import Flow
 
-        # Check if credentials file exists
-        if not os.path.exists(GOOGLE_CLIENT_SECRETS_FILE):
+        # Get client configuration
+        client_config = get_google_client_config()
+        if not client_config:
             return jsonify({
                 'error': 'Google OAuth not configured. Please contact administrator.'
             }), 500
 
-        # Create flow
-        flow = Flow.from_client_secrets_file(
-            GOOGLE_CLIENT_SECRETS_FILE,
+        # Create flow from client config
+        flow = Flow.from_client_config(
+            client_config,
             scopes=GOOGLE_SCOPES,
             redirect_uri=GOOGLE_REDIRECT_URI
         )
@@ -7891,9 +7910,14 @@ def oauth2callback():
         if not state:
             return "Error: Missing state parameter", 400
 
+        # Get client configuration
+        client_config = get_google_client_config()
+        if not client_config:
+            return "Error: Google OAuth not configured", 500
+
         # Create flow
-        flow = Flow.from_client_secrets_file(
-            GOOGLE_CLIENT_SECRETS_FILE,
+        flow = Flow.from_client_config(
+            client_config,
             scopes=GOOGLE_SCOPES,
             state=state,
             redirect_uri=GOOGLE_REDIRECT_URI
