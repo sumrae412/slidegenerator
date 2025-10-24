@@ -10,7 +10,7 @@ import sys
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from file_to_slides_enhanced import app
+from file_to_slides import app
 
 # Configure for production
 app.config['DEBUG'] = False
