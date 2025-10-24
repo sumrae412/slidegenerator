@@ -258,11 +258,54 @@
                     </div>
                 </div>
 
+                <!-- Output Format Selection -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-3">
+                        📊 Output Format
+                    </label>
+                    <div class="flex gap-4">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="output_format" value="pptx" checked class="peer sr-only">
+                            <div class="p-4 border-2 border-gray-300 rounded-lg peer-checked:border-blue-600 peer-checked:bg-blue-50 transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-semibold text-gray-900">PowerPoint (.pptx)</div>
+                                        <div class="text-sm text-gray-600">Download file</div>
+                                    </div>
+                                    <svg class="h-6 w-6 text-blue-600 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="output_format" value="google_slides" class="peer sr-only">
+                            <div class="p-4 border-2 border-gray-300 rounded-lg peer-checked:border-blue-600 peer-checked:bg-blue-50 transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-semibold text-gray-900">Google Slides</div>
+                                        <div class="text-sm text-gray-600">Create in Drive</div>
+                                    </div>
+                                    <svg class="h-6 w-6 text-blue-600 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="google-auth-notice" class="hidden mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p class="text-sm text-yellow-800">
+                            <strong>⚠️ Authentication Required:</strong> You'll need to authorize Google access before creating slides.
+                            <button type="button" id="google-auth-btn" class="ml-2 text-blue-600 underline">Authorize Now</button>
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Convert Button -->
                 <div class="text-center">
-                    <button type="submit" id="convert-btn" disabled 
+                    <button type="submit" id="convert-btn" disabled
                             class="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all transform hover:scale-105 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none">
-                        📈 Convert to PowerPoint
+                        📈 Convert to Presentation
                     </button>
                 </div>
             </form>
@@ -467,6 +510,37 @@
 
         // No processing mode selection needed - always use regular mode
 
+        // Output format toggle
+        const formatRadios = document.querySelectorAll('input[name="output_format"]');
+        const googleAuthNotice = document.getElementById('google-auth-notice');
+
+        formatRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'google_slides') {
+                    googleAuthNotice.classList.remove('hidden');
+                } else {
+                    googleAuthNotice.classList.add('hidden');
+                }
+            });
+        });
+
+        // Google Authentication
+        document.getElementById('google-auth-btn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/auth/google');
+                const data = await response.json();
+
+                if (data.auth_url) {
+                    // Open auth URL in popup or redirect
+                    window.location.href = data.auth_url;
+                } else if (data.error) {
+                    showError(data.error);
+                }
+            } catch (error) {
+                showError('Failed to initiate Google authentication: ' + error.message);
+            }
+        });
+
         // API Key validation
         document.getElementById('claude-key').addEventListener('input', (e) => {
             const key = e.target.value.trim();
@@ -506,12 +580,16 @@
             formData.append('file', selectedFile);
             formData.append('script_column', document.getElementById('script-column').value);
 
+            // Add output format
+            const outputFormat = document.querySelector('input[name="output_format"]:checked').value;
+            formData.append('output_format', outputFormat);
+
             // Add Claude API key if provided
             const claudeKey = document.getElementById('claude-key').value.trim();
             if (claudeKey) {
                 formData.append('claude_key', claudeKey);
             }
-            
+
             // Always use regular mode (no skip_visuals)
             // The hidden input already sets skip_visuals to false
 
@@ -558,6 +636,8 @@
 
                 if (result.success) {
                     showResults(result);
+                } else if (result.auth_required) {
+                    showError('Google authentication required. Please click "Authorize Now" and try again.');
                 } else {
                     showError(result.error || 'Conversion failed');
                 }
@@ -584,9 +664,24 @@
         }
 
         function showResults(result) {
-            document.getElementById('result-info').textContent = 
+            const resultInfo = document.getElementById('result-info');
+            const downloadLink = document.getElementById('download-link');
+
+            resultInfo.textContent =
                 `Generated "${result.title}" with ${result.slide_count} slides`;
-            document.getElementById('download-link').href = result.download_url;
+
+            if (result.format === 'google_slides') {
+                // Google Slides - show "Open in Google Slides" link
+                downloadLink.href = result.google_slides_url;
+                downloadLink.textContent = '🌐 Open in Google Slides';
+                downloadLink.target = '_blank';
+            } else {
+                // PowerPoint - show download link
+                downloadLink.href = result.download_url;
+                downloadLink.textContent = '📥 Download PowerPoint';
+                downloadLink.target = '';
+            }
+
             results.classList.remove('hidden');
         }
 

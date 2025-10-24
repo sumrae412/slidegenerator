@@ -100,6 +100,11 @@ ALLOWED_EXTENSIONS = {'docx'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Google OAuth configuration
+GOOGLE_CLIENT_SECRETS_FILE = os.environ.get('GOOGLE_CLIENT_SECRETS_FILE', 'credentials.json')
+GOOGLE_SCOPES = ['https://www.googleapis.com/auth/presentations']
+GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'http://localhost:5000/oauth2callback')
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 @dataclass
@@ -7585,6 +7590,211 @@ Generated: {timestamp}
             draw.line([x2, y2, hx1, hy1], fill='black', width=2)
             draw.line([x2, y2, hx2, hy2], fill='black', width=2)
 
+
+class GoogleSlidesGenerator:
+    """Handles creation of Google Slides presentations"""
+
+    def __init__(self, credentials=None):
+        """Initialize with Google OAuth credentials"""
+        self.credentials = credentials
+        self.service = None
+
+        if credentials:
+            try:
+                from googleapiclient.discovery import build
+                self.service = build('slides', 'v1', credentials=credentials)
+                logger.info("✅ Google Slides service initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Google Slides service: {e}")
+                self.service = None
+
+    def create_presentation(self, doc_structure: DocumentStructure) -> Dict[str, Any]:
+        """Create a Google Slides presentation from document structure"""
+        if not self.service:
+            raise Exception("Google Slides service not initialized")
+
+        try:
+            # Create a new presentation
+            presentation = {
+                'title': doc_structure.title or 'Generated Presentation'
+            }
+
+            presentation_response = self.service.presentations().create(
+                body=presentation
+            ).execute()
+
+            presentation_id = presentation_response.get('presentationId')
+            logger.info(f"Created Google Slides presentation: {presentation_id}")
+
+            # Build requests for all slides
+            requests = []
+
+            # Add slides and content
+            for idx, slide in enumerate(doc_structure.slides):
+                if idx == 0:
+                    # Use the default first slide for title
+                    slide_id = presentation_response['slides'][0]['objectId']
+                else:
+                    # Create new slides
+                    slide_id = f'slide_{idx}'
+                    requests.append({
+                        'createSlide': {
+                            'objectId': slide_id,
+                            'slideLayoutReference': {
+                                'predefinedLayout': 'TITLE_AND_BODY'
+                            }
+                        }
+                    })
+
+                # Add content based on slide type
+                if slide.slide_type == 'title':
+                    requests.extend(self._create_title_slide_requests(slide_id, slide, idx == 0))
+                elif slide.slide_type in ['section', 'subsection']:
+                    requests.extend(self._create_section_slide_requests(slide_id, slide))
+                else:  # content slide
+                    requests.extend(self._create_content_slide_requests(slide_id, slide))
+
+            # Execute all requests in batch
+            if requests:
+                self.service.presentations().batchUpdate(
+                    presentationId=presentation_id,
+                    body={'requests': requests}
+                ).execute()
+
+            logger.info(f"Successfully added {len(doc_structure.slides)} slides")
+
+            return {
+                'presentation_id': presentation_id,
+                'url': f'https://docs.google.com/presentation/d/{presentation_id}/edit',
+                'slide_count': len(doc_structure.slides)
+            }
+
+        except Exception as e:
+            logger.error(f"Error creating Google Slides presentation: {e}")
+            raise
+
+    def _create_title_slide_requests(self, slide_id: str, slide: SlideContent, is_first: bool) -> List[Dict]:
+        """Create requests for title slide"""
+        requests = []
+
+        # For the first slide, update existing placeholders
+        if is_first:
+            requests.append({
+                'insertText': {
+                    'objectId': slide_id + '_title',
+                    'text': slide.title,
+                    'insertionIndex': 0
+                }
+            })
+            if slide.content:
+                requests.append({
+                    'insertText': {
+                        'objectId': slide_id + '_subtitle',
+                        'text': '\n'.join(slide.content),
+                        'insertionIndex': 0
+                    }
+                })
+        else:
+            # For other slides, we'll need to create text boxes
+            requests.append({
+                'createShape': {
+                    'objectId': f'{slide_id}_title_box',
+                    'shapeType': 'TEXT_BOX',
+                    'elementProperties': {
+                        'pageObjectId': slide_id,
+                        'size': {
+                            'width': {'magnitude': 6000000, 'unit': 'EMU'},
+                            'height': {'magnitude': 1000000, 'unit': 'EMU'}
+                        },
+                        'transform': {
+                            'scaleX': 1,
+                            'scaleY': 1,
+                            'translateX': 1000000,
+                            'translateY': 2000000,
+                            'unit': 'EMU'
+                        }
+                    }
+                }
+            })
+            requests.append({
+                'insertText': {
+                    'objectId': f'{slide_id}_title_box',
+                    'text': slide.title
+                }
+            })
+
+        return requests
+
+    def _create_section_slide_requests(self, slide_id: str, slide: SlideContent) -> List[Dict]:
+        """Create requests for section/subsection slide"""
+        return self._create_title_slide_requests(slide_id, slide, False)
+
+    def _create_content_slide_requests(self, slide_id: str, slide: SlideContent) -> List[Dict]:
+        """Create requests for content slide with bullets"""
+        requests = []
+
+        # Create title text box
+        requests.append({
+            'createShape': {
+                'objectId': f'{slide_id}_title_box',
+                'shapeType': 'TEXT_BOX',
+                'elementProperties': {
+                    'pageObjectId': slide_id,
+                    'size': {
+                        'width': {'magnitude': 6000000, 'unit': 'EMU'},
+                        'height': {'magnitude': 800000, 'unit': 'EMU'}
+                    },
+                    'transform': {
+                        'scaleX': 1,
+                        'scaleY': 1,
+                        'translateX': 500000,
+                        'translateY': 500000,
+                        'unit': 'EMU'
+                    }
+                }
+            }
+        })
+        requests.append({
+            'insertText': {
+                'objectId': f'{slide_id}_title_box',
+                'text': slide.title
+            }
+        })
+
+        # Create bullet points text box
+        if slide.content:
+            bullet_text = '\n'.join([f'• {item}' for item in slide.content])
+
+            requests.append({
+                'createShape': {
+                    'objectId': f'{slide_id}_content_box',
+                    'shapeType': 'TEXT_BOX',
+                    'elementProperties': {
+                        'pageObjectId': slide_id,
+                        'size': {
+                            'width': {'magnitude': 6000000, 'unit': 'EMU'},
+                            'height': {'magnitude': 4000000, 'unit': 'EMU'}
+                        },
+                        'transform': {
+                            'scaleX': 1,
+                            'scaleY': 1,
+                            'translateX': 500000,
+                            'translateY': 1500000,
+                            'unit': 'EMU'
+                        }
+                    }
+                }
+            })
+            requests.append({
+                'insertText': {
+                    'objectId': f'{slide_id}_content_box',
+                    'text': bullet_text
+                }
+            })
+
+        return requests
+
+
 # Helper functions
 def allowed_file(filename):
     """Check if file extension is allowed"""
@@ -7636,6 +7846,80 @@ def index():
     """Main page"""
     return render_template('file_to_slides.html')
 
+@app.route('/auth/google')
+def google_auth():
+    """Initiate Google OAuth flow"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+
+        # Check if credentials file exists
+        if not os.path.exists(GOOGLE_CLIENT_SECRETS_FILE):
+            return jsonify({
+                'error': 'Google OAuth not configured. Please contact administrator.'
+            }), 500
+
+        # Create flow
+        flow = Flow.from_client_secrets_file(
+            GOOGLE_CLIENT_SECRETS_FILE,
+            scopes=GOOGLE_SCOPES,
+            redirect_uri=GOOGLE_REDIRECT_URI
+        )
+
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true'
+        )
+
+        # Store state in session
+        flask.session['state'] = state
+
+        return jsonify({'auth_url': authorization_url})
+
+    except Exception as e:
+        logger.error(f"Error initiating Google OAuth: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    """Handle OAuth2 callback from Google"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from google.auth.transport.requests import Request
+
+        # Verify state
+        state = flask.session.get('state')
+        if not state:
+            return "Error: Missing state parameter", 400
+
+        # Create flow
+        flow = Flow.from_client_secrets_file(
+            GOOGLE_CLIENT_SECRETS_FILE,
+            scopes=GOOGLE_SCOPES,
+            state=state,
+            redirect_uri=GOOGLE_REDIRECT_URI
+        )
+
+        # Fetch token
+        flow.fetch_token(authorization_response=flask.request.url)
+
+        # Store credentials in session
+        credentials = flow.credentials
+        flask.session['google_credentials'] = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        }
+
+        # Redirect back to main page
+        return redirect(url_for('index'))
+
+    except Exception as e:
+        logger.error(f"Error in OAuth callback: {e}")
+        return f"Error: {str(e)}", 500
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload and conversion"""
@@ -7653,7 +7937,9 @@ def upload_file():
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
     claude_api_key = request.form.get('claude_key', '').strip()  # Optional Claude API key
+    output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
+    logger.info(f"📊 Output format: {output_format}")
 
     # FIRST: Validate Claude API key if provided - do this before any file processing
     if claude_api_key:
@@ -7694,26 +7980,80 @@ def upload_file():
         if len(doc_structure.slides) > 200:
             os.remove(filepath)
             return jsonify({'error': f'Document too complex with {len(doc_structure.slides)} slides. Maximum is 200 slides for processing speed.'}), 400
-        
-        # Generate PowerPoint slides
+
+        # Generate presentation based on output format
         ppt_start = time.time()
-        generator = SlideGenerator(openai_client=parser.client)
-        output_path = generator.create_powerpoint(doc_structure, skip_visuals=skip_visuals)
-        logger.info(f"PowerPoint generated in {time.time() - ppt_start:.1f}s")
-        
-        # Clean up uploaded file
-        os.remove(filepath)
-        
-        total_time = time.time() - start_time
-        logger.info(f"Total conversion completed in {total_time:.1f}s")
-        
-        return jsonify({
-            'success': True,
-            'filename': os.path.basename(output_path),
-            'download_url': f'/download/{os.path.basename(output_path)}',
-            'slide_count': len(doc_structure.slides),
-            'title': doc_structure.title
-        })
+
+        if output_format == 'google_slides':
+            # Google Slides creation
+            google_credentials = flask.session.get('google_credentials')
+
+            if not google_credentials:
+                os.remove(filepath)
+                return jsonify({
+                    'error': 'Google authentication required. Please authorize first.',
+                    'auth_required': True
+                }), 401
+
+            try:
+                from google.oauth2.credentials import Credentials
+
+                # Rebuild credentials from session
+                creds = Credentials(
+                    token=google_credentials['token'],
+                    refresh_token=google_credentials.get('refresh_token'),
+                    token_uri=google_credentials['token_uri'],
+                    client_id=google_credentials['client_id'],
+                    client_secret=google_credentials['client_secret'],
+                    scopes=google_credentials['scopes']
+                )
+
+                # Create Google Slides presentation
+                google_generator = GoogleSlidesGenerator(credentials=creds)
+                result = google_generator.create_presentation(doc_structure)
+
+                logger.info(f"Google Slides generated in {time.time() - ppt_start:.1f}s")
+
+                # Clean up uploaded file
+                os.remove(filepath)
+
+                total_time = time.time() - start_time
+                logger.info(f"Total conversion completed in {total_time:.1f}s")
+
+                return jsonify({
+                    'success': True,
+                    'presentation_id': result['presentation_id'],
+                    'google_slides_url': result['url'],
+                    'slide_count': result['slide_count'],
+                    'title': doc_structure.title,
+                    'format': 'google_slides'
+                })
+
+            except Exception as e:
+                os.remove(filepath)
+                logger.error(f"Error creating Google Slides: {e}")
+                return jsonify({'error': f'Error creating Google Slides: {str(e)}'}), 500
+
+        else:
+            # PowerPoint creation (default)
+            generator = SlideGenerator(openai_client=parser.client)
+            output_path = generator.create_powerpoint(doc_structure, skip_visuals=skip_visuals)
+            logger.info(f"PowerPoint generated in {time.time() - ppt_start:.1f}s")
+
+            # Clean up uploaded file
+            os.remove(filepath)
+
+            total_time = time.time() - start_time
+            logger.info(f"Total conversion completed in {total_time:.1f}s")
+
+            return jsonify({
+                'success': True,
+                'filename': os.path.basename(output_path),
+                'download_url': f'/download/{os.path.basename(output_path)}',
+                'slide_count': len(doc_structure.slides),
+                'title': doc_structure.title,
+                'format': 'pptx'
+            })
         
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}")
