@@ -800,7 +800,35 @@ Return your analysis as a JSON object with:
         result = '\n'.join(content)
         logger.info(f"_parse_docx_raw_for_title returning {len(result)} chars")
         return result
-    
+
+    def _parse_txt(self, file_path: str) -> str:
+        """Parse TXT file (Google Docs export) with proper paragraph handling"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_content = f.read()
+
+        # Split into paragraphs (double newlines or single newlines with substantial content)
+        paragraphs = []
+
+        # First, split by double newlines (clear paragraph breaks)
+        blocks = raw_content.split('\n\n')
+
+        for block in blocks:
+            block = block.strip()
+            if not block:
+                continue
+
+            # Further split long blocks by single newlines if they contain multiple distinct thoughts
+            lines = block.split('\n')
+            for line in lines:
+                line = line.strip()
+                if len(line) > 30:  # Only include substantial content
+                    paragraphs.append(line)
+
+        # Join paragraphs with single newlines so each becomes a content block
+        result = '\n'.join(paragraphs)
+        logger.info(f"TXT parser extracted {len(paragraphs)} content paragraphs from {len(raw_content)} chars")
+        return result
+
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX or TXT file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
@@ -809,9 +837,8 @@ Return your analysis as a JSON object with:
             if file_ext == 'docx':
                 content = self._parse_docx(file_path, script_column)
             elif file_ext == 'txt':
-                # Google Docs fetched as plain text
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                # Google Docs fetched as plain text - parse it properly
+                content = self._parse_txt(file_path)
                 logger.info(f"TXT parsing complete: {len(content.split())} words extracted")
             else:
                 raise ValueError(f"Only DOCX and TXT files are supported. Got: {file_ext}")
