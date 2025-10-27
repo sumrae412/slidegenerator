@@ -315,14 +315,6 @@
                     </div>
                 </div>
 
-                <!-- Google Auth Notice -->
-                <div id="google-auth-notice" class="hidden mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p class="text-sm text-slate-800">
-                        <span class="font-semibold">Authentication Required:</span> You'll need to authorize Google access before creating slides.
-                        <button type="button" id="google-auth-btn" class="ml-2 text-slate-800 underline hover:text-slate-900">Authorize Now</button>
-                    </p>
-                </div>
-
                 <!-- Convert Button -->
                 <div class="text-center">
                     <button type="submit" id="convert-btn" disabled
@@ -467,12 +459,6 @@
 
                 if (config.authenticated && config.access_token) {
                     accessToken = config.access_token;
-
-                    // Hide auth notice if user is authenticated
-                    const googleAuthNotice = document.getElementById('google-auth-notice');
-                    if (googleAuthNotice) {
-                        googleAuthNotice.classList.add('hidden');
-                    }
                 }
 
                 googleApiKey = config.api_key || '';
@@ -557,31 +543,7 @@
         window.onload = async () => {
             onGoogleApiLoad();
             await fetchGoogleConfig();
-
-            // After fetching config, show auth notice if user is not authenticated
-            // (We always output to Google Slides now)
-            const googleAuthNotice = document.getElementById('google-auth-notice');
-            if (!accessToken) {
-                googleAuthNotice.classList.remove('hidden');
-            }
         };
-
-        // Google Authentication
-        document.getElementById('google-auth-btn').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/auth/google');
-                const data = await response.json();
-
-                if (data.auth_url) {
-                    // Open auth URL in popup or redirect
-                    window.location.href = data.auth_url;
-                } else if (data.error) {
-                    showError(data.error);
-                }
-            } catch (error) {
-                showError('Failed to initiate Google authentication: ' + error.message);
-            }
-        });
 
         // API Key validation
         document.getElementById('claude-key').addEventListener('input', (e) => {

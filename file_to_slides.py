@@ -134,13 +134,14 @@ def get_google_client_config():
     return None
 
 def extract_google_doc_id(url: str) -> Optional[str]:
-    """Extract document ID from Google Docs URL"""
+    """Extract document ID from Google Docs or Drive URL"""
     import re
 
-    # Match various Google Docs URL patterns
+    # Match various Google Docs and Drive URL patterns
     patterns = [
-        r'/document/d/([a-zA-Z0-9-_]+)',
-        r'id=([a-zA-Z0-9-_]+)',
+        r'/document/d/([a-zA-Z0-9-_]+)',  # docs.google.com/document/d/ID
+        r'/file/d/([a-zA-Z0-9-_]+)',       # drive.google.com/file/d/ID (from Picker)
+        r'id=([a-zA-Z0-9-_]+)',            # ?id=ID parameter
     ]
 
     for pattern in patterns:
