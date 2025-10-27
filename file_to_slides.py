@@ -802,31 +802,77 @@ Return your analysis as a JSON object with:
         return result
 
     def _parse_txt(self, file_path: str) -> str:
-        """Parse TXT file (Google Docs export) with proper paragraph handling"""
+        """Parse TXT file (Google Docs export) with heading detection and proper formatting"""
+        import re
+
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_content = f.read()
 
-        # Split into paragraphs (double newlines or single newlines with substantial content)
-        paragraphs = []
+        # Remove stage directions in brackets
+        raw_content = re.sub(r'\[.*?\]', '', raw_content)
 
-        # First, split by double newlines (clear paragraph breaks)
-        blocks = raw_content.split('\n\n')
+        # Split into lines for processing
+        lines = raw_content.split('\n')
+        processed_lines = []
 
-        for block in blocks:
-            block = block.strip()
-            if not block:
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
                 continue
 
-            # Further split long blocks by single newlines if they contain multiple distinct thoughts
-            lines = block.split('\n')
-            for line in lines:
-                line = line.strip()
-                if len(line) > 30:  # Only include substantial content
-                    paragraphs.append(line)
+            # Detect headings by characteristics:
+            # H1: Usually all caps, short, at the beginning
+            # H2: Title case, short, often followed by blank line
+            # H3: Similar to H2 but more context-specific
+            # H4: Similar to H3 but may be questions or specific topics
 
-        # Join paragraphs with single newlines so each becomes a content block
-        result = '\n'.join(paragraphs)
-        logger.info(f"TXT parser extracted {len(paragraphs)} content paragraphs from {len(raw_content)} chars")
+            is_heading = False
+            heading_level = None
+
+            # Check if line looks like a heading (short, capitalized, no punctuation at end)
+            is_short = len(line) < 80
+            is_capitalized = line[0].isupper() if line else False
+            no_ending_punct = not line.endswith(('.', ',', ';', ':'))
+            has_multiple_words = len(line.split()) >= 2
+
+            # H1 detection: All caps, short, typically at start
+            if (is_short and line.isupper() and has_multiple_words and i < 5):
+                is_heading = True
+                heading_level = 1
+                line = line.title()  # Convert to title case
+
+            # H2 detection: Title case, short, looks like section header
+            elif (is_short and is_capitalized and no_ending_punct and
+                  has_multiple_words and len(line) < 60 and
+                  any(word in line for word in ['Introduction', 'Overview', 'Background', 'Conclusion', 'Summary', 'Part', 'Section', 'Chapter'])):
+                is_heading = True
+                heading_level = 2
+
+            # H3 detection: Title case, subsection-like
+            elif (is_short and is_capitalized and no_ending_punct and
+                  has_multiple_words and len(line) < 50 and
+                  sum(1 for c in line if c.isupper()) / len(line) > 0.3):  # High proportion of capitals
+                is_heading = True
+                heading_level = 3
+
+            # H4 detection: Questions or topic headers
+            elif (is_short and is_capitalized and
+                  (line.endswith('?') or (no_ending_punct and has_multiple_words and len(line) < 40))):
+                is_heading = True
+                heading_level = 4
+
+            # Format headings with markdown
+            if is_heading and heading_level:
+                line = '#' * heading_level + ' ' + line
+                logger.info(f"Detected H{heading_level} heading: {line}")
+
+            # Only include substantial content (or headings)
+            if is_heading or len(line) > 30:
+                processed_lines.append(line)
+
+        # Join lines with single newlines
+        result = '\n'.join(processed_lines)
+        logger.info(f"TXT parser extracted {len(processed_lines)} lines ({sum(1 for l in processed_lines if l.startswith('#'))} headings) from {len(raw_content)} chars")
         return result
 
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
