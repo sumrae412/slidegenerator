@@ -234,6 +234,29 @@
                     </div>
                     <input type="file" id="file-input" name="file" class="hidden" accept=".docx" />
                 </div>
+
+                <!-- Divider -->
+                <div class="relative mb-6">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-slate-300"></div>
+                    </div>
+                    <div class="relative flex justify-center text-sm">
+                        <span class="px-2 bg-white text-slate-500">or</span>
+                    </div>
+                </div>
+
+                <!-- Google Docs URL Input -->
+                <div class="mb-6">
+                    <label for="google-docs-url" class="block text-sm font-semibold text-slate-800 mb-2">
+                        Paste a Google Docs URL
+                    </label>
+                    <input type="url" id="google-docs-url" name="google_docs_url"
+                           class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
+                           placeholder="https://docs.google.com/document/d/...">
+                    <p class="text-xs text-slate-600 mt-2">
+                        Make sure the document is set to "Anyone with the link can view"
+                    </p>
+                </div>
                 
                 <!-- File Info -->
                 <div id="file-info" class="hidden mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -419,6 +442,7 @@
         const results = document.getElementById('results');
         const error = document.getElementById('error');
         const scriptColumnSelect = document.getElementById('script-column');
+        const googleDocsUrlInput = document.getElementById('google-docs-url');
 
         // File upload handling
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -497,6 +521,8 @@
             convertBtn.disabled = false;
             hideError();
             clearUploadError();
+            // Clear Google Docs URL when file is selected
+            googleDocsUrlInput.value = '';
         }
 
         function showFileInfo(file) {
@@ -524,6 +550,27 @@
             hideError();
             hideResults();
             clearUploadError();
+        });
+
+        // Google Docs URL handling
+        googleDocsUrlInput.addEventListener('input', () => {
+            const url = googleDocsUrlInput.value.trim();
+            if (url) {
+                // Clear file selection when URL is entered
+                selectedFile = null;
+                fileInput.value = '';
+                fileInfo.classList.add('hidden');
+                uploadArea.classList.remove('uploading');
+                clearUploadError();
+
+                // Enable convert button
+                convertBtn.disabled = false;
+            } else {
+                // Disable convert button if no file is selected either
+                if (!selectedFile) {
+                    convertBtn.disabled = true;
+                }
+            }
         });
 
         // No processing mode selection needed - always use regular mode
@@ -590,9 +637,11 @@
         // Form submission
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            if (!selectedFile) {
-                showError('Please select a file first.');
+
+            const googleDocsUrl = googleDocsUrlInput.value.trim();
+
+            if (!selectedFile && !googleDocsUrl) {
+                showError('Please select a file or enter a Google Docs URL.');
                 return;
             }
 
@@ -601,7 +650,14 @@
             hideResults();
 
             const formData = new FormData();
-            formData.append('file', selectedFile);
+
+            // Add either file or Google Docs URL
+            if (selectedFile) {
+                formData.append('file', selectedFile);
+            } else if (googleDocsUrl) {
+                formData.append('google_docs_url', googleDocsUrl);
+            }
+
             formData.append('script_column', document.getElementById('script-column').value);
 
             // Add output format

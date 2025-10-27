@@ -102,7 +102,11 @@ MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Google OAuth configuration
-GOOGLE_SCOPES = ['https://www.googleapis.com/auth/presentations']
+GOOGLE_SCOPES = [
+    'https://www.googleapis.com/auth/presentations',
+    'https://www.googleapis.com/auth/documents.readonly',
+    'https://www.googleapis.com/auth/drive.readonly'
+]
 GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'http://localhost:5000/oauth2callback')
 
 # Load Google credentials from environment or file
@@ -122,6 +126,75 @@ def get_google_client_config():
             return json.load(f)
 
     return None
+
+def extract_google_doc_id(url: str) -> Optional[str]:
+    """Extract document ID from Google Docs URL"""
+    import re
+
+    # Match various Google Docs URL patterns
+    patterns = [
+        r'/document/d/([a-zA-Z0-9-_]+)',
+        r'id=([a-zA-Z0-9-_]+)',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+
+    return None
+
+def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Fetch content from a Google Doc
+    Returns: (content, error_message)
+    """
+    try:
+        if credentials:
+            # Use authenticated Google Docs API for better formatting
+            from googleapiclient.discovery import build
+            from google.oauth2.credentials import Credentials
+
+            # Rebuild credentials
+            creds = Credentials(
+                token=credentials['token'],
+                refresh_token=credentials.get('refresh_token'),
+                token_uri=credentials['token_uri'],
+                client_id=credentials['client_id'],
+                client_secret=credentials['client_secret'],
+                scopes=credentials['scopes']
+            )
+
+            service = build('docs', 'v1', credentials=creds)
+            document = service.documents().get(documentId=doc_id).execute()
+
+            # Extract text content from the document structure
+            content = []
+            for element in document.get('body', {}).get('content', []):
+                if 'paragraph' in element:
+                    paragraph_elements = element['paragraph'].get('elements', [])
+                    for elem in paragraph_elements:
+                        if 'textRun' in elem:
+                            content.append(elem['textRun']['content'])
+
+            return '\n'.join(content), None
+        else:
+            # Try public export URL (works if document is set to "Anyone with link can view")
+            export_url = f'https://docs.google.com/document/d/{doc_id}/export?format=txt'
+            response = requests.get(export_url, timeout=30)
+
+            if response.status_code == 200:
+                return response.text, None
+            elif response.status_code == 403:
+                return None, 'Document is not publicly accessible. Please set sharing to "Anyone with the link can view" or authenticate with Google.'
+            elif response.status_code == 404:
+                return None, 'Document not found. Please check the URL.'
+            else:
+                return None, f'Failed to fetch document (HTTP {response.status_code})'
+
+    except Exception as e:
+        logger.error(f"Error fetching Google Doc: {str(e)}")
+        return None, f'Error fetching document: {str(e)}'
 
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
@@ -7947,13 +8020,7 @@ def oauth2callback():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload and conversion"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
+
     # Get form data first
     script_column_raw = request.form.get('script_column', '2')
     logger.info(f"📊 Received script_column value from form: '{script_column_raw}'")
@@ -7962,37 +8029,86 @@ def upload_file():
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
     claude_api_key = request.form.get('claude_key', '').strip()  # Optional Claude API key
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
+    google_docs_url = request.form.get('google_docs_url', '').strip()
+
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
     logger.info(f"📊 Output format: {output_format}")
+
+    # Check if we have either a file or a Google Docs URL
+    has_file = 'file' in request.files and request.files['file'].filename != ''
+    has_google_docs_url = bool(google_docs_url)
+
+    if not has_file and not has_google_docs_url:
+        return jsonify({'error': 'Please provide either a file upload or a Google Docs URL'}), 400
+
+    if has_file and has_google_docs_url:
+        return jsonify({'error': 'Please provide either a file OR a Google Docs URL, not both'}), 400
+
+    filepath = None
+    temp_file = False
+
+    # Handle Google Docs URL
+    if has_google_docs_url:
+        logger.info(f"Processing Google Docs URL: {google_docs_url}")
+
+        # Extract document ID
+        doc_id = extract_google_doc_id(google_docs_url)
+        if not doc_id:
+            return jsonify({'error': 'Invalid Google Docs URL. Please provide a valid Google Docs document URL.'}), 400
+
+        # Get Google credentials if available (for authenticated access)
+        google_credentials = flask.session.get('google_credentials')
+
+        # Fetch document content
+        content, error = fetch_google_doc_content(doc_id, google_credentials)
+        if error:
+            return jsonify({'error': error}), 400
+
+        # Save content as temporary text file
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        filepath = os.path.join(UPLOAD_FOLDER, f'google_doc_{doc_id}.txt')
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        filename = f'google_doc_{doc_id}.txt'
+        file_size = len(content)
+        temp_file = True
+        logger.info(f"Google Doc fetched and saved temporarily (size: {file_size/1024:.1f}KB)")
+    else:
+        # Handle uploaded file
+        file = request.files['file']
+        if not allowed_file(file.filename):
+            return jsonify({'error': f'File type not supported. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+
+        # Check file size
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+
+        filename = secure_filename(file.filename)
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        logger.info(f"File uploaded and saved (size: {file_size/1024:.1f}KB)")
 
     # FIRST: Validate Claude API key if provided - do this before any file processing
     if claude_api_key:
         logger.info("Validating Claude API key before processing...")
         if not _validate_claude_api_key(claude_api_key):
+            if filepath and temp_file:
+                os.remove(filepath)
             return jsonify({'error': 'Invalid Claude API key. Please check your key and try again.'}), 400
         logger.info("✅ Claude API key validation successful")
-    
+
     # Now check file size to prevent timeouts on huge files
-    file.seek(0, 2)  # Seek to end to get size
-    file_size = file.tell()
-    file.seek(0)  # Reset to beginning
-    
     if file_size > 50 * 1024 * 1024:  # 50MB limit
+        if filepath and temp_file:
+            os.remove(filepath)
         return jsonify({'error': 'File too large. Maximum size is 50MB for processing speed.'}), 400
-    
-    if not allowed_file(file.filename):
-        return jsonify({'error': f'File type not supported. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
-    
+
     try:
         start_time = time.time()
-        logger.info(f"Starting conversion of {file.filename} (size: {file_size/1024:.1f}KB)")
-        
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-        logger.info(f"File saved in {time.time() - start_time:.1f}s")
+        logger.info(f"Starting conversion of {filename} (size: {file_size/1024:.1f}KB)")
         
         # Parse document
         parse_start = time.time()
