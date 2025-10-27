@@ -493,7 +493,20 @@
                 await fetchGoogleConfig();
 
                 if (!accessToken) {
-                    showError('Please authenticate with Google first. Click the "Authorize Now" button below the output format selection.');
+                    // Automatically initiate OAuth flow instead of showing error
+                    try {
+                        const response = await fetch('/auth/google');
+                        const data = await response.json();
+
+                        if (data.auth_url) {
+                            // Redirect to Google OAuth
+                            window.location.href = data.auth_url;
+                        } else if (data.error) {
+                            showError('Authentication failed: ' + data.error);
+                        }
+                    } catch (error) {
+                        showError('Failed to initiate Google authentication: ' + error.message);
+                    }
                     return;
                 }
             }
