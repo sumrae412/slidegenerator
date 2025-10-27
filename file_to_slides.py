@@ -833,25 +833,17 @@ Return your analysis as a JSON object with:
 
         logger.info(f"TXT parser processing {len(lines)} lines with script_column={script_column}")
 
-        # Debug: log first few lines to see the format
-        for idx in range(min(10, len(lines))):
-            debug_line = lines[idx]
-            has_tabs = '\t' in debug_line
-            logger.info(f"DEBUG Line {idx}: has_tabs={has_tabs}, length={len(debug_line)}, preview='{debug_line[:100]}'")
-
         for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-
-            # Check if this line is a tab-separated table row
+            # Check if this line is a tab-separated table row BEFORE stripping (tabs might be at start)
             if '\t' in line:
                 cells = line.split('\t')
+                # Strip each cell individually
+                cells = [cell.strip() for cell in cells]
 
                 # If column mode is active (script_column > 0), only extract from that column
                 if script_column > 0:
                     if len(cells) >= script_column:
-                        cell_text = cells[script_column - 1].strip()
+                        cell_text = cells[script_column - 1]
                         if cell_text:
                             # Clean up the text
                             cleaned_text = self._clean_script_text(cell_text)
@@ -870,6 +862,10 @@ Return your analysis as a JSON object with:
                     continue
 
             # Process non-table lines (headings and paragraphs)
+            line = line.strip()
+            if not line:
+                continue
+
             # Detect headings by characteristics:
             is_heading = False
             heading_level = None
@@ -927,7 +923,6 @@ Return your analysis as a JSON object with:
         table_count = len(processed_lines) - heading_count
 
         logger.info(f"TXT parser extracted {len(processed_lines)} lines total: {heading_count} headings, {table_count} table/content lines from {len(raw_content)} chars")
-        logger.info(f"First 5 processed lines: {processed_lines[:5]}")
 
         return result
 

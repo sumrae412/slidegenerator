@@ -1,0 +1,147 @@
+﻿C1 W1 Introduction to AI for Good
+Lesson 1 - Specialization & Course Introduction
+C1W1L1_1 - Welcome to AI for Good 
+
+
+
+
+
+
+
+
+C1W1L1_2 - What is “AI for Good”? 
+
+
+
+
+
+
+C1W1L1_3 - Microsoft AI for Good Lab
+
+
+
+
+
+
+
+
+C1W1L1_4 - The Courses in this Specialization 
+
+
+C1W1L1_5 - Project spotlight: Charles Onu, Ubenwa Health
+
+
+
+
+
+
+
+
+Lesson 2 - Introduction to Artificial Intelligence and Machine Learning
+C1W1L2_1 - What is Artificial Intelligence?
+
+
+
+
+
+
+C1W1L2_2 - How Supervised Learning Works
+
+
+
+
+
+
+C1W1L2_3 - Project spotlight: Felipe Oviedo, Microsoft AI for Good[a]
+
+
+
+
+
+
+C1W1L2_4 - Considering the Impact of Your AI for Good Project
+
+
+Draft Script
+	[Note to reviewer: the purpose of this video is to: 
+* Emphasize the AI does not always add value
+* Data privacy considerations
+* Model performance / deployment considerations
+* Word count ~950]
+
+
+	[full screen TH]
+As you’ve seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform what might be a relatively simple task for you or me, like recognizing what’s in an image, can actually be a powerful tool in many types of projects. 
+
+
+I’d now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying AI in your projects. 
+
+
+ The goal of any AI for Good project is to have a positive impact in the world, whether that’s
+	 improving peoples’ health, 
+	reducing the impacts of climate change, 
+	helping communities recover from a natural disaster or something else. 
+	However, with any project you work on, there will also be a risk of having a negative impact. In this video I’ll go over a few of the major areas for concern when embarking on any AI related project. 
+
+
+And just to be clear, for as long as people have been thinking about how technology can be used to improve humanity and the environment, people have also been concerned about the potential negative impacts of technology on people and the environment. And this is true for AI as well. And there are a large number of people currently focused on research in AI ethics, fairness, bias, and representation, and there are many good papers and educational materials published on these topics. 
+
+
+Here, I'll touch on some of these issues, but in this course, there simply isn't the time to go into great detail. With that being said, I do recommend you do take the time to look at some of these resources, and we've included many at the end of the week.
+
+
+So I encourage you to go look at these resources, think about how they apply to the use cases in this course, and also to any of the use cases that you're working on in your projects.
+
+
+When it comes to the impact of using AI in various projects, first off, I want to emphasize that AI does not necessarily add value to every new project. For the majority of technologies that I've built in any domain, when I thought AI could work out, most of the time it did not. And so this is why we really need to keep in mind that we can't harm people in the process of trying to work out whether AI can help or not.
+
+
+	With all the hype around AI and its capabilities, it can be easy to fall into some sort of “AI first” mindset when it comes to problem solving, where every problem you [>>>click] see is a nail and [>>>click] AI is the hammer! 
+	[close out this visual with a big red circle around the whole thing and slash through indicating to not take this approach] When it comes to working on real world problems it’s best to think of [>>>click] AI as one potential tool in your toolkit, particularly so it doesn’t become a [>>>click] distraction away from what might otherwise have been a much simpler solution. 
+	In the lessons that follow in this course, we’ll be walking through a [>>>click] framework for approaching any problem you want to work on that might involve AI and literally [>>>click] one of the first steps is to determine [>>>click] whether AI could actually add any value as part of a solution. For many real world problems, AI simply doesn’t add value, and it’s important to be able to recognize that as early as possible so you don’t waste your time and resources trying to implement an overly complicated AI solution where it’s not needed. Throughout this course I’ll highlight some cases in which AI adds great value and others where it does not.  
+	[full screen TH]
+For projects where AI can add value, as I’ve said before, having good data and plenty of it is of critical importance to the success of your project. Data is also right at the heart of many of the ethical concerns surrounding AI applications.
+[end full screen TH]
+	For example, in projects that involve imaging data, any images of people or property should be considered potentially sensitive. When I worked on [>>>click] aerial imagery analysis for damage assessments following Hurricane Sandy in the U.S. in 2012 , while you couldn’t identify any individuals in the photographs, if you were familiar with the area, you might have been able to work out the specific locations that were damaged and most vulnerable to theft. Following the disaster response period, we let one other organization conduct an analysis on how successful we were and then we deleted the data [>>>click] because of privacy and security concerns. Even though there were very good potential benefits for keeping the data and allowing people to train damage assessment algorithms on it, we couldn’t guarantee the principle of do no harm for people whose property appeared in those images.
+	Other forms of data that contain [>>>click] personally identifiable information, like [>>>click] names, [>>>click] phone numbers, [>>>click] addresses, [>>>click>>>click]medical or [>>>click] financial information need to be treated with the utmost care and confidentiality. On the one hand you need to make sure you’re handling your data with the appropriate [>>>click] security considerations in place to avoid having it leaked or stolen but you also need to make sure you’re not inadvertently publishing or sharing any data that might reveal personal information about any individuals or particular groups. 
+	[full screen TH]
+Ideally, whenever possible you should never be storing any personally identifiable information at all. For example, when I worked on the disaster response effort in Haiti after the earthquake in 2010, while we did store and make some data available, we ensured that any publicly shared data did not include personally identifiable information and then following the response period, we deleted all data that might have had personally identified information in it.
+	Even data that might seem like it’s already public, like peoples’ posts on social media should be considered potentially sensitive information and you should avoid insecurely archiving or republishing such data the same way you would for any other data that contains personally identifiable information. 
+	The reason you need to take extreme care with any data that could contain private information is not just because it’s the right thing to do, but because not doing so can pose real and potentially serious risks to the security and wellbeing of those individuals whose information has been compromised. 
+
+
+Unfortunately, there have been many cases of groups working on ostensibly “for good” projects, where the data they collected, shared or published was eventually used by the authorities in repressive regimes to target those individuals whose views, political affiliation, activities, location or other personal information was revealed in the data. 
+	In fact, nowadays there are authoritarian regimes in various countries around the world engaged in projects where they are collecting and analyzing social media and other data purportedly for some project to do with public good when in fact their goal is profiling and targeting of dissidents, which would not meet most peoples’ definition of “for good” and certainly not satisfy the principle of do no harm.
+	Beyond the ethical considerations associated with the data for your project, the other major area for concern is any of the actual impacts of your AI solution. 
+	For example, suppose the AI model you have deployed is responsible for identifying illegal activity, what are the chances it will wrongly identify such activity and ultimately cause problems for innocent people 
+	Or suppose your model is responsible for providing a medical diagnosis, like as you saw in the last video, whether or not someone has cancer. What are the implications of providing the wrong diagnosis?
+	[split screen talking head ]
+And if you must have wrong diagnoses some of the time would you rather have [>>>click] false positives meaning you tell someone they have cancer when they don’t or [>>>click] false negatives meaning telling someone they don’t have cancer when they actually do?
+	With each project you work on you’ll have a different set of specific considerations for what happens when things go wrong, or what the unforeseen consequences of things going exactly as you expected might be. In fact, it’s even useful to imagine specific adversarial use cases, and by that I mean ways in which others might use the system you build or the data you publish to do harm rather than good. 
+
+
+And this, as we'll come back to a few times over these courses, 
+	this is an important area for you to engage in stakeholders, especially among the users and people impacted by your technology, because you're not going to think about all the potential risks yourself, and you need to engage the people who would be harmed by those potential negative use cases. 
+	[get some black rhino b-roll here]
+For example, imagine you deployed a system for automatically tracking the population and location of some endangered species, like the black rhino. If you published data on exactly where to find the greatest numbers of black rhinos, could poachers use your data to further threaten the species?
+	Possibly. I don't know. And so, this is a really good example of why you would speak to the stakeholders, the people who are responsible for tracking and protecting the rhinos, and get their input as to whether or not such a system would obey the do no harm principle. 
+
+
+Whatever you’re working on, [>>click] apply the “do no harm” principle and you’ll be most successful if you take time to consider all the potential impacts, both positive and negative, of your project. Also keep in mind that, as someone working on an AI for Good project, you are not the only one who should be making a judgment call on how to do no harm. You need to consider the perspectives and input from all those potentially impacted by your project.
+
+
+	After this video there’s a short quiz for you to practice the subjects that you have learned so far. And don’t worry if you don’t get everything right from the first try. You can always revisit the videos from this week, refresh your memory, and try again
+	
+
+
+
+
+
+C1W1L2_5 - Summary Week 1
+
+
+
+
+
+
+[a]actually this one goes after the summary week 1
