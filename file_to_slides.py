@@ -802,26 +802,35 @@ Return your analysis as a JSON object with:
         return result
     
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
-        """Parse DOCX file and convert to slide structure"""
+        """Parse DOCX or TXT file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
-        
+
         try:
             if file_ext == 'docx':
                 content = self._parse_docx(file_path, script_column)
+            elif file_ext == 'txt':
+                # Google Docs fetched as plain text
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                logger.info(f"TXT parsing complete: {len(content.split())} words extracted")
             else:
-                raise ValueError(f"Only DOCX files are supported. Got: {file_ext}")
+                raise ValueError(f"Only DOCX and TXT files are supported. Got: {file_ext}")
             
             if script_column == 0:
-                logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from paragraphs")
+                logger.info(f"Document parsing complete: {len(content.split())} words extracted from paragraphs")
             else:
-                logger.info(f"DOCX parsing complete: {len(content.split())} words extracted from column {script_column}")
-            
+                logger.info(f"Document parsing complete: {len(content.split())} words extracted from column {script_column}")
+
             # Extract title from filename or raw content (before any processing)
             logger.info(f"Title extraction starting - script_column={script_column}")
             if script_column == 0:
                 # For paragraph mode, extract title from raw content before chunking affects it
                 logger.info("Using raw content extraction for title (paragraph mode)")
-                raw_content = self._parse_docx_raw_for_title(file_path)
+                if file_ext == 'docx':
+                    raw_content = self._parse_docx_raw_for_title(file_path)
+                else:
+                    # For txt files, use the content directly
+                    raw_content = content
                 logger.info(f"Raw content extracted: {len(raw_content)} chars")
                 logger.info(f"Raw content preview: {raw_content[:200]}...")
                 doc_title = self._extract_title(raw_content, filename)
