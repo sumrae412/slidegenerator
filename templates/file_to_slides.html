@@ -502,12 +502,15 @@
 
         function createPicker() {
             // Create a view for My Drive documents (shown first)
+            // IMPORTANT: Only show Google Docs (not .docx, .pdf, etc.)
             const myDriveView = new google.picker.DocsView(google.picker.ViewId.DOCS)
+                .setMimeTypes('application/vnd.google-apps.document')  // Only Google Docs
                 .setIncludeFolders(true)
                 .setOwnedByMe(true);  // Only show documents owned by the user
 
             // Also add a view for all accessible documents (shared with user)
             const allDocsView = new google.picker.DocsView(google.picker.ViewId.DOCS)
+                .setMimeTypes('application/vnd.google-apps.document')  // Only Google Docs
                 .setIncludeFolders(true);
 
             const pickerBuilder = new google.picker.PickerBuilder()

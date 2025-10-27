@@ -201,6 +201,12 @@ def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[st
 
     except Exception as e:
         logger.error(f"Error fetching Google Doc: {str(e)}")
+        error_str = str(e).lower()
+
+        # Check if this is a non-Google Docs file (like .docx, .pdf, etc.)
+        if 'not supported' in error_str or '400' in error_str:
+            return None, 'This file is not a Google Doc. Please convert .docx/.pdf files to Google Docs format first, or use the "Browse Google Drive" button to select a Google Doc.'
+
         return None, f'Error fetching document: {str(e)}'
 
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
