@@ -87,7 +87,13 @@ import anthropic
 import io
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your-secret-key-change-this')
+app.secret_key = os.environ.get('SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', 'your-secret-key-change-this'))
+
+# Configure session for OAuth
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'  # Require HTTPS in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow OAuth redirects
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
