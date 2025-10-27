@@ -505,6 +505,12 @@
 
                 if (config.authenticated && config.access_token) {
                     accessToken = config.access_token;
+
+                    // Hide auth notice if user is authenticated
+                    const googleAuthNotice = document.getElementById('google-auth-notice');
+                    if (googleAuthNotice) {
+                        googleAuthNotice.classList.add('hidden');
+                    }
                 }
 
                 googleApiKey = config.api_key || '';
@@ -566,6 +572,15 @@
         window.onload = async () => {
             onGoogleApiLoad();
             await fetchGoogleConfig();
+
+            // After fetching config, check if we need to show auth notice
+            const googleAuthNotice = document.getElementById('google-auth-notice');
+            const selectedFormat = document.querySelector('input[name="output_format"]:checked');
+
+            // Only show auth notice if Google Slides is selected AND user is not authenticated
+            if (selectedFormat && selectedFormat.value === 'google_slides' && !accessToken) {
+                googleAuthNotice.classList.remove('hidden');
+            }
         };
 
         // No processing mode selection needed - always use regular mode
@@ -574,16 +589,13 @@
         const formatRadios = document.querySelectorAll('input[name="output_format"]');
         const googleAuthNotice = document.getElementById('google-auth-notice');
 
-        // Show auth notice on load if Google Slides is selected by default
-        const selectedFormat = document.querySelector('input[name="output_format"]:checked');
-        if (selectedFormat && selectedFormat.value === 'google_slides') {
-            googleAuthNotice.classList.remove('hidden');
-        }
-
         formatRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
                 if (e.target.value === 'google_slides') {
-                    googleAuthNotice.classList.remove('hidden');
+                    // Only show auth notice if not already authenticated
+                    if (!accessToken) {
+                        googleAuthNotice.classList.remove('hidden');
+                    }
                 } else {
                     googleAuthNotice.classList.add('hidden');
                 }
