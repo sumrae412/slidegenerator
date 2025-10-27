@@ -8017,6 +8017,23 @@ def oauth2callback():
         logger.error(f"Error in OAuth callback: {e}")
         return f"Error: {str(e)}", 500
 
+@app.route('/api/google-config')
+def google_config():
+    """Get Google API configuration and access token"""
+    try:
+        google_credentials = flask.session.get('google_credentials')
+
+        response_data = {
+            'authenticated': google_credentials is not None,
+            'access_token': google_credentials.get('token') if google_credentials else None,
+            'api_key': os.environ.get('GOOGLE_API_KEY', '')  # Optional API key for Picker
+        }
+
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"Error getting Google config: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload and conversion"""
@@ -8034,62 +8051,35 @@ def upload_file():
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
     logger.info(f"📊 Output format: {output_format}")
 
-    # Check if we have either a file or a Google Docs URL
-    has_file = 'file' in request.files and request.files['file'].filename != ''
-    has_google_docs_url = bool(google_docs_url)
+    # Check if we have a Google Docs URL
+    if not google_docs_url:
+        return jsonify({'error': 'Please provide a Google Docs URL'}), 400
 
-    if not has_file and not has_google_docs_url:
-        return jsonify({'error': 'Please provide either a file upload or a Google Docs URL'}), 400
+    logger.info(f"Processing Google Docs URL: {google_docs_url}")
 
-    if has_file and has_google_docs_url:
-        return jsonify({'error': 'Please provide either a file OR a Google Docs URL, not both'}), 400
+    # Extract document ID
+    doc_id = extract_google_doc_id(google_docs_url)
+    if not doc_id:
+        return jsonify({'error': 'Invalid Google Docs URL. Please provide a valid Google Docs document URL.'}), 400
 
-    filepath = None
-    temp_file = False
+    # Get Google credentials if available (for authenticated access)
+    google_credentials = flask.session.get('google_credentials')
 
-    # Handle Google Docs URL
-    if has_google_docs_url:
-        logger.info(f"Processing Google Docs URL: {google_docs_url}")
+    # Fetch document content
+    content, error = fetch_google_doc_content(doc_id, google_credentials)
+    if error:
+        return jsonify({'error': error}), 400
 
-        # Extract document ID
-        doc_id = extract_google_doc_id(google_docs_url)
-        if not doc_id:
-            return jsonify({'error': 'Invalid Google Docs URL. Please provide a valid Google Docs document URL.'}), 400
+    # Save content as temporary text file
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    filepath = os.path.join(UPLOAD_FOLDER, f'google_doc_{doc_id}.txt')
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(content)
 
-        # Get Google credentials if available (for authenticated access)
-        google_credentials = flask.session.get('google_credentials')
-
-        # Fetch document content
-        content, error = fetch_google_doc_content(doc_id, google_credentials)
-        if error:
-            return jsonify({'error': error}), 400
-
-        # Save content as temporary text file
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        filepath = os.path.join(UPLOAD_FOLDER, f'google_doc_{doc_id}.txt')
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-        filename = f'google_doc_{doc_id}.txt'
-        file_size = len(content)
-        temp_file = True
-        logger.info(f"Google Doc fetched and saved temporarily (size: {file_size/1024:.1f}KB)")
-    else:
-        # Handle uploaded file
-        file = request.files['file']
-        if not allowed_file(file.filename):
-            return jsonify({'error': f'File type not supported. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
-
-        # Check file size
-        file.seek(0, 2)
-        file_size = file.tell()
-        file.seek(0)
-
-        filename = secure_filename(file.filename)
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-        logger.info(f"File uploaded and saved (size: {file_size/1024:.1f}KB)")
+    filename = f'google_doc_{doc_id}.txt'
+    file_size = len(content)
+    temp_file = True
+    logger.info(f"Google Doc fetched and saved temporarily (size: {file_size/1024:.1f}KB)")
 
     # FIRST: Validate Claude API key if provided - do this before any file processing
     if claude_api_key:
