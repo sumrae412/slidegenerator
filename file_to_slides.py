@@ -1926,197 +1926,197 @@ Return only the bullet points, one per line, without symbols or numbering."""
             return []
     
     def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
-        """Create bullets using conservative NLP analysis - only extract high-quality content"""
+        """Create bullets using smart NLP: TF-IDF ranking + spaCy structure validation"""
         try:
             import re
-            
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+
             # Clean the text
             text = re.sub(r'\[.*?\]', '', text)  # Remove stage directions
             text = re.sub(r'^(so|well|now|alright|okay),?\s*', '', text, flags=re.IGNORECASE)
             text = text.strip()
-            
-            if len(text) < 40:  # Require more substantial content
+
+            if len(text) < 40:
                 return []
-            
+
+            # Load spaCy model for sentence parsing
+            try:
+                import spacy
+                nlp = spacy.load("en_core_web_sm")
+            except OSError:
+                logger.warning("spaCy model not found, falling back to simple extraction")
+                return self._simple_sentence_extraction(text)
+
+            # Parse text with spaCy
+            doc = nlp(text)
+            sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 20]
+
+            if len(sentences) == 0:
+                return []
+
+            # If only 1-2 sentences, return them directly (if quality)
+            if len(sentences) <= 2:
+                return [self._format_bullet(s) for s in sentences if self._is_quality_sentence_spacy(nlp(s))]
+
+            # Use TF-IDF to rank sentences by importance
+            try:
+                vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
+                tfidf_matrix = vectorizer.fit_transform(sentences)
+
+                # Calculate sentence importance (similarity to overall document)
+                # Convert to dense array to avoid numpy matrix deprecation warning
+                doc_vector = np.asarray(tfidf_matrix.mean(axis=0))
+                similarities = cosine_similarity(tfidf_matrix, doc_vector).flatten()
+
+                # Rank sentences by importance
+                ranked_indices = similarities.argsort()[::-1]
+
+            except Exception as e:
+                logger.warning(f"TF-IDF ranking failed: {e}, using order-based selection")
+                ranked_indices = list(range(len(sentences)))
+
+            # Select top sentences and validate quality with spaCy
             bullets = []
-            
-            # Strategy 1: Extract complete, meaningful sentences only
-            sentences = re.split(r'[.!?]+', text)
-            sentences = [s.strip() for s in sentences if s.strip()]  # Clean sentences list
+            for idx in ranked_indices:
+                sentence = sentences[idx]
+                sentence_doc = nlp(sentence)
 
-            for sentence in sentences:
-                sentence = sentence.strip()
-
-                # Only process sentences with sufficient length and meaningful content (relaxed limits)
-                if 20 <= len(sentence) <= 200 and self._is_meaningful_sentence(sentence):
-                    bullet = self._convert_meaningful_sentence_to_bullet(sentence)
-                    if bullet:
+                # Validate sentence structure with spaCy
+                if self._is_quality_sentence_spacy(sentence_doc):
+                    bullet = self._format_bullet(sentence)
+                    if bullet and bullet not in bullets:
                         bullets.append(bullet)
-                        if len(bullets) >= 5:  # Increased to 5 quality bullets for more content
+                        if len(bullets) >= 4:  # Max 4 bullets
                             break
 
-            # Strategy 2: Extract direct instructional content (only if no sentences worked)
-            if len(bullets) == 0:
-                instructions = self._extract_direct_instructions(text)
-                bullets.extend(instructions[:2])
+            # If we got very few bullets from strict filtering, be less strict
+            if len(bullets) < 2 and len(sentences) >= 3:
+                logger.info(f"Only {len(bullets)} strict bullets, adding more with relaxed criteria")
+                for sentence in sentences[:5]:
+                    sentence_lower = sentence.lower()
 
-            # Final quality filter - be very strict
-            quality_bullets = []
-            for bullet in bullets:
-                if self._is_high_quality_nlp_bullet(bullet):
-                    quality_bullets.append(bullet)
+                    # Still reject obvious marketing/vague content in fallback
+                    vague_indicators = ['really interesting', 'going to love', 'super easy', 'kind of amazing',
+                                      'really cool', 'pretty amazing', 'super streamlined']
+                    if any(phrase in sentence_lower for phrase in vague_indicators):
+                        continue
 
-            # FIX #2: Ensure minimum 2 bullets when we have 3+ sentences available
-            if len(quality_bullets) < 2 and len(sentences) >= 3:
-                logger.info(f"Only {len(quality_bullets)} quality bullets from {len(sentences)} sentences - being less strict")
-                # Be less strict - take the first 2 bullets that passed initial filter
-                for bullet in bullets[:3]:
-                    if bullet not in quality_bullets and len(bullet) > 20:
-                        quality_bullets.append(bullet)
-                        if len(quality_bullets) >= 2:
-                            break
+                    if len(sentence) > 25 and sentence not in [b.rstrip('.') for b in bullets]:
+                        bullet = self._format_bullet(sentence)
+                        if bullet:
+                            bullets.append(bullet)
+                            if len(bullets) >= 2:
+                                break
 
-            logger.info(f"Conservative NLP generated {len(quality_bullets)} high-quality bullets from text of length {len(text)}")
-            return quality_bullets
-            
+            logger.info(f"Smart NLP generated {len(bullets)} bullets using TF-IDF + spaCy")
+            return bullets
+
         except Exception as e:
-            logger.error(f"Error in conservative NLP bullet generation: {e}")
-            return []
+            logger.error(f"Error in smart NLP bullet generation: {e}")
+            # Fallback to simple extraction
+            return self._simple_sentence_extraction(text)
     
-    def _is_meaningful_sentence(self, sentence: str) -> bool:
-        """Check if a sentence contains meaningful, specific content"""
-        sentence_lower = sentence.lower()
-        
-        # Reject contextless fragments and problematic starters
-        problematic_starters = ['which means', 'for example', 'it stores', 'that means', 'this means', 'these are', 'what stores', 'they are', 'this is']
-        if any(sentence_lower.startswith(starter) for starter in problematic_starters):
+    def _is_quality_sentence_spacy(self, sentence_doc) -> bool:
+        """Use spaCy to validate sentence structure and quality"""
+        sentence_text = sentence_doc.text.strip()
+        sentence_lower = sentence_text.lower()
+
+        # Minimum length check
+        if len(sentence_text) < 25:
             return False
-        
-        # Reject sentences ending with etc or incomplete phrases
-        if sentence_lower.endswith(('etc', 'etc.', 'and more', 'and so on')):
+
+        # Check for complete sentence structure using spaCy
+        has_verb = any(token.pos_ == "VERB" for token in sentence_doc)
+        has_noun = any(token.pos_ in ["NOUN", "PROPN"] for token in sentence_doc)
+
+        # Must have both verb and noun for complete thought
+        if not (has_verb and has_noun):
             return False
-        
-        # Reject sentences with vague words
-        vague_words = ['this', 'that', 'these', 'those', 'alright', 'okay', 'well', 'stuff', 'things', 'something']
-        if any(word in sentence_lower for word in vague_words):
+
+        # Reject obvious filler/vague content
+        vague_starters = ['so,', 'well,', 'um,', 'uh,', 'you know,', 'i mean,', 'this is where']
+        if any(sentence_lower.startswith(starter) for starter in vague_starters):
             return False
-        
-        # Require specific content indicators
-        content_indicators = [
-            'database', 'interface', 'system', 'platform', 'feature', 'tool', 'method', 'process',
-            'configure', 'setup', 'create', 'build', 'implement', 'access', 'manage', 'query',
-            'data', 'table', 'schema', 'warehouse', 'compute', 'storage', 'security', 'authentication',
-            'api', 'endpoint', 'request', 'response', 'application', 'service', 'workflow'
-        ]
-        
-        # Must have at least one specific content indicator
-        if not any(indicator in sentence_lower for indicator in content_indicators):
+
+        # Reject marketing fluff
+        marketing_phrases = ['really interesting', 'going to love', 'super easy', 'kind of amazing',
+                           'really cool', 'pretty amazing', 'super streamlined']
+        if any(phrase in sentence_lower for phrase in marketing_phrases):
             return False
-        
-        # Check for complete thoughts (has verb and object) - expanded verb list
-        action_verbs = [
-            'can', 'will', 'allows', 'enables', 'provides', 'uses', 'supports', 'handles', 'processes', 'manages', 'creates', 'builds',
-            'design', 'designs', 'retrieves', 'retrieve', 'clean', 'cleans', 'validate', 'validates', 'restructure', 'restructures',
-            'involves', 'involve', 'insert', 'inserts', 'extract', 'extracts', 'transform', 'transforms', 'load', 'loads',
-            'configure', 'configures', 'setup', 'setups', 'implement', 'implements', 'access', 'accesses', 'query', 'queries',
-            'analyze', 'analyzes', 'process', 'optimize', 'optimizes', 'scale', 'scales', 'deploy', 'deploys',
-            'generate', 'generates', 'execute', 'executes', 'monitor', 'monitors', 'track', 'tracks'
-        ]
-        has_verb = any(verb in sentence_lower for verb in action_verbs)
-        if not has_verb:
+
+        # Reject incomplete thoughts
+        if sentence_lower.endswith(('etc', 'etc.', 'and so on', '...')):
             return False
-        
+
+        # Check for named entities or important keywords (indicates specific content)
+        has_entities = len(sentence_doc.ents) > 0
+
+        # Check for meaningful keywords (broader than before)
+        meaningful_keywords = any(
+            token.lemma_ in [
+                'system', 'data', 'platform', 'service', 'application', 'process',
+                'feature', 'tool', 'method', 'cost', 'benefit', 'architecture',
+                'enable', 'provide', 'support', 'create', 'allow', 'improve',
+                'reduce', 'increase', 'manage', 'access', 'configure', 'deploy'
+            ]
+            for token in sentence_doc
+            if not token.is_stop
+        )
+
+        # Accept if has entities OR meaningful keywords
+        if not (has_entities or meaningful_keywords):
+            return False
+
         return True
-    
-    def _convert_meaningful_sentence_to_bullet(self, sentence: str) -> str:
-        """Convert a meaningful sentence to a clean bullet point"""
+
+    def _format_bullet(self, sentence: str) -> str:
+        """Format a sentence as a clean bullet point"""
         import re
-        
+
         sentence = sentence.strip()
-        
-        # If sentence starts with "you", make it more direct
-        if sentence.lower().startswith('you '):
-            # Remove "you can/will/should" patterns
-            sentence = re.sub(r'^you (can|will|should|are able to|need to)\s+', '', sentence, flags=re.IGNORECASE)
-            sentence = sentence.strip()
-            # Capitalize first letter
+
+        # Remove leading filler words
+        sentence = re.sub(r'^(you can|you will|you should|you may|you are able to)\s+', '', sentence, flags=re.IGNORECASE)
+
+        # Ensure first letter is capitalized
+        if sentence:
             sentence = sentence[0].upper() + sentence[1:] if len(sentence) > 1 else sentence.upper()
-        
-        # Ensure proper capitalization and punctuation
-        if not sentence.endswith('.'):
+
+        # Ensure proper punctuation
+        if not sentence.endswith(('.', '!', '?')):
             sentence += '.'
-        
+
         return sentence
-    
-    def _extract_direct_instructions(self, text: str) -> List[str]:
-        """Extract direct instructional content as a last resort"""
+
+    def _simple_sentence_extraction(self, text: str) -> List[str]:
+        """Fallback sentence extraction when spaCy is not available"""
         import re
-        
-        instructions = []
-        
-        # Look for clear imperative sentences
-        imperative_patterns = [
-            r'(configure|setup|create|build|access|open|select|click|navigate to)\s+[^.]{15,80}',
-        ]
-        
-        for pattern in imperative_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches[:2]:  # Very limited
-                if len(match) > 20 and self._is_clear_instruction(match):
-                    instruction = match.strip().capitalize()
-                    if not instruction.endswith('.'):
-                        instruction += '.'
-                    instructions.append(instruction)
-        
-        return instructions
-    
-    def _is_clear_instruction(self, instruction: str) -> bool:
-        """Check if an instruction is clear and specific"""
-        instruction_lower = instruction.lower()
-        
-        # Must not contain vague words
-        vague_words = ['this', 'that', 'stuff', 'things', 'something', 'alright', 'okay']
-        if any(word in instruction_lower for word in vague_words):
-            return False
-        
-        # Must have specific content
-        specific_terms = ['database', 'interface', 'warehouse', 'schema', 'table', 'query', 'data', 'system']
-        return any(term in instruction_lower for term in specific_terms)
-    
-    def _is_high_quality_nlp_bullet(self, bullet: str) -> bool:
-        """Strict quality check for NLP bullets"""
-        if not bullet or len(bullet) < 20:
-            return False
-        
-        bullet_lower = bullet.lower()
-        
-        # Reject bullets with any problematic patterns
-        bad_patterns = [
-            'work with.*in your implementation',  # Our terrible template
-            'behind the scenes',
-            'all in',
-            'uses in your',
-            'this', 'that', 'these', 'those',
-            'alright', 'okay', 'well',
-            'fundamental concepts',
-            'practical applications',
-        ]
-        
-        for pattern in bad_patterns:
-            if pattern in bullet_lower:
-                return False
-        
-        # Must contain meaningful content
-        meaningful_content = [
-            'database', 'warehouse', 'compute', 'storage', 'schema', 'table', 'query',
-            'configure', 'create', 'access', 'manage', 'implement', 'setup',
-            'data', 'system', 'platform', 'interface', 'application', 'service'
-        ]
-        
-        if not any(content in bullet_lower for content in meaningful_content):
-            return False
-        
-        return True
+
+        # Split into sentences
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 25]
+
+        # Take first few complete sentences
+        bullets = []
+        for sentence in sentences[:4]:
+            # Basic quality check
+            sentence_lower = sentence.lower()
+
+            # Skip obvious filler
+            if any(starter in sentence_lower for starter in ['so,', 'well,', 'um,', 'basically']):
+                continue
+
+            # Skip sentences that are too vague
+            if sentence_lower.count(' ') < 4:  # Less than 4 words
+                continue
+
+            bullet = self._format_bullet(sentence)
+            if bullet:
+                bullets.append(bullet)
+
+        return bullets[:3]  # Max 3 bullets as fallback
     
     
     def _create_fusion_bullets(self, text: str) -> List[str]:
