@@ -8178,6 +8178,25 @@ def index():
     """Main page"""
     return render_template('file_to_slides.html')
 
+@app.route('/auth/google/debug')
+def google_auth_debug():
+    """Debug endpoint to check OAuth configuration"""
+    try:
+        client_config = get_google_client_config()
+        if not client_config:
+            return jsonify({'error': 'No client config found'}), 500
+
+        # Return sanitized config info for debugging
+        return jsonify({
+            'redirect_uri': GOOGLE_REDIRECT_URI,
+            'scopes': GOOGLE_SCOPES,
+            'client_id': client_config.get('web', {}).get('client_id', 'Not found'),
+            'has_client_secret': 'client_secret' in client_config.get('web', {}),
+            'redirect_uris_in_config': client_config.get('web', {}).get('redirect_uris', [])
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/auth/google')
 def google_auth():
     """Initiate Google OAuth flow"""
@@ -8190,6 +8209,11 @@ def google_auth():
             return jsonify({
                 'error': 'Google OAuth not configured. Please contact administrator.'
             }), 500
+
+        # Log configuration for debugging
+        logger.info(f"OAuth Config - Redirect URI: {GOOGLE_REDIRECT_URI}")
+        logger.info(f"OAuth Config - Scopes: {GOOGLE_SCOPES}")
+        logger.info(f"OAuth Config - Client ID: {client_config.get('web', {}).get('client_id', 'Missing')}")
 
         # Create flow from client config
         flow = Flow.from_client_config(
@@ -8205,6 +8229,8 @@ def google_auth():
 
         # Store state in session
         flask.session['state'] = state
+
+        logger.info(f"Generated auth URL: {authorization_url[:100]}...")
 
         return jsonify({'auth_url': authorization_url})
 
