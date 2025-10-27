@@ -170,48 +170,6 @@
     </header>
 
     <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <!-- Document Structure Guide -->
-        <div class="card p-6 mb-8">
-            <button type="button" id="guide-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
-                <div>
-                    <h3 class="text-lg font-semibold text-slate-800 mb-1">Document Structure Guide</h3>
-                    <p class="text-sm text-slate-600">Learn how to format your document for optimal results</p>
-                </div>
-                <svg class="toggle-icon w-5 h-5 text-slate-500 group-hover:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-
-            <div id="guide-content" class="collapsible-content mt-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div class="feature-card">
-                        <h4 class="font-semibold text-slate-800 mb-2 text-sm">Heading Structure</h4>
-                        <ul class="space-y-2 text-sm text-slate-600">
-                            <li><span class="font-medium text-slate-700">H1:</span> Presentation title</li>
-                            <li><span class="font-medium text-slate-700">H2:</span> Section dividers</li>
-                            <li><span class="font-medium text-slate-700">H3:</span> Subsection titles</li>
-                            <li><span class="font-medium text-slate-700">H4:</span> Individual slide titles</li>
-                        </ul>
-                    </div>
-
-                    <div class="feature-card">
-                        <h4 class="font-semibold text-slate-800 mb-2 text-sm">Content Processing</h4>
-                        <ul class="space-y-2 text-sm text-slate-600">
-                            <li><span class="font-medium text-slate-700">Table rows:</span> Each row becomes a slide</li>
-                            <li><span class="font-medium text-slate-700">Paragraphs:</span> Auto-converted to bullet points</li>
-                            <li><span class="font-medium text-slate-700">Stage directions:</span> [BRACKETS] filtered automatically</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="info-box rounded-lg p-4">
-                    <p class="text-sm text-slate-700">
-                        <span class="font-semibold">Best Practice:</span> Structure your Word document with clear headings and organized content. AI will generate contextually relevant bullet points and visual prompts for each slide.
-                    </p>
-                </div>
-            </div>
-        </div>
-
         <!-- Upload Section -->
         <div class="card p-8 mb-12">
             <h2 class="text-2xl font-semibold text-slate-800 mb-2 text-center">Select Your Google Document</h2>
@@ -255,6 +213,48 @@
                     </div>
                 </div>
 
+                <!-- Document Structure Guide -->
+                <div class="card p-6 mb-6 bg-white border-2 border-slate-200 rounded-lg">
+                    <button type="button" id="guide-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 mb-1">Document Structure Guide</h3>
+                            <p class="text-sm text-slate-600">Learn how to format your document for optimal results</p>
+                        </div>
+                        <svg class="toggle-icon w-5 h-5 text-slate-500 group-hover:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <div id="guide-content" class="collapsible-content mt-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div class="feature-card">
+                                <h4 class="font-semibold text-slate-800 mb-2 text-sm">Heading Structure</h4>
+                                <ul class="space-y-2 text-sm text-slate-600">
+                                    <li><span class="font-medium text-slate-700">H1:</span> Presentation title</li>
+                                    <li><span class="font-medium text-slate-700">H2:</span> Section dividers</li>
+                                    <li><span class="font-medium text-slate-700">H3:</span> Subsection titles</li>
+                                    <li><span class="font-medium text-slate-700">H4:</span> Individual slide titles</li>
+                                </ul>
+                            </div>
+
+                            <div class="feature-card">
+                                <h4 class="font-semibold text-slate-800 mb-2 text-sm">Content Processing</h4>
+                                <ul class="space-y-2 text-sm text-slate-600">
+                                    <li><span class="font-medium text-slate-700">Table rows:</span> Each row becomes a slide</li>
+                                    <li><span class="font-medium text-slate-700">Paragraphs:</span> Auto-converted to bullet points</li>
+                                    <li><span class="font-medium text-slate-700">Stage directions:</span> [BRACKETS] filtered automatically</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="info-box rounded-lg p-4">
+                            <p class="text-sm text-slate-700">
+                                <span class="font-semibold">Best Practice:</span> Structure your Word document with clear headings and organized content. AI will generate contextually relevant bullet points and visual prompts for each slide.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Document Info -->
                 <div id="doc-info" class="hidden mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <div class="flex items-center">
@@ -275,90 +275,59 @@
 
                 <!-- Hidden input for backward compatibility -->
                 <input type="hidden" id="skip-visuals" name="skip_visuals" value="false">
+                <input type="hidden" name="output_format" value="google_slides">
 
-                <!-- Script Column Selection -->
-                <div class="mb-8">
-                    <label for="script-column" class="block text-sm font-semibold text-slate-800 mb-2">
-                        Script Column
-                    </label>
-                    <select id="script-column" name="script_column" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
-                        <option value="0" selected>No table - Use paragraphs (recommended)</option>
-                        <option value="1">Column 1</option>
-                        <option value="2">Column 2</option>
-                        <option value="3">Column 3</option>
-                        <option value="4">Column 4</option>
-                        <option value="5">Column 5</option>
-                        <option value="6">Column 6</option>
-                    </select>
-                    <p class="text-xs text-slate-500 mt-1.5">
-                        Choose the table column with your script, or use paragraphs for AI-generated bullets
-                    </p>
-                </div>
-
-                <!-- Claude API Key -->
-                <div id="claude-key-section" class="mb-8">
-                    <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
-                        Claude API Key <span class="text-xs text-slate-500 font-normal">(Optional)</span>
-                    </label>
-                    <input type="password" id="claude-key" name="claude_key"
-                           class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
-                           placeholder="sk-ant-...">
-                    <div id="key-validation" class="mt-2 text-xs hidden">
-                        <span id="key-status"></span>
-                    </div>
-                    <p class="text-xs text-slate-500 mt-1.5">
-                        For enhanced AI bullet generation. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
-                    </p>
-                </div>
-
-                <!-- Output Format Selection -->
-                <div class="mb-8">
-                    <label class="block text-sm font-semibold text-slate-800 mb-3">
-                        Output Format
-                    </label>
-                    <div class="flex gap-4">
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="output_format" value="pptx" class="peer sr-only">
-                            <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <div class="font-semibold text-slate-800">PowerPoint (.pptx)</div>
-                                        <div class="text-sm text-slate-600">Download file</div>
-                                    </div>
-                                    <svg class="h-6 w-6 text-slate-700 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                            </div>
+                <!-- Script Column and Claude API Key - Side by Side -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <!-- Script Column Selection -->
+                    <div>
+                        <label for="script-column" class="block text-sm font-semibold text-slate-800 mb-2">
+                            Select your script column
                         </label>
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="output_format" value="google_slides" checked class="peer sr-only">
-                            <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <div class="font-semibold text-slate-800">Google Slides</div>
-                                        <div class="text-sm text-slate-600">Create in Drive</div>
-                                    </div>
-                                    <svg class="h-6 w-6 text-slate-700 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                            </div>
-                        </label>
-                    </div>
-                    <div id="google-auth-notice" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <p class="text-sm text-slate-800">
-                            <span class="font-semibold">Authentication Required:</span> You'll need to authorize Google access before creating slides.
-                            <button type="button" id="google-auth-btn" class="ml-2 text-slate-800 underline hover:text-slate-900">Authorize Now</button>
+                        <select id="script-column" name="script_column" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
+                            <option value="0" selected>No table - Use paragraphs (recommended)</option>
+                            <option value="1">Column 1</option>
+                            <option value="2">Column 2</option>
+                            <option value="3">Column 3</option>
+                            <option value="4">Column 4</option>
+                            <option value="5">Column 5</option>
+                            <option value="6">Column 6</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1.5">
+                            Choose the table column with your script, or use paragraphs for AI-generated bullets
                         </p>
                     </div>
+
+                    <!-- Claude API Key -->
+                    <div id="claude-key-section">
+                        <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
+                            Claude API Key <span class="text-xs text-slate-500 font-normal">(Optional)</span>
+                        </label>
+                        <input type="password" id="claude-key" name="claude_key"
+                               class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
+                               placeholder="sk-ant-...">
+                        <div id="key-validation" class="mt-2 text-xs hidden">
+                            <span id="key-status"></span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1.5">
+                            For enhanced AI bullet generation. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Google Auth Notice -->
+                <div id="google-auth-notice" class="hidden mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p class="text-sm text-slate-800">
+                        <span class="font-semibold">Authentication Required:</span> You'll need to authorize Google access before creating slides.
+                        <button type="button" id="google-auth-btn" class="ml-2 text-slate-800 underline hover:text-slate-900">Authorize Now</button>
+                    </p>
                 </div>
 
                 <!-- Convert Button -->
                 <div class="text-center">
                     <button type="submit" id="convert-btn" disabled
                             class="btn-primary px-8 py-3 font-semibold rounded-lg focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
-                        Convert to Presentation
+                        Create Google Slides
                     </button>
                 </div>
             </form>
@@ -576,34 +545,13 @@
             onGoogleApiLoad();
             await fetchGoogleConfig();
 
-            // After fetching config, check if we need to show auth notice
+            // After fetching config, show auth notice if user is not authenticated
+            // (We always output to Google Slides now)
             const googleAuthNotice = document.getElementById('google-auth-notice');
-            const selectedFormat = document.querySelector('input[name="output_format"]:checked');
-
-            // Only show auth notice if Google Slides is selected AND user is not authenticated
-            if (selectedFormat && selectedFormat.value === 'google_slides' && !accessToken) {
+            if (!accessToken) {
                 googleAuthNotice.classList.remove('hidden');
             }
         };
-
-        // No processing mode selection needed - always use regular mode
-
-        // Output format toggle
-        const formatRadios = document.querySelectorAll('input[name="output_format"]');
-        const googleAuthNotice = document.getElementById('google-auth-notice');
-
-        formatRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.value === 'google_slides') {
-                    // Only show auth notice if not already authenticated
-                    if (!accessToken) {
-                        googleAuthNotice.classList.remove('hidden');
-                    }
-                } else {
-                    googleAuthNotice.classList.add('hidden');
-                }
-            });
-        });
 
         // Google Authentication
         document.getElementById('google-auth-btn').addEventListener('click', async () => {
@@ -662,10 +610,7 @@
             const formData = new FormData();
             formData.append('google_docs_url', googleDocsUrl);
             formData.append('script_column', document.getElementById('script-column').value);
-
-            // Add output format
-            const outputFormat = document.querySelector('input[name="output_format"]:checked').value;
-            formData.append('output_format', outputFormat);
+            formData.append('output_format', 'google_slides'); // Always Google Slides
 
             // Add Claude API key if provided
             const claudeKey = document.getElementById('claude-key').value.trim();
