@@ -3,174 +3,249 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Script to Slides Generator</title>
+    <title>Document to Presentation Converter</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        * {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
-        .card-shadow {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+        :root {
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-500: #64748b;
+            --slate-400: #94a3b8;
+            --slate-300: #cbd5e1;
+            --slate-200: #e2e8f0;
+            --slate-100: #f1f5f9;
+            --slate-50: #f8fafc;
+            --blue-600: #2563eb;
+            --blue-500: #3b82f6;
+            --emerald-600: #059669;
+            --emerald-500: #10b981;
+            --amber-600: #d97706;
+            --red-600: #dc2626;
         }
-        .upload-area {
-            border: 2px dashed #d1d5db;
+
+        body {
+            background: linear-gradient(to bottom, var(--slate-50) 0%, white 100%);
+            min-height: 100vh;
+        }
+
+        .header-gradient {
+            background: linear-gradient(135deg, var(--slate-900) 0%, var(--slate-800) 50%, var(--slate-700) 100%);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
         }
-        .upload-area.dragover {
-            border-color: #3b82f6;
-            background-color: #eff6ff;
-            transform: scale(1.02);
+
+        .card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
         }
+
+        .upload-area {
+            border: 2px dashed var(--slate-300);
+            background: var(--slate-50);
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .upload-area.dragover {
+            border-color: var(--blue-500);
+            background-color: #eff6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        }
+
         .upload-area.uploading {
-            border-color: #10b981;
+            border-color: var(--emerald-500);
             background-color: #f0fdf4;
         }
+
         .upload-area.error {
-            border-color: #ef4444;
+            border-color: var(--red-600);
             background-color: #fef2f2;
             animation: shake 0.5s ease-in-out;
         }
+
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
         }
-        .tooltip {
-            position: relative;
-            display: inline-block;
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--slate-800) 0%, var(--slate-700) 100%);
+            color: white;
+            border: none;
+            transition: all 0.2s ease;
         }
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 320px;
-            background-color: #1f2937;
-            color: #fff;
-            text-align: left;
-            border-radius: 6px;
-            padding: 12px;
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -160px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 12px;
-            line-height: 1.4;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--slate-700) 0%, var(--slate-600) 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
-        .tooltip .tooltiptext::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #1f2937 transparent transparent transparent;
+
+        .btn-primary:disabled {
+            background: var(--slate-300);
+            cursor: not-allowed;
         }
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
-        }
+
         .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3b82f6;
+            border: 3px solid var(--slate-200);
+            border-top: 3px solid var(--slate-700);
             border-radius: 50%;
             width: 20px;
             height: 20px;
             animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .info-box {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border: 1px solid #bfdbfe;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible-content.open {
+            max-height: 800px;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-icon.open {
+            transform: rotate(180deg);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--slate-400);
+            box-shadow: 0 0 0 3px rgba(51, 65, 85, 0.1);
+        }
+
+        .feature-card {
+            background: var(--slate-50);
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            padding: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .feature-card:hover {
+            background: white;
+            border-color: var(--slate-300);
+        }
     </style>
 </head>
-<body class="bg-gray-50">
+<body>
     <!-- Header -->
-    <header class="gradient-bg text-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <header class="header-gradient text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
             <div class="text-center">
-                <h1 class="text-4xl font-bold mb-4">📄➡️📈 Script to PowerPoint Generator</h1>
-                <p class="text-xl opacity-90">Upload your documents and convert them to PowerPoint presentations instantly</p>
+                <h1 class="text-5xl font-bold mb-4 tracking-tight">Document to Presentation Converter</h1>
+                <p class="text-xl text-slate-300 max-w-2xl mx-auto">Transform your Word documents into professional PowerPoint presentations with AI-powered content generation</p>
             </div>
         </div>
     </header>
 
     <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <!-- Document Structure Guide -->
-        <div class="bg-yellow-50 rounded-lg p-6 mb-8 border border-yellow-200">
-            <h3 class="text-lg font-semibold text-yellow-800 mb-4">📋 Document Structure Guide</h3>
-            <div class="space-y-3 text-yellow-700">
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">H1:</span>
-                    <span>Presentation title page (appears once at the beginning)</span>
+        <div class="card p-6 mb-8">
+            <button type="button" id="guide-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-1">Document Structure Guide</h3>
+                    <p class="text-sm text-slate-600">Learn how to format your document for optimal results</p>
                 </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">H2:</span>
-                    <span>Section title pages (divides your presentation into major sections)</span>
+                <svg class="toggle-icon w-5 h-5 text-slate-500 group-hover:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+
+            <div id="guide-content" class="collapsible-content mt-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="feature-card">
+                        <h4 class="font-semibold text-slate-800 mb-2 text-sm">Heading Structure</h4>
+                        <ul class="space-y-2 text-sm text-slate-600">
+                            <li><span class="font-medium text-slate-700">H1:</span> Presentation title</li>
+                            <li><span class="font-medium text-slate-700">H2:</span> Section dividers</li>
+                            <li><span class="font-medium text-slate-700">H3:</span> Subsection titles</li>
+                            <li><span class="font-medium text-slate-700">H4:</span> Individual slide titles</li>
+                        </ul>
+                    </div>
+
+                    <div class="feature-card">
+                        <h4 class="font-semibold text-slate-800 mb-2 text-sm">Content Processing</h4>
+                        <ul class="space-y-2 text-sm text-slate-600">
+                            <li><span class="font-medium text-slate-700">Table rows:</span> Each row becomes a slide</li>
+                            <li><span class="font-medium text-slate-700">Paragraphs:</span> Auto-converted to bullet points</li>
+                            <li><span class="font-medium text-slate-700">Stage directions:</span> [BRACKETS] filtered automatically</li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">H3:</span>
-                    <span>Subsection title pages (creates sub-topics within sections)</span>
+
+                <div class="info-box rounded-lg p-4">
+                    <p class="text-sm text-slate-700">
+                        <span class="font-semibold">Best Practice:</span> Structure your Word document with clear headings and organized content. AI will generate contextually relevant bullet points and visual prompts for each slide.
+                    </p>
                 </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">H4:</span>
-                    <span>Individual slide titles (each H4 becomes a content slide with bullet points and visual prompts)</span>
-                </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">Table rows:</span>
-                    <span>Content slides with bullet points (each row in your selected column becomes one slide with AI-generated visual prompts)</span>
-                </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">Paragraphs:</span>
-                    <span>When "No table" is selected, each paragraph becomes a slide with AI-generated bullet points and visual prompts</span>
-                </div>
-                <div class="flex items-start">
-                    <span class="font-medium text-yellow-800 mr-2">Stage Directions:</span>
-                    <span>All-caps bracketed text like [SCREENCAST], [CLICK], [PAUSE] will be automatically filtered out during conversion</span>
-                </div>
-            </div>
-            <div class="mt-4 p-3 bg-yellow-100 rounded-lg">
-                <p class="text-sm text-yellow-800">
-                    <strong>💡 Tip:</strong> Use this hierarchy in your Word document to create a well-structured presentation with proper title pages and organized content. Each content slide will include AI-generated visual prompts as text to inspire creative diagrams and illustrations.
-                </p>
             </div>
         </div>
 
         <!-- Upload Section -->
-        <div class="bg-white rounded-xl card-shadow p-8 mb-12">
-            <h2 class="text-2xl font-bold text-gray-900 mb-6 text-center">🚀 Upload & Convert</h2>
+        <div class="card p-8 mb-12">
+            <h2 class="text-2xl font-semibold text-slate-800 mb-2 text-center">Upload Your Document</h2>
+            <p class="text-slate-600 text-center mb-8">Supported format: Microsoft Word (.docx) up to 16MB</p>
             
             <form id="upload-form" enctype="multipart/form-data">
                 <!-- File Upload Area -->
-                <div id="upload-area" class="upload-area rounded-lg p-12 text-center cursor-pointer mb-6">
+                <div id="upload-area" class="upload-area p-12 text-center cursor-pointer mb-6">
                     <div id="upload-content">
-                        <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <svg class="mx-auto h-16 w-16 text-slate-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">
+                        <h3 class="text-lg font-medium text-slate-800 mb-2">
                             Drop your file here or click to browse
                         </h3>
-                        <p class="text-gray-600 mb-4">
-                            Upload your Microsoft Word (.docx) document
+                        <p class="text-slate-600 mb-4">
+                            Upload your Microsoft Word document
                         </p>
-                        <p class="text-sm text-gray-500">Maximum file size: 16MB</p>
+                        <p class="text-sm text-slate-500">Maximum file size: 16MB</p>
                     </div>
                     <input type="file" id="file-input" name="file" class="hidden" accept=".docx" />
                 </div>
                 
                 <!-- File Info -->
-                <div id="file-info" class="hidden mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div id="file-info" class="hidden mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <div class="flex items-center">
-                        <svg class="h-8 w-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="h-8 w-8 text-emerald-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         <div>
-                            <p id="file-name" class="font-medium text-blue-900"></p>
-                            <p id="file-size" class="text-sm text-blue-700"></p>
+                            <p id="file-name" class="font-medium text-slate-800"></p>
+                            <p id="file-size" class="text-sm text-slate-600"></p>
                         </div>
-                        <button type="button" id="remove-file" class="ml-auto text-blue-600 hover:text-blue-800">
+                        <button type="button" id="remove-file" class="ml-auto text-slate-600 hover:text-slate-800 transition-colors">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -178,49 +253,15 @@
                     </div>
                 </div>
 
-                <!-- How It Works -->
-                <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h3 class="text-sm font-medium text-gray-800 mb-2">💡 How It Works</h3>
-                    
-                    <!-- No Table Mode -->
-                    <div id="how-it-works-no-table" class="text-sm text-gray-600">
-                        <p class="mb-2">
-                            <strong>Paragraph-Based Processing:</strong> Your document will be analyzed using intelligent chunking with overlap to create substantial slides.
-                        </p>
-                        <ul class="list-disc list-inside space-y-1 text-xs">
-                            <li>Each paragraph and heading is processed in document order</li>
-                            <li>Related content is grouped into comprehensive chunks (200-800 characters)</li>
-                            <li>15% overlap between chunks maintains context and flow</li>
-                            <li>H4 headings become slide titles paired with following content</li>
-                            <li>AI generates contextually relevant bullet points for each chunk</li>
-                            <li>Visual prompts are created for custom graphics and diagrams</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- Table Mode -->
-                    <div id="how-it-works-table" class="text-sm text-gray-600 hidden">
-                        <p class="mb-2">
-                            <strong>Table Column Processing:</strong> Content from your selected table column will be converted into slides.
-                        </p>
-                        <ul class="list-disc list-inside space-y-1 text-xs">
-                            <li>Each row in the selected table column becomes one slide</li>
-                            <li>Document headings (H1-H4) create title and section slides</li>
-                            <li>Table content is processed with AI bullet generation</li>
-                            <li>Visual prompts are generated for each content slide</li>
-                            <li>Maintains document hierarchy and structure</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- Hidden input for backward compatibility -->
-                    <input type="hidden" id="skip-visuals" name="skip_visuals" value="false">
-                </div>
+                <!-- Hidden input for backward compatibility -->
+                <input type="hidden" id="skip-visuals" name="skip_visuals" value="false">
 
                 <!-- Script Column Selection -->
                 <div class="mb-6">
-                    <label for="script-column" class="block text-sm font-medium text-gray-700 mb-2">
-                        📝 Script Column (Optional)
+                    <label for="script-column" class="block text-sm font-semibold text-slate-800 mb-2">
+                        Script Column
                     </label>
-                    <select id="script-column" name="script_column" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <select id="script-column" name="script_column" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
                         <option value="0" selected>No table - Use paragraphs for slides (recommended)</option>
                         <option value="1">Column 1 - First column</option>
                         <option value="2">Column 2 - Second column</option>
@@ -229,50 +270,49 @@
                         <option value="5">Column 5 - Fifth column</option>
                         <option value="6">Column 6 - Sixth column</option>
                     </select>
-                    <p class="text-sm text-gray-500 mt-1">
-                        <strong>With table:</strong> Each row in the selected column becomes one slide.<br>
-                        <strong>Without table:</strong> Each paragraph becomes one slide with AI-generated bullet points.
+                    <p class="text-xs text-slate-600 mt-2">
+                        <span class="font-medium">With table:</span> Each row becomes one slide.
+                        <span class="font-medium">Without table:</span> Paragraphs become slides with AI-generated bullets.
                     </p>
                 </div>
 
                 <!-- Claude API Key -->
                 <div id="claude-key-section" class="mb-6">
-                    <label for="claude-key" class="block text-sm font-medium text-gray-700 mb-2">
-                        🔑 Claude API Key (Optional, but recommended)
+                    <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
+                        Claude API Key <span class="text-slate-500 font-normal">(Optional, but recommended)</span>
                     </label>
                     <input type="password" id="claude-key" name="claude_key"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                           placeholder="sk-ant-... (optional - for enhanced bullet generation)">
-                    <div id="key-validation" class="mt-1 text-xs hidden">
+                           class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
+                           placeholder="sk-ant-...">
+                    <div id="key-validation" class="mt-2 text-xs hidden">
                         <span id="key-status"></span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">
-                        Enter your Claude API key for enhanced AI-powered bullet generation and content analysis.
-                        <span class="text-blue-600">Recommended for higher quality, more contextually relevant bullets.</span>
+                    <p class="text-xs text-slate-600 mt-2">
+                        Enhanced AI-powered bullet generation and content analysis. Recommended for higher quality results.
                     </p>
-                    <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-xs text-blue-800">
-                            <strong>🔒 Privacy:</strong> Your API key is only used for this session and is not stored or logged.
-                            Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" class="underline">console.anthropic.com/settings/keys</a>
+                    <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <p class="text-xs text-slate-700">
+                            <span class="font-semibold">Privacy:</span> Your API key is used only for this session and is not stored or logged.
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-800 underline hover:text-slate-900">Get your key</a>
                         </p>
                     </div>
                 </div>
 
                 <!-- Output Format Selection -->
                 <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-3">
-                        📊 Output Format
+                    <label class="block text-sm font-semibold text-slate-800 mb-3">
+                        Output Format
                     </label>
                     <div class="flex gap-4">
                         <label class="flex-1 cursor-pointer">
                             <input type="radio" name="output_format" value="pptx" checked class="peer sr-only">
-                            <div class="p-4 border-2 border-gray-300 rounded-lg peer-checked:border-blue-600 peer-checked:bg-blue-50 transition-all">
+                            <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <div class="font-semibold text-gray-900">PowerPoint (.pptx)</div>
-                                        <div class="text-sm text-gray-600">Download file</div>
+                                        <div class="font-semibold text-slate-800">PowerPoint (.pptx)</div>
+                                        <div class="text-sm text-slate-600">Download file</div>
                                     </div>
-                                    <svg class="h-6 w-6 text-blue-600 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg class="h-6 w-6 text-slate-700 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
@@ -280,23 +320,23 @@
                         </label>
                         <label class="flex-1 cursor-pointer">
                             <input type="radio" name="output_format" value="google_slides" class="peer sr-only">
-                            <div class="p-4 border-2 border-gray-300 rounded-lg peer-checked:border-blue-600 peer-checked:bg-blue-50 transition-all">
+                            <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <div class="font-semibold text-gray-900">Google Slides</div>
-                                        <div class="text-sm text-gray-600">Create in Drive</div>
+                                        <div class="font-semibold text-slate-800">Google Slides</div>
+                                        <div class="text-sm text-slate-600">Create in Drive</div>
                                     </div>
-                                    <svg class="h-6 w-6 text-blue-600 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg class="h-6 w-6 text-slate-700 hidden peer-checked:block" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                             </div>
                         </label>
                     </div>
-                    <div id="google-auth-notice" class="hidden mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p class="text-sm text-yellow-800">
-                            <strong>⚠️ Authentication Required:</strong> You'll need to authorize Google access before creating slides.
-                            <button type="button" id="google-auth-btn" class="ml-2 text-blue-600 underline">Authorize Now</button>
+                    <div id="google-auth-notice" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p class="text-sm text-slate-800">
+                            <span class="font-semibold">Authentication Required:</span> You'll need to authorize Google access before creating slides.
+                            <button type="button" id="google-auth-btn" class="ml-2 text-slate-800 underline hover:text-slate-900">Authorize Now</button>
                         </p>
                     </div>
                 </div>
@@ -304,8 +344,8 @@
                 <!-- Convert Button -->
                 <div class="text-center">
                     <button type="submit" id="convert-btn" disabled
-                            class="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all transform hover:scale-105 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none">
-                        📈 Convert to Presentation
+                            class="btn-primary px-8 py-3 font-semibold rounded-lg focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
+                        Convert to Presentation
                     </button>
                 </div>
             </form>
@@ -314,30 +354,30 @@
             <div id="progress" class="hidden mt-8 text-center">
                 <div class="flex justify-center items-center mb-4">
                     <div class="spinner mr-3"></div>
-                    <span id="progress-text" class="text-gray-600">Converting your document...</span>
+                    <span id="progress-text" class="text-slate-700 font-medium">Converting your document...</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                    <div id="progress-bar" class="bg-slate-700 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
                 </div>
-                <p id="progress-subtitle" class="text-sm text-gray-500 mt-2">This may take a few moments depending on file size</p>
+                <p id="progress-subtitle" class="text-sm text-slate-600 mt-2">This may take a few moments depending on file size</p>
             </div>
 
             <!-- Results -->
-            <div id="results" class="hidden mt-8 p-6 bg-green-50 border border-green-200 rounded-lg">
+            <div id="results" class="hidden mt-8 p-6 bg-emerald-50 border border-emerald-200 rounded-lg">
                 <div class="text-center">
-                    <svg class="h-12 w-12 text-green-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="h-12 w-12 text-emerald-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
-                    <h3 class="text-lg font-semibold text-green-800 mb-2">🎉 Conversion Successful!</h3>
-                    <p id="result-info" class="text-green-700 mb-4"></p>
-                    <a id="download-link" href="#" 
-                       class="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-2">Conversion Successful</h3>
+                    <p id="result-info" class="text-slate-700 mb-4"></p>
+                    <a id="download-link" href="#"
+                       class="inline-flex items-center px-6 py-3 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-700 transition-colors">
                         <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         Download Presentation
                     </a>
-                    <button id="convert-another" class="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                    <button id="convert-another" class="ml-4 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
                         Convert Another File
                     </button>
                 </div>
@@ -346,12 +386,12 @@
             <!-- Error -->
             <div id="error" class="hidden mt-8 p-6 bg-red-50 border border-red-200 rounded-lg">
                 <div class="flex items-center">
-                    <svg class="h-6 w-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="h-6 w-6 text-red-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <div>
-                        <h3 class="text-lg font-semibold text-red-800">Conversion Failed</h3>
-                        <p id="error-message" class="text-red-700"></p>
+                        <h3 class="text-lg font-semibold text-slate-800 mb-1">Conversion Failed</h3>
+                        <p id="error-message" class="text-slate-700"></p>
                     </div>
                 </div>
             </div>
@@ -359,9 +399,9 @@
 
     </main>
 
-    <footer class="bg-gray-800 text-white py-8 mt-16">
+    <footer class="header-gradient text-white py-8 mt-16">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p>&copy; 2024 Script to Slides Generator</p>
+            <p class="text-slate-300">&copy; 2024 Document to Presentation Converter</p>
         </div>
     </footer>
 
@@ -379,28 +419,6 @@
         const results = document.getElementById('results');
         const error = document.getElementById('error');
         const scriptColumnSelect = document.getElementById('script-column');
-        const howItWorksNoTable = document.getElementById('how-it-works-no-table');
-        const howItWorksTable = document.getElementById('how-it-works-table');
-
-        // How It Works section toggle based on script column selection
-        function updateHowItWorks() {
-            const selectedColumn = scriptColumnSelect.value;
-            if (selectedColumn === '0') {
-                // No table mode
-                howItWorksNoTable.classList.remove('hidden');
-                howItWorksTable.classList.add('hidden');
-            } else {
-                // Table mode
-                howItWorksNoTable.classList.add('hidden');
-                howItWorksTable.classList.remove('hidden');
-            }
-        }
-        
-        // Initialize How It Works section based on default selection
-        updateHowItWorks();
-        
-        // Listen for script column changes
-        scriptColumnSelect.addEventListener('change', updateHowItWorks);
 
         // File upload handling
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -444,7 +462,7 @@
             
             if (!allowedExtensions.includes(fileExtension)) {
                 const fileType = fileExtension.substring(1).toUpperCase();
-                showError(`❌ ${fileType} files are not supported. Only Microsoft Word (.docx) files are accepted. Please export your document from Google Docs as Word format and try again.`);
+                showError(`${fileType} files are not supported. Only Microsoft Word (.docx) files are accepted. Please export your document from Google Docs as Word format and try again.`);
                 showUploadError();
                 return;
             }
@@ -643,7 +661,7 @@
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    showError('⏰ Request timed out. The document may be too large or complex. Try using fast mode for quicker processing.');
+                    showError('Request timed out. The document may be too large or complex. Try using fast mode for quicker processing.');
                 } else {
                     showError('Network error: ' + error.message);
                 }
@@ -673,12 +691,12 @@
             if (result.format === 'google_slides') {
                 // Google Slides - show "Open in Google Slides" link
                 downloadLink.href = result.google_slides_url;
-                downloadLink.textContent = '🌐 Open in Google Slides';
+                downloadLink.textContent = 'Open in Google Slides';
                 downloadLink.target = '_blank';
             } else {
                 // PowerPoint - show download link
                 downloadLink.href = result.download_url;
-                downloadLink.textContent = '📥 Download PowerPoint';
+                downloadLink.textContent = 'Download PowerPoint';
                 downloadLink.target = '';
             }
 
@@ -720,6 +738,16 @@
             hideResults();
             hideError();
             clearUploadError();
+        });
+
+        // Collapsible guide toggle
+        const guideToggle = document.getElementById('guide-toggle');
+        const guideContent = document.getElementById('guide-content');
+        const toggleIcon = guideToggle.querySelector('.toggle-icon');
+
+        guideToggle.addEventListener('click', () => {
+            guideContent.classList.toggle('open');
+            toggleIcon.classList.toggle('open');
         });
     </script>
 </body>
