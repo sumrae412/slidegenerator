@@ -205,6 +205,7 @@ class SlideContent:
     content: List[str]
     slide_type: str = 'content'  # 'title', 'content', 'image', 'bullet'
     heading_level: Optional[int] = None  # Original heading level from DOCX (1-6)
+    subheader: Optional[str] = None  # Bold subheader above bullets (extracted topic sentence)
 
 @dataclass
 class DocumentStructure:
@@ -1595,20 +1596,21 @@ Return your analysis as a JSON object with:
                 
             else:
                 # This is content - create a slide with bullet points
-                bullet_points = self._create_bullet_points(line, fast_mode)
-                
+                topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode)
+
                 # Use pending H4 title if available, otherwise use simple content-based title
                 if pending_h4_title:
                     slide_title = pending_h4_title
                 else:
                     # For regular content slides, create a simple descriptive title
                     slide_title = self._create_simple_content_title(line)
-                
+
                 slides.append(SlideContent(
                     title=slide_title,
                     content=bullet_points,
                     slide_type='script',
-                    heading_level=4 if pending_h4_title else None
+                    heading_level=4 if pending_h4_title else None,
+                    subheader=topic_sentence  # Bold subheader above bullets
                 ))
                 
                 if pending_h4_title:
@@ -1627,24 +1629,89 @@ Return your analysis as a JSON object with:
         logger.info(f"VERIFICATION: {len(script_slides)} script slides + {len(heading_slides)} heading slides = {len(slides)} total")
         
         return slides
-    
-    def _create_bullet_points(self, text: str, fast_mode: bool = False) -> List[str]:
-        """Convert content into high-quality bullet points using unified approach"""
+
+    def _extract_topic_sentence(self, text: str) -> Optional[str]:
+        """
+        Extract topic sentence from text that should become a bold subheader.
+        Topic sentences are typically first 1-2 sentences that define/introduce the main subject.
+        Returns None if no clear topic sentence found.
+        """
+        import re
+
+        if not text or len(text.strip()) < 30:
+            return None
+
+        # Split into sentences
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        if not sentences:
+            return None
+
+        first_sentence = sentences[0]
+
+        # Check if first sentence is a topic/definition sentence
+        # Pattern: "X is a Y" or "X are Y" or "X provides/enables/offers Y"
+        topic_patterns = [
+            r'^\w+.*\s+(is|are)\s+(a|an|the)\s+\w+',  # "Snowflake is a platform..."
+            r'^\w+.*\s+(provides?|enables?|offers?|supports?|includes?)\s+',  # "The system provides..."
+            r'^\w+.*\s+(divides?|separates?|combines?|integrates?)\s+',  # "Architecture divides..."
+        ]
+
+        is_topic_sentence = any(re.search(pattern, first_sentence, re.IGNORECASE) for pattern in topic_patterns)
+
+        # Additional check: Does it contain technical/specific terms?
+        technical_indicators = [
+            'platform', 'system', 'architecture', 'framework', 'service', 'application',
+            'database', 'interface', 'process', 'method', 'tool', 'feature', 'capability',
+            'data', 'cloud', 'api', 'authentication', 'security', 'infrastructure'
+        ]
+
+        has_technical_content = any(indicator in first_sentence.lower() for indicator in technical_indicators)
+
+        # Return topic sentence if it matches patterns AND has technical content
+        if is_topic_sentence and has_technical_content and len(first_sentence) >= 20:
+            # Clean up the sentence
+            topic = first_sentence.strip()
+            if not topic.endswith('.'):
+                topic += '.'
+            return topic
+
+        return None
+
+    def _create_bullet_points(self, text: str, fast_mode: bool = False) -> Tuple[Optional[str], List[str]]:
+        """
+        Convert content into high-quality bullet points using unified approach.
+        Returns: (topic_sentence, bullets) where topic_sentence becomes a bold subheader
+        """
         text = text.strip()
         if not text:
-            return []  # Leave blank for empty content
-        
+            return None, []  # Leave blank for empty content
+
+        # Extract topic sentence first (will become bold subheader)
+        topic_sentence = self._extract_topic_sentence(text)
+
+        # If topic sentence found, remove it from text before generating bullets
+        remaining_text = text
+        if topic_sentence:
+            # Remove the topic sentence from the beginning
+            import re
+            # Remove first sentence
+            remaining_text = re.sub(r'^[^.!?]+[.!?]\s*', '', text, count=1).strip()
+            logger.info(f"Extracted topic sentence: {topic_sentence}")
+
         # Fast mode: Simple, quick bullet generation without AI processing
         if fast_mode:
-            return self._create_fast_bullets(text)
-        
-        logger.info(f"Creating unified high-quality bullets from text: {text[:100]}...")
-        
+            bullets = self._create_fast_bullets(remaining_text if topic_sentence else text)
+            return topic_sentence, bullets
+
+        logger.info(f"Creating unified high-quality bullets from text: {(remaining_text if topic_sentence else text)[:100]}...")
+
         # Use unified bullet generation that combines best approaches
-        bullets = self._create_unified_bullets(text)
-        
+        bullets = self._create_unified_bullets(remaining_text if topic_sentence else text)
+
         logger.info(f"Final unified bullets: {bullets}")
-        return bullets[:4]  # Limit to 4 bullets for readability
+        return topic_sentence, bullets[:4]  # Limit to 4 bullets for readability
     
     def _create_unified_bullets(self, text: str) -> List[str]:
         """LLM-only bullet generation for highest quality and content relevance"""
@@ -1774,12 +1841,35 @@ Return your analysis as a JSON object with:
                             bullets.append("Key content about " + ' '.join(words[:4]))
                     else:
                         bullets.append("Key information from content")
-            
-            return bullets[:3]  # Maximum 3 bullets
-            
+
+            # FIX #3: Block vague fallbacks completely - filter out vague/generic content
+            filtered_bullets = []
+            vague_keywords = ['really', 'cool', 'interesting', 'amazing', 'awesome', 'stuff', 'things',
+                            'this is where', 'you will love', 'basically', 'kind of', 'sort of']
+
+            for bullet in bullets:
+                bullet_lower = bullet.lower()
+                # Check if bullet is too vague or generic
+                is_vague = (
+                    any(vague_word in bullet_lower for vague_word in vague_keywords) or
+                    bullet_lower.startswith(('so,', 'well,', 'um,', 'uh,')) or
+                    'going to' in bullet_lower or
+                    len(bullet) < 25  # Too short to be meaningful
+                )
+
+                if not is_vague:
+                    filtered_bullets.append(bullet)
+
+            # If filtering removed everything, return empty list rather than junk
+            if not filtered_bullets:
+                logger.warning("All basic fallback bullets were vague - returning empty list")
+                return []
+
+            return filtered_bullets[:3]  # Maximum 3 bullets
+
         except Exception as e:
             logger.error(f"Basic fallback bullet generation failed: {e}")
-            return ["Content summary point"]
+            return []  # Return empty instead of generic fallback
     
     def _create_llm_only_bullets(self, text: str) -> List[str]:
         """Create bullets using Claude with optimized prompt for content relevance"""
@@ -1852,9 +1942,11 @@ Return only the bullet points, one per line, without symbols or numbering."""
             
             # Strategy 1: Extract complete, meaningful sentences only
             sentences = re.split(r'[.!?]+', text)
+            sentences = [s.strip() for s in sentences if s.strip()]  # Clean sentences list
+
             for sentence in sentences:
                 sentence = sentence.strip()
-                
+
                 # Only process sentences with sufficient length and meaningful content (relaxed limits)
                 if 20 <= len(sentence) <= 200 and self._is_meaningful_sentence(sentence):
                     bullet = self._convert_meaningful_sentence_to_bullet(sentence)
@@ -1862,18 +1954,28 @@ Return only the bullet points, one per line, without symbols or numbering."""
                         bullets.append(bullet)
                         if len(bullets) >= 5:  # Increased to 5 quality bullets for more content
                             break
-            
+
             # Strategy 2: Extract direct instructional content (only if no sentences worked)
             if len(bullets) == 0:
                 instructions = self._extract_direct_instructions(text)
                 bullets.extend(instructions[:2])
-            
+
             # Final quality filter - be very strict
             quality_bullets = []
             for bullet in bullets:
                 if self._is_high_quality_nlp_bullet(bullet):
                     quality_bullets.append(bullet)
-            
+
+            # FIX #2: Ensure minimum 2 bullets when we have 3+ sentences available
+            if len(quality_bullets) < 2 and len(sentences) >= 3:
+                logger.info(f"Only {len(quality_bullets)} quality bullets from {len(sentences)} sentences - being less strict")
+                # Be less strict - take the first 2 bullets that passed initial filter
+                for bullet in bullets[:3]:
+                    if bullet not in quality_bullets and len(bullet) > 20:
+                        quality_bullets.append(bullet)
+                        if len(quality_bullets) >= 2:
+                            break
+
             logger.info(f"Conservative NLP generated {len(quality_bullets)} high-quality bullets from text of length {len(text)}")
             return quality_bullets
             
@@ -5118,7 +5220,7 @@ class SlideGenerator:
                             content_text = '\n'.join([f"• {item}" for item in section['content']])
                         else:
                             # Process text content into bullet points
-                            bullet_points = self._create_bullet_points(str(section['content']), skip_visuals)
+                            _, bullet_points = self._create_bullet_points(str(section['content']), skip_visuals)
                             content_text = '\n'.join([f"• {bullet}" for bullet in bullet_points])
                         
                         content_shape.text = content_text
@@ -5145,19 +5247,32 @@ class SlideGenerator:
                 pptx_slides_created += 1
                 logger.info(f"Created script slide #{current_slide_number}: '{section['title']}' with {len(section.get('content', []))} bullet points")
                 
-                # Left side - Bullet points
-                if section.get('content'):
+                # Left side - Subheader and Bullet points
+                if section.get('content') or section.get('subheader'):
                     bullet_shape = slide.shapes.add_textbox(
-                        left=Inches(0.5), top=Inches(1.5), 
+                        left=Inches(0.5), top=Inches(1.5),
                         width=Inches(4.5), height=Inches(5)
                     )
                     bullet_frame = bullet_shape.text_frame
                     bullet_frame.word_wrap = True
                     bullet_frame.clear()
-                    
-                    # Add bullet points directly without header
-                    for i, bullet_point in enumerate(section['content']):
-                        p = bullet_frame.paragraphs[0] if i == 0 else bullet_frame.add_paragraph()
+
+                    para_index = 0
+
+                    # Add subheader if present (bold topic sentence above bullets)
+                    if section.get('subheader'):
+                        p = bullet_frame.paragraphs[0]
+                        p.text = section['subheader']
+                        p.level = 0
+                        p.font.size = Pt(18)
+                        p.font.bold = True
+                        p.space_after = Pt(12)
+                        p.space_before = Pt(0)
+                        para_index += 1
+
+                    # Add bullet points
+                    for i, bullet_point in enumerate(section.get('content', [])):
+                        p = bullet_frame.paragraphs[para_index] if (i == 0 and para_index == 0) else bullet_frame.add_paragraph()
                         p.text = f"• {bullet_point}"
                         p.level = 0
                         p.font.size = Pt(16)
@@ -7934,9 +8049,21 @@ class GoogleSlidesGenerator:
             }
         })
 
-        # Create bullet points text box
-        if slide.content:
-            bullet_text = '\n'.join([f'• {item}' for item in slide.content])
+        # Create bullet points text box (with optional subheader)
+        if slide.content or slide.subheader:
+            # Build text with subheader first if present, then bullets
+            text_parts = []
+            subheader_length = 0
+
+            if slide.subheader:
+                text_parts.append(slide.subheader)
+                text_parts.append('')  # Blank line after subheader
+                subheader_length = len(slide.subheader) + 1  # +1 for newline
+
+            if slide.content:
+                text_parts.extend([f'• {item}' for item in slide.content])
+
+            full_text = '\n'.join(text_parts)
 
             requests.append({
                 'createShape': {
@@ -7961,9 +8088,30 @@ class GoogleSlidesGenerator:
             requests.append({
                 'insertText': {
                     'objectId': f'{slide_id}_content_box',
-                    'text': bullet_text
+                    'text': full_text
                 }
             })
+
+            # Make subheader bold if present
+            if slide.subheader and subheader_length > 0:
+                requests.append({
+                    'updateTextStyle': {
+                        'objectId': f'{slide_id}_content_box',
+                        'textRange': {
+                            'type': 'FIXED_RANGE',
+                            'startIndex': 0,
+                            'endIndex': subheader_length
+                        },
+                        'style': {
+                            'bold': True,
+                            'fontSize': {
+                                'magnitude': 18,
+                                'unit': 'PT'
+                            }
+                        },
+                        'fields': 'bold,fontSize'
+                    }
+                })
 
         return requests
 

@@ -23,7 +23,23 @@
       "Bash(cp:*)",
       "Bash(awk:*)",
       "Bash(env)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(test:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(heroku ps:*)",
+      "Bash(heroku logs:*)",
+      "Bash(heroku open:*)",
+      "WebFetch(domain:developers.google.com)",
+      "Bash(if [ -f .gitignore ])",
+      "Bash(then cat .gitignore)",
+      "Bash(else echo \"No .gitignore found\")",
+      "Bash(fi)",
+      "Bash(heroku config:set:*)",
+      "Read(//Users/summerrae/claude_code/**)",
+      "Bash(heroku config:*)"
     ],
     "deny": []
   }
