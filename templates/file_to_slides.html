@@ -506,7 +506,8 @@
             const myDriveView = new google.picker.DocsView(google.picker.ViewId.DOCS)
                 .setMimeTypes('application/vnd.google-apps.document')  // Only Google Docs
                 .setIncludeFolders(true)
-                .setOwnedByMe(true);  // Only show documents owned by the user
+                .setParent('root')          // Start at root of My Drive
+                .setOwnedByMe(true);        // Only show documents owned by the user
 
             // Also add a view for all accessible documents (shared with user)
             const allDocsView = new google.picker.DocsView(google.picker.ViewId.DOCS)
@@ -517,7 +518,8 @@
                 .addView(myDriveView)       // My Drive is first (default)
                 .addView(allDocsView)       // All docs is second (accessible via tabs)
                 .setOAuthToken(accessToken)
-                .setCallback(pickerCallback);
+                .setCallback(pickerCallback)
+                .enableFeature(google.picker.Feature.NAV_HIDDEN);  // Cleaner interface
 
             // Add API key if available (optional but recommended)
             if (googleApiKey) {
