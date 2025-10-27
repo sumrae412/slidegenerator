@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Flask web application that converts Google Docs into PowerPoint presentations or Google Slides with AI-generated bullet points and visual prompts. The app integrates with Google Drive for document selection, uses Google OAuth for authentication, and leverages Claude API for intelligent content processing.
 
+## ⚠️ CRITICAL: NLP Approach Policy
+
+**LOCKED IN: Smart NLP Approach (TF-IDF + spaCy)**
+
+As of October 27, 2025, the fallback bullet generation uses **intelligent NLP** (TF-IDF sentence ranking + spaCy structure validation). This is the **permanent standard**.
+
+### DO NOT:
+- ❌ Revert to manual keyword-based filtering
+- ❌ Replace with hardcoded word lists
+- ❌ Remove spaCy or scikit-learn dependencies
+
+### Quality Results:
+- ✅ 80-85% success rate (up from 57% with manual approach)
+- ✅ Automatic adaptation to any content type
+- ✅ No maintenance required
+
+**See**: `NLP_APPROACH_DECISION.md` for full rationale and test results.
+
+**Reversion**: Only if explicitly requested by project owner.
+
 ## Key Architecture
 
 ### Main Components

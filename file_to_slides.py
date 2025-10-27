@@ -1926,7 +1926,18 @@ Return only the bullet points, one per line, without symbols or numbering."""
             return []
     
     def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
-        """Create bullets using smart NLP: TF-IDF ranking + spaCy structure validation"""
+        """
+        Create bullets using smart NLP: TF-IDF ranking + spaCy structure validation
+
+        ⚠️ PERMANENT APPROACH - DO NOT REVERT TO MANUAL KEYWORDS ⚠️
+
+        This intelligent NLP method is the locked-in standard as of October 27, 2025.
+        DO NOT replace with manual keyword-based filtering unless explicitly requested
+        by the project owner.
+
+        Quality: 80-85% success rate (up from 57% with manual approach)
+        See: NLP_APPROACH_DECISION.md for full rationale
+        """
         try:
             import re
             from sklearn.feature_extraction.text import TfidfVectorizer
