@@ -1034,36 +1034,18 @@ Return your analysis as a JSON object with:
             return '\n'.join(chunked_content)
         
         # Original table-based extraction
-        logger.info(f"Extracting script text from column {script_column}")
-        
+        logger.info(f"Extracting script text from column {script_column} - ONLY from tables (skipping all non-table content)")
+
         # Process paragraphs and tables in document order
         for element in doc.element.body:
             if element.tag.endswith('p'):  # Paragraph
+                # When column mode is active, skip ALL paragraphs (including headings)
+                # Only content from tables should be extracted
                 for paragraph in doc.paragraphs:
                     if paragraph._element == element:
                         text = paragraph.text.strip()
                         if text:
-                            # Check if paragraph is a heading
-                            if paragraph.style.name.startswith('Heading'):
-                                level = paragraph.style.name.replace('Heading ', '')
-                                try:
-                                    level_num = int(level)
-                                    # Filter out conversational H1 headings that shouldn't be title slides
-                                    if level_num == 1 and self._is_conversational_heading(text):
-                                        logger.info(f"Skipping conversational H1: {text}")
-                                        # Treat as regular content instead of heading
-                                        content.append(text)
-                                    else:
-                                        content.append(f"{'#' * level_num} {text}")
-                                        logger.info(f"Found heading level {level_num}: {text}")
-                                except ValueError:
-                                    content.append(f"# {text}")
-                                    logger.info(f"Found heading: {text}")
-                            else:
-                                # Only add non-heading paragraphs if we've found the first table
-                                # This ignores intro content before the first table
-                                if first_table_found:
-                                    content.append(text)
+                            logger.debug(f"Skipping paragraph outside table: {text[:50]}...")
                         break
                         
             elif element.tag.endswith('tbl'):  # Table
