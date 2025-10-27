@@ -177,14 +177,33 @@ def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[st
             service = build('docs', 'v1', credentials=creds)
             document = service.documents().get(documentId=doc_id).execute()
 
-            # Extract text content from the document structure
+            # Extract text content from the document structure (paragraphs AND tables)
             content = []
             for element in document.get('body', {}).get('content', []):
+                # Extract paragraph text
                 if 'paragraph' in element:
                     paragraph_elements = element['paragraph'].get('elements', [])
                     for elem in paragraph_elements:
                         if 'textRun' in elem:
                             content.append(elem['textRun']['content'])
+
+                # Extract table content (tab-delimited, matching .txt export format)
+                elif 'table' in element:
+                    table = element['table']
+                    for row in table.get('tableRows', []):
+                        row_cells = []
+                        for cell in row.get('tableCells', []):
+                            # Extract all text from the cell
+                            cell_text = []
+                            for cell_element in cell.get('content', []):
+                                if 'paragraph' in cell_element:
+                                    for elem in cell_element['paragraph'].get('elements', []):
+                                        if 'textRun' in elem:
+                                            cell_text.append(elem['textRun']['content'].strip())
+                            row_cells.append(' '.join(cell_text))
+
+                        # Join cells with tabs to match .txt export format
+                        content.append('\t'.join(row_cells))
 
             return '\n'.join(content), None
         else:
