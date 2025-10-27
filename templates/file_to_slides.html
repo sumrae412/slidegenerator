@@ -305,7 +305,7 @@
                     </label>
                     <div class="flex gap-4">
                         <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="output_format" value="pptx" checked class="peer sr-only">
+                            <input type="radio" name="output_format" value="pptx" class="peer sr-only">
                             <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
                                 <div class="flex items-center justify-between">
                                     <div>
@@ -319,7 +319,7 @@
                             </div>
                         </label>
                         <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="output_format" value="google_slides" class="peer sr-only">
+                            <input type="radio" name="output_format" value="google_slides" checked class="peer sr-only">
                             <div class="p-4 border-2 border-slate-300 rounded-lg peer-checked:border-slate-700 peer-checked:bg-slate-50 transition-all hover:border-slate-400">
                                 <div class="flex items-center justify-between">
                                     <div>
@@ -531,6 +531,12 @@
         // Output format toggle
         const formatRadios = document.querySelectorAll('input[name="output_format"]');
         const googleAuthNotice = document.getElementById('google-auth-notice');
+
+        // Show auth notice on load if Google Slides is selected by default
+        const selectedFormat = document.querySelector('input[name="output_format"]:checked');
+        if (selectedFormat && selectedFormat.value === 'google_slides') {
+            googleAuthNotice.classList.remove('hidden');
+        }
 
         formatRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
