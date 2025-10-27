@@ -26,22 +26,24 @@ try:
     import textstat
     from collections import Counter
     LIGHTWEIGHT_SEMANTIC = True
-    
-    # Try to download required NLTK data if not present
+
+    # Try to download required NLTK data if not present (but don't crash if it fails)
     try:
         nltk.data.find('tokenizers/punkt')
         nltk.data.find('corpora/stopwords')
         nltk.data.find('taggers/averaged_perceptron_tagger')
-    except LookupError:
+    except (LookupError, OSError) as e:
+        # Data not found, try to download
         logger = logging.getLogger(__name__)
-        logger.info("Downloading required NLTK data...")
+        logger.info(f"NLTK data not found, attempting download: {e}")
         try:
             nltk.download('punkt', quiet=True)
-            nltk.download('stopwords', quiet=True)  
+            nltk.download('stopwords', quiet=True)
             nltk.download('averaged_perceptron_tagger', quiet=True)
-        except:
-            logger.warning("Could not download NLTK data - basic analysis only")
-            
+        except Exception as download_error:
+            logger.warning(f"Could not download NLTK data - basic analysis only: {download_error}")
+            LIGHTWEIGHT_SEMANTIC = False
+
 except ImportError:
     logging.warning("Lightweight semantic libraries not available - using basic fallback")
     LIGHTWEIGHT_SEMANTIC = False
