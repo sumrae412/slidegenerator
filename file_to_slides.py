@@ -817,8 +817,8 @@ Return your analysis as a JSON object with:
         logger.info(f"_parse_docx_raw_for_title returning {len(result)} chars")
         return result
 
-    def _parse_txt(self, file_path: str) -> str:
-        """Parse TXT file (Google Docs export) with heading detection and proper formatting"""
+    def _parse_txt(self, file_path: str, script_column: int = 0) -> str:
+        """Parse TXT file (Google Docs export) with heading detection, table handling, and column filtering"""
         import re
 
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -831,17 +831,40 @@ Return your analysis as a JSON object with:
         lines = raw_content.split('\n')
         processed_lines = []
 
+        logger.info(f"TXT parser processing {len(lines)} lines with script_column={script_column}")
+
         for i, line in enumerate(lines):
             line = line.strip()
             if not line:
                 continue
 
-            # Detect headings by characteristics:
-            # H1: Usually all caps, short, at the beginning
-            # H2: Title case, short, often followed by blank line
-            # H3: Similar to H2 but more context-specific
-            # H4: Similar to H3 but may be questions or specific topics
+            # Check if this line is a tab-separated table row
+            if '\t' in line:
+                cells = line.split('\t')
 
+                # If column mode is active (script_column > 0), only extract from that column
+                if script_column > 0:
+                    if len(cells) >= script_column:
+                        cell_text = cells[script_column - 1].strip()
+                        if cell_text:
+                            # Clean up the text
+                            cleaned_text = self._clean_script_text(cell_text)
+                            if cleaned_text and len(cleaned_text) > 10:
+                                processed_lines.append(cleaned_text)
+                                logger.info(f"Extracted from column {script_column}: {cleaned_text[:50]}...")
+                    else:
+                        logger.debug(f"Row has only {len(cells)} columns, cannot access column {script_column}")
+                    continue
+                else:
+                    # In paragraph mode (script_column == 0), extract all cells from table
+                    for cell in cells:
+                        cell_text = cell.strip()
+                        if cell_text and len(cell_text) > 10:
+                            processed_lines.append(cell_text)
+                    continue
+
+            # Process non-table lines (headings and paragraphs)
+            # Detect headings by characteristics:
             is_heading = False
             heading_level = None
 
@@ -882,9 +905,13 @@ Return your analysis as a JSON object with:
                 line = '#' * heading_level + ' ' + line
                 logger.info(f"Detected H{heading_level} heading: {line}")
 
-            # Only include substantial content (or headings)
-            if is_heading or len(line) > 30:
+            # Include headings always, but only include non-table paragraphs in paragraph mode
+            if is_heading:
                 processed_lines.append(line)
+            elif script_column == 0 and len(line) > 30:
+                # In paragraph mode, include substantial content
+                processed_lines.append(line)
+            # In column mode (script_column > 0), skip non-table paragraphs
 
         # Join lines with single newlines
         result = '\n'.join(processed_lines)
@@ -899,8 +926,8 @@ Return your analysis as a JSON object with:
             if file_ext == 'docx':
                 content = self._parse_docx(file_path, script_column)
             elif file_ext == 'txt':
-                # Google Docs fetched as plain text - parse it properly
-                content = self._parse_txt(file_path)
+                # Google Docs fetched as plain text - parse it properly with column filtering
+                content = self._parse_txt(file_path, script_column)
                 logger.info(f"TXT parsing complete: {len(content.split())} words extracted")
             else:
                 raise ValueError(f"Only DOCX and TXT files are supported. Got: {file_ext}")
