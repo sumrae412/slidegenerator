@@ -23,7 +23,8 @@ python tests/regression_benchmark.py --compare v87_baseline v88_changes  # Compa
 |------|---------|-------|
 | `smoke_test.py` | Quick validation (4 tests) | Run before every deploy |
 | `regression_benchmark.py` | Full quality testing (11 tests) | Track quality across versions |
-| `golden_test_set.py` | Hand-crafted test cases | Reference data for tests |
+| `structure_validation.py` | Document parsing validation (4 tests) | Verify slide count and header recognition |
+| `golden_test_set.py` | Hand-crafted test cases | Reference data for bullet quality tests |
 | `quality_metrics.py` | Objective scoring system | Evaluates bullet quality 0-100 |
 
 ## 🧪 Test Suites
@@ -204,6 +205,106 @@ print(format_metrics_report(metrics, test_id="edu_ml_basics"))
 #
 # Bullets: 3
 # Avg Length: 9.7 words (58.3 chars)
+```
+
+---
+
+### 5. Structure Validation (`structure_validation.py`)
+
+**Purpose:** Validate document parsing and slide structure recognition
+
+**What It Tests:**
+- Slide count (expected vs actual)
+- Slide type distribution (title slides vs content slides)
+- Header recognition patterns (plain text, markdown, video script formats)
+- Table row extraction accuracy
+- Stage direction filtering
+
+**Unlike bullet quality tests** which evaluate the quality of generated bullet points, **structure tests** validate that the parser correctly identifies slide boundaries and creates the right number of slides from various document formats.
+
+**Test Cases:**
+
+| Test ID | Description | Expected Slides |
+|---------|-------------|-----------------|
+| `video_script_with_lesson_headers` | Video script with plain text lesson headers + script table | 37 (12 headers + 25 rows) |
+| `markdown_headings` | Document with markdown-style headings | 5 |
+| `script_table_narration_column` | Script table with narration in column 1 | 37 |
+| `script_table_stage_directions_column` | Script table with stage directions in column 2 | 12 (headers only) |
+
+**Usage:**
+
+```bash
+# Run all structure validation tests
+python tests/structure_validation.py
+
+# Run specific test
+python tests/structure_validation.py --test video_script_with_lesson_headers
+
+# With Claude API key (optional)
+python tests/structure_validation.py --api-key sk-ant-...
+```
+
+**Example Output:**
+
+```
+======================================================================
+Testing: video_script_with_lesson_headers
+Description: Video script with plain text lesson headers + script table
+======================================================================
+
+📊 SLIDE COUNT:
+  Expected: 37
+  Actual:   7
+  Match:    ❌
+
+📋 SLIDE TYPES:
+  Title slides - Expected: 12, Actual: 2 ❌
+  Content slides - Expected: 25, Actual: 5 ❌
+
+🎯 HEADING RECOGNITION:
+  Expected headings: 12
+  Found: 4 ❌
+
+  ❌ MISSING HEADINGS:
+     - C1W1L1_1 - Welcome to AI for Good
+     - C1W1L1_2 - What is "AI for Good"?
+     - C1W1L1_4 - The Courses in this Specialization
+
+======================================================================
+RESULT: ❌ FAIL
+======================================================================
+```
+
+**When to Run:**
+- ✅ After modifying document parsing logic (`_parse_txt`, `_parse_docx`)
+- ✅ After changing slide boundary detection (`_content_to_slides`)
+- ✅ When adding support for new document formats
+- ✅ Before deploying parser improvements
+
+**Adding New Structure Tests:**
+
+```python
+# tests/structure_validation.py
+
+STRUCTURE_TEST_SET.append(
+    StructureTest(
+        id="your_test_id",
+        description="Description of what document format this tests",
+        file_path="test_document.txt",
+        script_column=1,  # 0 = paragraph, 1/2 = table columns
+        expected_slide_count=20,  # Total slides expected
+        expected_title_slides=5,  # Heading-only slides
+        expected_content_slides=15,  # Slides with bullets
+        expected_heading_patterns=[
+            "Header 1 - Title",
+            "Header 2 - Subtitle"
+        ],
+        skip_patterns=[
+            "[STAGE DIRECTION",  # Rows to filter out
+            "[VISUAL:"
+        ]
+    )
+)
 ```
 
 ---
