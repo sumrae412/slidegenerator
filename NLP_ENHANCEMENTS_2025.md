@@ -282,10 +282,12 @@ No new dependencies required - all libraries already in `requirements.txt`
 ## Future Enhancements
 
 ### High Priority
-1. **Spacy Model Deployment** (BLOCKER)
-   - Current issue: spaCy model not loading on Heroku (404 errors)
-   - Fix: Correct `bin/post_compile` script to download `en_core_web_sm`
-   - Impact: Enables 80-85% success rate vs current basic fallback
+1. **Spacy Model Deployment** ✅ FIXED (v84 - October 28, 2025)
+   - ~~Current issue: spaCy model not loading on Heroku (404 errors)~~
+   - **Fix applied**: Added `en_core_web_sm` as direct pip dependency via GitHub release URL
+   - **Removed**: Problematic `bin/post_compile` script
+   - **Result**: Model now loads successfully on production
+   - **Impact**: All NLP enhancements (redundancy reduction, compression, metrics) now active
 
 2. **Table Headers → Bullet Conversion**
    - Extract table headers as bullet point structure
@@ -348,6 +350,9 @@ Track these metrics over time to measure improvement:
 
 ---
 
-**Status**: ✅ Complete - Ready for Deployment (v83)
-**Deployment**: Committed October 28, 2025
+**Status**: ✅ Complete - FULLY ACTIVE ON PRODUCTION (v84)
+**Deployment Timeline**:
+- v83: NLP enhancements committed (October 28, 2025 11:31 AM)
+- v84: spaCy model fix deployed (October 28, 2025 11:43 AM)
 **Quality Score**: 87-90/100 (based on test cases)
+**Production Status**: All enhancements operational
