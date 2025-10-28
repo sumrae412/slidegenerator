@@ -1591,35 +1591,73 @@ Return your analysis as a JSON object with:
         """Create a simple, short title for regular content slides (not headings)"""
         if not content_line or len(content_line.strip()) == 0:
             return "Content Slide"
-            
+
         line = content_line.strip()
-        
+
         # Remove markdown prefixes if present
         if line.startswith('#'):
             line = line.lstrip('#').strip()
-        
-        # For content slides, we want very simple, short titles
-        # First 3-5 words, or up to 30 characters max
-        
+
+        # Strategy: Look for natural break points to create complete phrases
+        # 1. Look for natural break points (comma, colon, dash) within first 60 chars
+        # 2. Otherwise, take 6-8 words to ensure complete thought
+        # 3. Max 60 characters for readability
+
         words = line.split()
-        if len(words) <= 5:
-            # If it's already short, take up to 30 chars
-            if len(line) <= 30:
+        if len(words) <= 6:
+            # If it's already short (6 words or less), use it
+            if len(line) <= 60:
                 return line
             else:
-                return line[:30].strip()
-        
-        # Take first 3-5 words
-        short_title = ' '.join(words[:4])
-        
-        # If still too long, cut at 30 chars
-        if len(short_title) > 30:
-            short_title = short_title[:30]
-            # Find last space to avoid cutting mid-word
+                # Still truncate at 60 chars if too long
+                return line[:60].strip()
+
+        # Look for natural break points in the first 60 characters
+        first_part = line[:60]
+
+        # Try to find a comma, colon, or dash that marks a good break point
+        break_points = [
+            (', ', 'comma'),
+            (': ', 'colon'),
+            (' - ', 'dash'),
+            (' — ', 'em-dash')
+        ]
+
+        best_title = None
+        for break_char, _ in break_points:
+            if break_char in first_part:
+                idx = first_part.index(break_char)
+                # Only use if it's at least 15 characters (meaningful title)
+                if idx >= 15:
+                    potential_title = first_part[:idx].strip()
+                    # Make sure it's at least 3 words
+                    if len(potential_title.split()) >= 3:
+                        best_title = potential_title
+                        break
+
+        if best_title:
+            return best_title
+
+        # No natural break point found - take 6-8 words depending on length
+        # Use 6 words unless they're all very short (< 5 chars average)
+        avg_word_len = sum(len(w) for w in words[:8]) / min(8, len(words))
+
+        if avg_word_len < 5:
+            # Short words, take 8 to make a meaningful title
+            num_words = min(8, len(words))
+        else:
+            # Longer words, take 6
+            num_words = min(6, len(words))
+
+        short_title = ' '.join(words[:num_words])
+
+        # If still too long, cut at 60 chars at word boundary
+        if len(short_title) > 60:
+            short_title = short_title[:60]
             last_space = short_title.rfind(' ')
-            if last_space > 10:
+            if last_space > 20:  # At least 20 chars
                 short_title = short_title[:last_space]
-        
+
         return short_title.strip()
     
     def _process_click_markers(self, content: str) -> str:
