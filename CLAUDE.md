@@ -26,6 +26,232 @@ As of October 27, 2025, the fallback bullet generation uses **intelligent NLP** 
 
 **Reversion**: Only if explicitly requested by project owner.
 
+## 🧪 CRITICAL: Quality Testing & Iterative Improvement Protocol
+
+**REQUIRED PRACTICE: Test Before Deploy**
+
+As of October 28, 2025, all code changes MUST be validated with automated testing before deployment. Manual back-and-forth testing is inefficient and doesn't scale.
+
+### Testing Infrastructure (Located in `tests/`)
+
+**Available Test Suites:**
+1. **`smoke_test.py`** - Quick validation (30 seconds)
+   - Run BEFORE every deployment
+   - Tests 4 core scenarios
+   - Exit code 1 = DO NOT DEPLOY
+
+2. **`golden_test_set.py`** - 11 hand-crafted test cases
+   - Educational, technical, executive, professional styles
+   - Tables, lists, paragraphs, headings
+   - Edge cases (very short, very long text)
+
+3. **`quality_metrics.py`** - Objective scoring system
+   - Structure (count, length, parallel formatting)
+   - Relevance (keyword coverage, semantic similarity)
+   - Style (tone, voice, terminology)
+   - Readability (complexity, clarity)
+   - Composite score 0-100
+
+4. **`regression_benchmark.py`** - Version comparison
+   - Track quality across versions
+   - Detect regressions automatically
+   - Compare before/after metrics
+
+### Mandatory Testing Workflow
+
+#### BEFORE Making Changes:
+```bash
+# 1. Establish baseline
+python tests/regression_benchmark.py --version v87_baseline
+
+# Stores results in tests/benchmark_results/v87_baseline.json
+```
+
+#### AFTER Making Changes:
+```bash
+# 2. Run smoke test (30 seconds)
+python tests/smoke_test.py
+
+# If passes, continue. If fails, fix issues first.
+
+# 3. Run full benchmark
+python tests/regression_benchmark.py --version v88_proposed
+
+# 4. Compare versions
+python tests/regression_benchmark.py --compare v87_baseline v88_proposed
+
+# Example output:
+# Overall Quality: 82.4 → 85.1 (+2.7) ✅
+# Structure:       78.5 → 83.2 (+4.7) ✅
+# Relevance:       84.2 → 86.8 (+2.6) ✅
+#
+# REGRESSIONS: 0 tests
+# IMPROVEMENTS: 8/11 tests
+```
+
+#### DEPLOYMENT CRITERIA:
+Deploy ONLY if:
+- ✅ Smoke test passes (exit code 0)
+- ✅ Overall quality ≥ baseline (no regression)
+- ✅ Zero critical test failures
+- ✅ Improvements outweigh any minor regressions
+
+### What to Test When
+
+| Change Type | Required Tests | Time Investment |
+|-------------|----------------|-----------------|
+| **Bug fix** | Smoke test only | 30 seconds |
+| **Minor enhancement** | Smoke + affected category | 2 minutes |
+| **Major feature** | Full benchmark + comparison | 5-10 minutes |
+| **Refactoring** | Full benchmark (regression check) | 5-10 minutes |
+| **Before production deploy** | Full benchmark | 5-10 minutes |
+
+### Quality Thresholds (Enforced by Tests)
+
+```python
+QUALITY_THRESHOLDS = {
+    "overall_quality": 70.0,    # Composite score
+    "structure_score": 65.0,    # Bullet formatting
+    "relevance_score": 70.0,    # Content relevance
+    "style_score": 60.0,        # Style consistency
+    "readability_score": 65.0   # Readability
+}
+```
+
+**DO NOT DEPLOY** if any test falls below these thresholds.
+
+### Adding New Test Cases
+
+When adding new bullet generation features:
+
+```python
+# tests/golden_test_set.py
+
+GOLDEN_TEST_SET.append({
+    "id": "your_new_test",
+    "category": "professional",  # or educational, technical, executive
+    "input_text": """Your test input...""",
+    "context_heading": "Test Heading",
+    "expected_bullets": [
+        "Expected bullet 1",
+        "Expected bullet 2"
+    ],
+    "quality_criteria": {
+        "min_bullets": 3,
+        "avg_word_length": (8, 15),
+        "must_contain_keywords": ["keyword1", "keyword2"]
+    }
+})
+```
+
+### Iterative Improvement Process
+
+**Replace manual testing with:**
+
+1. **Make change** → Edit code
+2. **Quick validate** → Run smoke test (30s)
+3. **Measure impact** → Run benchmark (5m)
+4. **Compare** → Automated comparison report
+5. **Decision** → Deploy if metrics improve
+
+**Benefits over manual testing:**
+- 📊 Quantitative scores (not subjective "looks good")
+- 🚨 Automatic regression detection
+- ⚡ 90% reduction in testing time
+- 📈 Track improvement over time
+- 🎯 Data-driven deployment decisions
+
+### Example Usage Session
+
+```bash
+# Starting work on v88 - new feature
+$ python tests/regression_benchmark.py --version v87_baseline
+✅ Baseline established: 82.4/100
+
+# Make code changes...
+# ... editing file_to_slides.py ...
+
+# Quick validation
+$ python tests/smoke_test.py
+✅ All smoke tests passed
+
+# Full validation
+$ python tests/regression_benchmark.py --version v88_new_feature
+[11/11] Testing completed
+✅ Average quality: 85.1/100
+
+# Compare
+$ python tests/regression_benchmark.py --compare v87_baseline v88_new_feature
+
+COMPARING VERSIONS: v87_baseline vs v88_new_feature
+============================================================
+Overall Quality: 82.4 → 85.1 (+2.7) ✅
+
+Breakdown:
+  Structure Score:      78.5 → 83.2  ✅ +4.7
+  Relevance Score:      84.2 → 86.8  ✅ +2.6
+  Style Score:          81.1 → 83.5  ✅ +2.4
+  Readability Score:    85.8 → 86.2  ✅ +0.4
+
+✅ IMPROVEMENTS (8 tests):
+  - edu_ml_basics: 79.2 → 85.3 (+6.1)
+  - tech_microservices: 82.1 → 88.4 (+6.3)
+  ...
+
+DECISION: ✅ SAFE TO DEPLOY - Quality improved across all dimensions
+```
+
+### Integration with Deployment
+
+**Pre-deployment checklist:**
+```bash
+# Run BEFORE every `git push heroku main`
+
+# 1. Smoke test (mandatory)
+python tests/smoke_test.py || exit 1
+
+# 2. Visual inspection of benchmark results
+python tests/regression_benchmark.py --version v88_release
+
+# 3. Compare to last production version
+python tests/regression_benchmark.py --compare v87_production v88_release
+
+# 4. If all green, deploy
+git push heroku main
+```
+
+### CI/CD Integration (Future)
+
+```yaml
+# .github/workflows/quality_check.yml (planned)
+
+- name: Run smoke tests
+  run: python tests/smoke_test.py
+
+- name: Run regression benchmark
+  run: |
+    python tests/regression_benchmark.py --version ${GITHUB_SHA}
+
+- name: Quality gate
+  run: |
+    # Fail if quality drops below threshold
+    python tests/check_quality_gate.py --threshold 75
+```
+
+### Key Principle: Objective > Subjective
+
+**OLD WAY (Manual Testing):**
+- "The bullets look good to me" ❌
+- "I think this is better" ❌
+- "Seems fine" ❌
+
+**NEW WAY (Automated Testing):**
+- "Overall quality: 85.1/100" ✅
+- "Relevance improved by 2.6 points" ✅
+- "Zero regressions detected" ✅
+
+---
+
 ## Key Architecture
 
 ### Main Components
