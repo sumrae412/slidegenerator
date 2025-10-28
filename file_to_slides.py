@@ -3026,13 +3026,37 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
         if bullet:
             bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
 
-        # HARD LIMIT: Enforce 15-word maximum for slide readability
+        # SMART TRUNCATION: Try to find natural break point within 25 words
         words = bullet.split()
-        if len(words) > 15:
-            # Truncate at 15 words and add period if needed
-            bullet = ' '.join(words[:15])
-            if not bullet.endswith(('.', '!', '?')):
-                bullet = bullet.rstrip(',;:') + '.'
+        if len(words) > 25:
+            # First, try to find a natural break point within the first 20-25 words
+            # Look for periods, semicolons, or strong clause breaks
+            truncated = ' '.join(words[:25])
+
+            # Try to find the last complete sentence within the limit
+            last_period = truncated.rfind('.')
+            last_semicolon = truncated.rfind(';')
+
+            # If we find a period or semicolon in the last 10 words, use that
+            if last_period > len(' '.join(words[:15])):  # At least 15 words before period
+                bullet = truncated[:last_period + 1]
+            elif last_semicolon > len(' '.join(words[:15])):
+                bullet = truncated[:last_semicolon] + '.'
+            else:
+                # Look for a comma that marks a clause break
+                # Find the last comma in words 15-23 (leave room for closure)
+                for i in range(min(23, len(words) - 1), 14, -1):
+                    partial = ' '.join(words[:i])
+                    if partial.endswith(','):
+                        # Check if this is a good break point (after a clause)
+                        if i >= 15:  # At least 15 words
+                            bullet = partial.rstrip(',') + '.'
+                            break
+                else:
+                    # Last resort: hard truncate at 25 words
+                    bullet = ' '.join(words[:25])
+                    if not bullet.endswith(('.', '!', '?')):
+                        bullet = bullet.rstrip(',;:') + '.'
 
         return bullet
 
