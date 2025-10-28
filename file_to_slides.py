@@ -926,13 +926,13 @@ Return your analysis as a JSON object with:
                 line = '#' * heading_level + ' ' + line
                 logger.info(f"Detected H{heading_level} heading: {line}")
 
-            # Include headings always, but only include non-table paragraphs in paragraph mode
+            # Include headings and paragraphs always (paragraphs are outside tables)
             if is_heading:
                 processed_lines.append(line)
-            elif script_column == 0 and len(line) > 30:
-                # In paragraph mode, include substantial content
+            elif len(line) > 30:
+                # Include substantial paragraph content regardless of column mode
+                # (Tables handle column filtering separately)
                 processed_lines.append(line)
-            # In column mode (script_column > 0), skip non-table paragraphs
 
         # Join lines with single newlines
         result = '\n'.join(processed_lines)
@@ -1114,10 +1114,9 @@ Return your analysis as a JSON object with:
                                     content.append(f"# {text}")
                                     logger.info(f"Found heading: {text}")
                             else:
-                                # Only add non-heading paragraphs if we've found the first table
-                                # This ignores intro content before the first table
-                                if first_table_found:
-                                    content.append(text)
+                                # Always include non-heading paragraphs (outside tables)
+                                # Tables handle column filtering separately
+                                content.append(text)
                         break
                         
             elif element.tag.endswith('tbl'):  # Table
