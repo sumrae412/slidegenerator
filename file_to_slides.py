@@ -1650,9 +1650,10 @@ Return your analysis as a JSON object with:
                 # Before processing new heading, flush any buffered content
                 if content_buffer:
                     combined_text = ' '.join(content_buffer)
-                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode)
 
+                    # Use heading as context for better bullet relevance
                     slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
+                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
 
                     slides.append(SlideContent(
                         title=slide_title,
@@ -1688,9 +1689,10 @@ Return your analysis as a JSON object with:
         # Flush any remaining buffered content at end of document
         if content_buffer:
             combined_text = ' '.join(content_buffer)
-            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode)
 
+            # Use heading as context for better bullet relevance
             slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
+            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
 
             slides.append(SlideContent(
                 title=slide_title,
@@ -1759,10 +1761,17 @@ Return your analysis as a JSON object with:
 
         return None
 
-    def _create_bullet_points(self, text: str, fast_mode: bool = False) -> Tuple[Optional[str], List[str]]:
+    def _create_bullet_points(self, text: str, fast_mode: bool = False, context_heading: str = None) -> Tuple[Optional[str], List[str]]:
         """
         Convert content into high-quality bullet points using unified approach.
-        Returns: (topic_sentence, bullets) where topic_sentence becomes a bold subheader
+
+        Args:
+            text: Content to extract bullets from
+            fast_mode: Skip advanced NLP/LLM processing
+            context_heading: Optional heading/title for contextual awareness
+
+        Returns:
+            (topic_sentence, bullets) where topic_sentence becomes a bold subheader
         """
         text = text.strip()
         if not text:
@@ -1788,19 +1797,36 @@ Return your analysis as a JSON object with:
         logger.info(f"Creating unified high-quality bullets from text: {(remaining_text if topic_sentence else text)[:100]}...")
 
         # Use unified bullet generation that combines best approaches
-        bullets = self._create_unified_bullets(remaining_text if topic_sentence else text)
+        bullets = self._create_unified_bullets(remaining_text if topic_sentence else text, context_heading=context_heading)
 
         logger.info(f"Final unified bullets: {bullets}")
         return topic_sentence, bullets[:4]  # Limit to 4 bullets for readability
-    
-    def _create_unified_bullets(self, text: str) -> List[str]:
-        """LLM-only bullet generation for highest quality and content relevance"""
+
+    def _create_unified_bullets(self, text: str, context_heading: str = None) -> List[str]:
+        """
+        LLM-only bullet generation for highest quality and content relevance
+
+        Args:
+            text: Content to extract bullets from
+            context_heading: Optional heading/title for contextual awareness
+        """
         if not text or len(text.strip()) < 20:
             return []
-        
+
         text = text.strip()
-        logger.info(f"Starting LLM-only bullet generation for: {text[:100]}...")
-        
+        logger.info(f"Starting bullet generation for: {text[:100]}...")
+
+        # ENHANCEMENT: Check if content is a table first
+        table_info = self._detect_table_structure(text)
+        if table_info['is_table']:
+            logger.info("Table structure detected - using table summarization")
+            table_bullets = self._summarize_table(table_info)
+            if table_bullets:
+                logger.info(f"✅ TABLE SUCCESS: Generated {len(table_bullets)} bullets from table")
+                return table_bullets[:4]
+            else:
+                logger.warning("Table summarization produced no bullets, falling back to text processing")
+
         # Try LLM first if API key is available
         if self.api_key and not self.force_basic_mode:
             logger.info("Using LLM approach for bullet generation")
@@ -1813,11 +1839,11 @@ Return your analysis as a JSON object with:
                 logger.warning("LLM approach failed - falling back to lightweight NLP")
         else:
             logger.info("No API key available - using lightweight NLP approach")
-        
-        # Fallback to lightweight NLP approach
+
+        # Fallback to lightweight NLP approach with contextual awareness
         if self.semantic_analyzer.initialized:
             logger.info("Using lightweight NLP bullet generation")
-            nlp_bullets = self._create_lightweight_nlp_bullets(text)
+            nlp_bullets = self._create_lightweight_nlp_bullets(text, context_heading=context_heading)
             if nlp_bullets and len(nlp_bullets) >= 1:
                 logger.info(f"✅ NLP SUCCESS: Generated {len(nlp_bullets)} NLP bullets")
                 unique_bullets = self._deduplicate_bullets(nlp_bullets)
@@ -1826,7 +1852,7 @@ Return your analysis as a JSON object with:
                 logger.warning("Lightweight NLP approach also failed")
         else:
             logger.warning("Lightweight NLP not available")
-        
+
         # If both approaches fail, use basic text extraction as last resort
         logger.warning("All advanced approaches failed - using basic text extraction")
         return self._create_basic_fallback_bullets(text)
@@ -2005,7 +2031,7 @@ Return only the bullet points, one per line, without symbols or numbering."""
             logger.error(f"Error in Claude bullet generation: {e}")
             return []
     
-    def _create_lightweight_nlp_bullets(self, text: str) -> List[str]:
+    def _create_lightweight_nlp_bullets(self, text: str, context_heading: str = None) -> List[str]:
         """
         Create bullets using smart NLP: TF-IDF ranking + spaCy structure validation
 
@@ -2017,6 +2043,10 @@ Return only the bullet points, one per line, without symbols or numbering."""
 
         Quality: 80-85% success rate (up from 57% with manual approach)
         See: NLP_APPROACH_DECISION.md for full rationale
+
+        Args:
+            text: Content to extract bullets from
+            context_heading: Optional heading/title to boost contextually relevant sentences
         """
         try:
             import re
@@ -2051,6 +2081,11 @@ Return only the bullet points, one per line, without symbols or numbering."""
             if len(sentences) <= 2:
                 return [self._format_bullet(s) for s in sentences if self._is_quality_sentence_spacy(nlp(s))]
 
+            # ENHANCEMENT: Extract heading keywords for contextual boosting
+            heading_keywords = []
+            if context_heading:
+                heading_keywords = self._extract_heading_keywords(context_heading)
+
             # Use TF-IDF to rank sentences by importance
             try:
                 vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
@@ -2060,6 +2095,10 @@ Return only the bullet points, one per line, without symbols or numbering."""
                 # Convert to dense array to avoid numpy matrix deprecation warning
                 doc_vector = np.asarray(tfidf_matrix.mean(axis=0))
                 similarities = cosine_similarity(tfidf_matrix, doc_vector).flatten()
+
+                # ENHANCEMENT: Apply contextual boost if heading keywords available
+                if heading_keywords:
+                    similarities = self._boost_contextual_sentences(sentences, similarities, heading_keywords)
 
                 # Rank sentences by importance
                 ranked_indices = similarities.argsort()[::-1]
@@ -2462,6 +2501,254 @@ Return only the bullet points, one per line, without symbols or numbering."""
                 'avg_readability': 0,
                 'quality_score': 0
             }
+
+    # ============================================================================
+    # ENHANCEMENT: Table Intelligence and Summarization
+    # ============================================================================
+
+    def _detect_table_structure(self, text: str) -> dict:
+        """
+        Detect if text contains table structure (tab-delimited rows).
+
+        Returns dict with:
+            - is_table: bool
+            - rows: List[List[str]] (parsed table rows)
+            - has_header: bool
+            - column_count: int
+        """
+        lines = text.strip().split('\n')
+
+        # Check if we have tab-delimited content
+        tab_lines = [line for line in lines if '\t' in line]
+
+        if len(tab_lines) < 2:  # Need at least 2 rows to be a table
+            return {'is_table': False, 'rows': [], 'has_header': False, 'column_count': 0}
+
+        # Parse rows
+        rows = []
+        for line in tab_lines:
+            cells = [cell.strip() for cell in line.split('\t')]
+            if cells:  # Skip empty rows
+                rows.append(cells)
+
+        if len(rows) < 2:
+            return {'is_table': False, 'rows': [], 'has_header': False, 'column_count': 0}
+
+        # Check if first row looks like a header
+        # Headers typically: short, capitalized, no punctuation at end
+        first_row = rows[0]
+        has_header = all(
+            len(cell) < 50 and  # Short
+            (cell[0].isupper() if cell else False) and  # Capitalized
+            not cell.endswith(('.', ',', ';'))  # No sentence endings
+            for cell in first_row if cell
+        )
+
+        column_count = len(first_row)
+
+        logger.info(f"Table detected: {len(rows)} rows, {column_count} columns, has_header={has_header}")
+        return {
+            'is_table': True,
+            'rows': rows,
+            'has_header': has_header,
+            'column_count': column_count
+        }
+
+    def _summarize_table(self, table_info: dict) -> List[str]:
+        """
+        Generate natural language bullet points from table structure.
+
+        Strategies:
+        1. Key-value tables (2 columns) → "Key: Value" bullets
+        2. Comparison tables (3+ columns) → Extract patterns and insights
+        3. Header extraction → Use headers as structural bullets
+        """
+        if not table_info['is_table']:
+            return []
+
+        rows = table_info['rows']
+        has_header = table_info['has_header']
+        col_count = table_info['column_count']
+
+        bullets = []
+
+        try:
+            # Strategy 1: Key-Value Table (2 columns)
+            if col_count == 2:
+                header_row = rows[0] if has_header else None
+                data_rows = rows[1:] if has_header else rows
+
+                for row in data_rows[:4]:  # Limit to 4 key insights
+                    if len(row) >= 2 and row[0] and row[1]:
+                        key = row[0].strip().rstrip(':')
+                        value = row[1].strip()
+
+                        # Create clean "Key: Value" bullet
+                        if len(value) < 100:  # Keep values concise
+                            bullet = f"{key}: {value}"
+                            bullets.append(bullet)
+                        else:
+                            # Value too long, just use key as bullet
+                            bullet = f"{key}: {value[:80]}..."
+                            bullets.append(bullet)
+
+                logger.info(f"Generated {len(bullets)} bullets from key-value table")
+
+            # Strategy 2: Comparison Table (3+ columns)
+            elif col_count >= 3:
+                headers = rows[0] if has_header else [f"Column {i+1}" for i in range(col_count)]
+                data_rows = rows[1:] if has_header else rows
+
+                # Extract first column as entities being compared
+                entities = [row[0] for row in data_rows if row and row[0]]
+
+                if len(entities) > 0 and len(headers) > 1:
+                    # Generate comparative insight
+                    entity_list = ', '.join(entities[:5])  # Limit to 5
+                    metric_list = ', '.join(headers[1:3])  # Limit to 2 metrics
+
+                    insight = f"Comparison of {len(entities)} options across {metric_list}"
+                    bullets.append(insight)
+
+                    # Extract specific data points (first 3 rows)
+                    for row in data_rows[:3]:
+                        if len(row) >= 2 and row[0]:
+                            entity = row[0]
+                            # Find most important metric (first non-empty value)
+                            for idx, value in enumerate(row[1:], 1):
+                                if value and value.strip():
+                                    metric_name = headers[idx] if idx < len(headers) else f"metric {idx}"
+                                    bullet = f"{entity}: {metric_name} = {value.strip()}"
+                                    bullets.append(bullet)
+                                    break
+
+                logger.info(f"Generated {len(bullets)} bullets from comparison table")
+
+            # Strategy 3: Header Extraction (if table is complex)
+            if has_header and len(bullets) == 0:
+                headers = rows[0]
+                # Use headers as structural bullets
+                header_text = " | ".join([h for h in headers if h])
+                bullets.append(f"Table structure: {header_text}")
+                logger.info("Generated structural bullet from table headers")
+
+            return bullets[:4]  # Limit to 4 bullets
+
+        except Exception as e:
+            logger.warning(f"Table summarization failed: {e}")
+            return []
+
+    # ============================================================================
+    # ENHANCEMENT: Contextual Awareness from Headings
+    # ============================================================================
+
+    def _extract_heading_keywords(self, heading: str) -> List[str]:
+        """
+        Extract meaningful keywords from heading to boost contextually relevant sentences.
+
+        Strategy:
+        - Remove stop words and common presentation terms
+        - Extract nouns and proper nouns (entities, topics)
+        - Return normalized keywords for matching
+        """
+        if not heading:
+            return []
+
+        try:
+            import spacy
+            import re
+
+            # Load spaCy model
+            try:
+                nlp = spacy.load("en_core_web_sm")
+            except OSError:
+                # Fallback: simple word extraction without spaCy
+                words = re.findall(r'\b[a-z]{4,}\b', heading.lower())
+                stopwords = {'this', 'that', 'with', 'from', 'what', 'when', 'where', 'which', 'your', 'their'}
+                return [w for w in words if w not in stopwords][:3]
+
+            # Parse heading with spaCy
+            doc = nlp(heading.lower())
+
+            # Extract meaningful words
+            keywords = []
+
+            # Priority 1: Named entities (organizations, technologies, concepts)
+            for ent in doc.ents:
+                if ent.label_ in ['ORG', 'PRODUCT', 'GPE', 'TECH', 'CONCEPT']:
+                    keywords.append(ent.text.lower())
+
+            # Priority 2: Nouns and proper nouns (topics, subjects)
+            for token in doc:
+                if token.pos_ in ['NOUN', 'PROPN'] and not token.is_stop:
+                    if len(token.text) >= 3:  # Skip very short words
+                        keywords.append(token.lemma_.lower())
+
+            # Priority 3: Significant verbs (actions, processes)
+            for token in doc:
+                if token.pos_ == 'VERB' and not token.is_stop:
+                    if token.lemma_ not in ['be', 'have', 'do', 'make', 'get']:
+                        keywords.append(token.lemma_.lower())
+
+            # Deduplicate while preserving order
+            seen = set()
+            unique_keywords = []
+            for kw in keywords:
+                if kw not in seen:
+                    seen.add(kw)
+                    unique_keywords.append(kw)
+
+            logger.info(f"Extracted {len(unique_keywords)} keywords from heading '{heading}': {unique_keywords[:5]}")
+            return unique_keywords[:5]  # Limit to top 5 most important
+
+        except Exception as e:
+            logger.warning(f"Keyword extraction failed: {e}")
+            return []
+
+    def _boost_contextual_sentences(self, sentences: List[str], tfidf_similarities: 'np.ndarray',
+                                   heading_keywords: List[str], boost_factor: float = 0.3) -> 'np.ndarray':
+        """
+        Boost similarity scores for sentences that contain heading keywords.
+
+        Args:
+            sentences: List of sentence strings
+            tfidf_similarities: Original TF-IDF similarity scores
+            heading_keywords: Keywords extracted from heading
+            boost_factor: Multiplier for sentences containing keywords (0.3 = 30% boost)
+
+        Returns:
+            Boosted similarity scores (numpy array)
+        """
+        if not heading_keywords:
+            return tfidf_similarities
+
+        try:
+            import numpy as np
+
+            boosted_scores = tfidf_similarities.copy()
+            boost_count = 0
+
+            for idx, sentence in enumerate(sentences):
+                sentence_lower = sentence.lower()
+
+                # Count keyword matches in sentence
+                matches = sum(1 for kw in heading_keywords if kw in sentence_lower)
+
+                if matches > 0:
+                    # Apply boost: more keywords = stronger boost (up to 2x boost_factor)
+                    boost_multiplier = min(1 + (boost_factor * matches), 1 + (boost_factor * 2))
+                    boosted_scores[idx] *= boost_multiplier
+                    boost_count += 1
+                    logger.debug(f"Boosted sentence {idx} ({matches} keyword matches): {sentence[:50]}...")
+
+            if boost_count > 0:
+                logger.info(f"Applied contextual boost to {boost_count}/{len(sentences)} sentences")
+
+            return boosted_scores
+
+        except Exception as e:
+            logger.warning(f"Contextual boosting failed: {e}, using original scores")
+            return tfidf_similarities
 
 
     def _create_fusion_bullets(self, text: str) -> List[str]:
