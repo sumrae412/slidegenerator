@@ -240,6 +240,7 @@ class SlideContent:
     slide_type: str = 'content'  # 'title', 'content', 'image', 'bullet'
     heading_level: Optional[int] = None  # Original heading level from DOCX (1-6)
     subheader: Optional[str] = None  # Bold subheader above bullets (extracted topic sentence)
+    visual_cues: Optional[List[str]] = None  # Visual/stage direction cues extracted from content
 
 @dataclass
 class DocumentStructure:
@@ -836,6 +837,19 @@ Return your analysis as a JSON object with:
         logger.info(f"_parse_docx_raw_for_title returning {len(result)} chars")
         return result
 
+    def _extract_visual_cues(self, text: str) -> List[str]:
+        """Extract visual cues from text (e.g., [>>>click], [full screen TH], [VISUAL:...])"""
+        import re
+        cues = []
+        # Match content in brackets
+        matches = re.findall(r'\[(.*?)\]', text)
+        for match in matches:
+            match = match.strip()
+            # Extract recognizable cue types
+            if any(keyword in match.lower() for keyword in ['click', 'visual', 'full screen', 'image', 'animation', '>>>']):
+                cues.append(match)
+        return cues
+
     def _parse_txt(self, file_path: str, script_column: int = 0) -> str:
         """Parse TXT file (Google Docs export) with heading detection, table handling, and column filtering"""
         import re
@@ -843,7 +857,9 @@ Return your analysis as a JSON object with:
         with open(file_path, 'r', encoding='utf-8') as f:
             raw_content = f.read()
 
-        # Remove stage directions in brackets
+        # Extract visual cues BEFORE removing them (for metadata preservation)
+        # Note: Visual cues will be attached to slides later in processing pipeline
+        # For now, we still remove them from the content text to avoid confusion
         raw_content = re.sub(r'\[.*?\]', '', raw_content)
 
         # Split into lines for processing
@@ -1708,14 +1724,20 @@ Return your analysis as a JSON object with:
                     slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
                     topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
 
+                    # Get pending visual cues if any
+                    slide_visual_cues = getattr(self, '_pending_visual_cues', None)
                     slides.append(SlideContent(
                         title=slide_title,
                         content=bullet_points,
                         slide_type='script',
                         heading_level=4 if pending_h4_title else None,
-                        subheader=topic_sentence
+                        subheader=topic_sentence,
+                        visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
                     ))
                     logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from {len(content_buffer)} paragraphs")
+                    if slide_visual_cues:
+                        logger.info(f"  Visual cues attached: {slide_visual_cues}")
+                        self._pending_visual_cues = []  # Clear after using
                     script_slide_counter += 1
                     content_buffer = []
 
@@ -1737,6 +1759,18 @@ Return your analysis as a JSON object with:
 
             else:
                 # This is content
+                # EXTRACT VISUAL CUES before filtering
+                visual_cues = []
+                if line.startswith('['):
+                    # This might be a visual cue line - extract before skipping
+                    visual_cues = self._extract_visual_cues(line)
+                    if visual_cues:
+                        logger.info(f"Extracted visual cues: {visual_cues}")
+                        # Store for next content slide
+                        if not hasattr(self, '_pending_visual_cues'):
+                            self._pending_visual_cues = []
+                        self._pending_visual_cues.extend(visual_cues)
+
                 # FILTER META-NOTES: Skip lines starting with *, [, or containing meta-instructions
                 if (line.startswith('*') or line.startswith('[') or
                     'Note to reviewer' in line or 'Word count' in line):
@@ -1751,14 +1785,20 @@ Return your analysis as a JSON object with:
                     topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=slide_title)
 
                     if bullet_points:  # Only create slide if we got bullets
+                        # Get pending visual cues if any
+                        slide_visual_cues = getattr(self, '_pending_visual_cues', None)
                         slides.append(SlideContent(
                             title=slide_title,
                             content=bullet_points,
                             slide_type='script',
                             heading_level=4 if pending_h4_title else None,
-                            subheader=topic_sentence
+                            subheader=topic_sentence,
+                            visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
                         ))
                         logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from paragraph")
+                        if slide_visual_cues:
+                            logger.info(f"  Visual cues attached: {slide_visual_cues}")
+                            self._pending_visual_cues = []  # Clear after using
                         script_slide_counter += 1
                         pending_h4_title = None  # Clear H4 title after using it
                 else:
@@ -1773,13 +1813,18 @@ Return your analysis as a JSON object with:
             slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
             topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
 
+            # Get pending visual cues if any
+            slide_visual_cues = getattr(self, '_pending_visual_cues', None)
             slides.append(SlideContent(
                 title=slide_title,
                 content=bullet_points,
                 slide_type='script',
                 heading_level=4 if pending_h4_title else None,
-                subheader=topic_sentence
+                subheader=topic_sentence,
+                visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
             ))
+            if slide_visual_cues:
+                logger.info(f"  Visual cues attached to final slide: {slide_visual_cues}")
             logger.info(f"Created final content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from {len(content_buffer)} paragraphs")
         
         logger.info(f"FINAL RESULT: Created {len(slides)} total slides")
@@ -1875,14 +1920,28 @@ Return your analysis as a JSON object with:
 
         logger.info(f"Creating unified high-quality bullets from text: {(remaining_text if topic_sentence else text)[:100]}...")
 
+        # Calculate adaptive bullet count based on content density
+        content_for_analysis = remaining_text if topic_sentence else text
+        text_length = len(content_for_analysis)
+
+        if text_length < 200:
+            target_bullets = 2  # Short content: 2 bullets max
+            logger.info(f"Short content ({text_length} chars) - targeting 2 bullets")
+        elif text_length > 800:
+            target_bullets = 5  # Long content: 5 bullets max
+            logger.info(f"Long content ({text_length} chars) - targeting 5 bullets")
+        else:
+            target_bullets = 4  # Medium content: 3-4 bullets (current behavior)
+            logger.info(f"Medium content ({text_length} chars) - targeting 3-4 bullets")
+
         # Use unified bullet generation that combines best approaches
-        bullets = self._create_unified_bullets(remaining_text if topic_sentence else text, context_heading=context_heading)
+        bullets = self._create_unified_bullets(content_for_analysis, context_heading=context_heading)
 
         # APPLY 15-WORD COMPRESSION to ALL bullets before returning (top-level enforcement)
         bullets = [self._compress_bullet_for_slides(b) for b in bullets]
 
-        logger.info(f"Final unified bullets: {bullets}")
-        return topic_sentence, bullets[:4]  # Limit to 4 bullets for readability
+        logger.info(f"Final unified bullets (before limiting to {target_bullets}): {bullets}")
+        return topic_sentence, bullets[:target_bullets]
 
     def _create_unified_bullets(self, text: str, context_heading: str = None) -> List[str]:
         """
