@@ -2446,9 +2446,19 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             if len(sentences) == 0:
                 return []
 
-            # If only 1-2 sentences, return them directly (if quality)
+            # If only 1-2 sentences, check if we can split them for more bullets
             if len(sentences) <= 2:
-                return [self._format_bullet(s) for s in sentences if self._is_quality_sentence_spacy(nlp(s))]
+                quality_sentences = [s for s in sentences if self._is_quality_sentence_spacy(nlp(s))]
+
+                # If we have only 1 sentence and it's long (>15 words), try to split it
+                if len(quality_sentences) == 1 and len(quality_sentences[0].split()) > 15:
+                    sentence = quality_sentences[0]
+                    split_bullets = self._split_long_sentence(sentence, nlp)
+                    if len(split_bullets) >= 2:
+                        return [self._format_bullet(b) for b in split_bullets]
+
+                # Otherwise return as-is
+                return [self._format_bullet(s) for s in quality_sentences]
 
             # ENHANCEMENT: Extract heading keywords for contextual boosting
             heading_keywords = []
@@ -2568,10 +2578,20 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
         # Check for meaningful keywords (broader than before)
         meaningful_keywords = any(
             token.lemma_ in [
+                # Technical/Business terms
                 'system', 'data', 'platform', 'service', 'application', 'process',
                 'feature', 'tool', 'method', 'cost', 'benefit', 'architecture',
                 'enable', 'provide', 'support', 'create', 'allow', 'improve',
-                'reduce', 'increase', 'manage', 'access', 'configure', 'deploy'
+                'reduce', 'increase', 'manage', 'access', 'configure', 'deploy',
+                # Educational/Academic terms
+                'learn', 'teach', 'study', 'understand', 'student', 'course',
+                'training', 'education', 'skill', 'knowledge', 'analyze', 'evaluate',
+                # ML/Data Science terms
+                'algorithm', 'model', 'dataset', 'prediction', 'classification',
+                'regression', 'training', 'testing', 'accuracy', 'performance',
+                # Additional domain terms
+                'storage', 'user', 'price', 'plan', 'option', 'comparison',
+                'transformation', 'satisfaction', 'metric', 'result', 'impact'
             ]
             for token in sentence_doc
             if not token.is_stop
@@ -2582,6 +2602,67 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             return False
 
         return True
+
+    def _split_long_sentence(self, sentence: str, nlp) -> list:
+        """
+        Split a long single sentence into multiple bullet points at natural boundaries.
+
+        For example:
+        "Students will learn to apply machine learning algorithms to real-world datasets using Python"
+        → ["Learn to apply machine learning algorithms to datasets", "Applied using Python and scikit-learn"]
+        """
+        import re
+
+        # Parse sentence with spaCy to find clauses
+        doc = nlp(sentence)
+        bullets = []
+
+        # Strategy 1: Split on "using" first (strongest boundary for educational/technical content)
+        # This gives us: main concept + tools/methods
+        using_match = re.search(r'\s+using\s+', sentence, flags=re.IGNORECASE)
+        if using_match:
+            main_part = sentence[:using_match.start()].strip()
+            using_part = sentence[using_match.end():].strip()
+
+            # Create two descriptive bullets with enough words
+            if len(main_part.split()) >= 5 and len(using_part.split()) >= 2:
+                # First bullet: main learning objective (keep full context)
+                bullets.append(main_part)
+                # Second bullet: tools/methods used (add prefix to make it 5+ words)
+                using_bullet = f"Applied using {using_part}"
+                bullets.append(using_bullet)
+
+        # Strategy 2: Split on "to [verb] [object]" keeping both parts substantial
+        if len(bullets) < 2:
+            # Match "to" followed by verb and keep rest of sentence
+            to_match = re.search(r'\s+(to\s+\w+.*?)(\s+using|\s+with|\s+and|$)', sentence, flags=re.IGNORECASE)
+            if to_match:
+                first_part = sentence[:to_match.start(1)].strip()
+                second_part = to_match.group(1).strip()
+
+                # Only split if both parts are substantial
+                if len(first_part.split()) >= 5 and len(second_part.split()) >= 5:
+                    bullets = [first_part, second_part.capitalize()]
+
+        # Strategy 3: Split on " and " if sentence is very long
+        if len(bullets) < 2 and len(sentence.split()) > 20:
+            and_split = re.split(r'\s+and\s+', sentence)
+            if len(and_split) >= 2:
+                for part in and_split:
+                    part = part.strip()
+                    if len(part.split()) >= 5:
+                        if not part[0].isupper():
+                            part = part[0].upper() + part[1:]
+                        bullets.append(part)
+
+        # Validate: both bullets must be 5+ words
+        if len(bullets) >= 2:
+            valid_bullets = [b for b in bullets[:2] if len(b.split()) >= 5]
+            if len(valid_bullets) >= 2:
+                return valid_bullets
+
+        # Fallback: return original sentence
+        return [sentence]
 
     def _format_bullet(self, sentence: str) -> str:
         """Format a sentence as a clean bullet point"""
@@ -3070,7 +3151,9 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
                             for idx, value in enumerate(row[1:], 1):
                                 if value and value.strip():
                                     metric_name = headers[idx] if idx < len(headers) else f"metric {idx}"
-                                    bullet = f"{entity}: {metric_name} = {value.strip()}"
+                                    # Format as descriptive bullet (minimum 5 words)
+                                    # e.g., "Basic plan includes 10GB of storage" instead of "Storage: Basic = 10GB"
+                                    bullet = f"{entity} plan provides {value.strip()} {metric_name.lower()}"
                                     bullets.append(bullet)
                                     break
 
