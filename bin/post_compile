@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Heroku post-compile hook to download spaCy language model
-
-echo "-----> Downloading spaCy English model..."
-python -m spacy download en_core_web_sm
-
-echo "-----> spaCy model downloaded successfully"
