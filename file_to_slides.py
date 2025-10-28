@@ -1598,67 +1598,107 @@ Return your analysis as a JSON object with:
         if line.startswith('#'):
             line = line.lstrip('#').strip()
 
-        # Strategy: Look for natural break points to create complete phrases
-        # 1. Look for natural break points (comma, colon, dash) within first 60 chars
-        # 2. Otherwise, take 6-8 words to ensure complete thought
-        # 3. Max 60 characters for readability
+        # Strategy: Create meaningful titles by focusing on actual content
+        # 1. Strip introductory/transition phrases
+        # 2. Look for natural break points (commas, periods)
+        # 3. Extract complete phrases, not fragments
+        # 4. Max 50 characters for readability
 
-        words = line.split()
-        if len(words) <= 6:
-            # If it's already short (6 words or less), use it
-            if len(line) <= 60:
-                return line
-            else:
-                # Still truncate at 60 chars if too long
-                return line[:60].strip()
-
-        # Look for natural break points in the first 60 characters
-        first_part = line[:60]
-
-        # Try to find a comma, colon, or dash that marks a good break point
-        break_points = [
-            (', ', 'comma'),
-            (': ', 'colon'),
-            (' - ', 'dash'),
-            (' — ', 'em-dash')
+        # Strip common introductory phrases that don't make good titles
+        intro_phrases = [
+            'For example, ',
+            'For instance, ',
+            'In addition, ',
+            'However, ',
+            'Moreover, ',
+            'Furthermore, ',
+            'Therefore, ',
+            'Nevertheless, ',
+            'Consequently, ',
+            'In contrast, ',
+            'On the other hand, ',
+            'As a result, ',
+            'In this case, ',
+            'In these cases, ',
+            'In this situation, ',
         ]
 
-        best_title = None
-        for break_char, _ in break_points:
-            if break_char in first_part:
-                idx = first_part.index(break_char)
-                # Only use if it's at least 15 characters (meaningful title)
-                if idx >= 15:
-                    potential_title = first_part[:idx].strip()
-                    # Make sure it's at least 3 words
-                    if len(potential_title.split()) >= 3:
-                        best_title = potential_title
-                        break
+        for phrase in intro_phrases:
+            if line.startswith(phrase):
+                line = line[len(phrase):].strip()
+                break
 
-        if best_title:
-            return best_title
+        words = line.split()
+        if len(words) <= 5:
+            # If it's already short (5 words or less), use it
+            if len(line) <= 50:
+                return line
+            else:
+                # Still truncate at 50 chars if too long
+                return line[:50].strip()
 
-        # No natural break point found - take 6-8 words depending on length
-        # Use 6 words unless they're all very short (< 5 chars average)
-        avg_word_len = sum(len(w) for w in words[:8]) / min(8, len(words))
+        # Look for natural break points within reasonable length
+        # Strategy: Find first comma or period that creates a complete phrase
 
-        if avg_word_len < 5:
-            # Short words, take 8 to make a meaningful title
-            num_words = min(8, len(words))
-        else:
-            # Longer words, take 6
-            num_words = min(6, len(words))
+        # Check for comma-separated phrases (up to 50 chars)
+        if ', ' in line[:50]:
+            comma_idx = line[:50].index(', ')
+            # Only use if the part before comma is substantial (at least 20 chars, 3 words)
+            before_comma = line[:comma_idx].strip()
+            if len(before_comma) >= 20 and len(before_comma.split()) >= 3:
+                return before_comma
 
-        short_title = ' '.join(words[:num_words])
+        # Check for colon or dash (these often introduce key concepts)
+        for separator in [': ', ' - ', ' — ']:
+            if separator in line[:60]:
+                sep_idx = line[:60].index(separator)
+                before_sep = line[:sep_idx].strip()
+                # Colon/dash should have meaningful text before it
+                if len(before_sep) >= 15 and len(before_sep.split()) >= 2:
+                    return before_sep
 
-        # If still too long, cut at 60 chars at word boundary
-        if len(short_title) > 60:
-            short_title = short_title[:60]
-            last_space = short_title.rfind(' ')
+        # No good break point found - take first 4-5 words but ensure it makes sense
+        # Avoid cutting in the middle of common phrase patterns
+
+        # If text starts with a preposition, it's likely a fragment - skip ahead
+        leading_preps = ['in', 'at', 'on', 'by', 'with', 'from', 'through', 'during', 'after', 'before']
+        if words[0].lower() in leading_preps and len(words) > 6:
+            # Skip the prepositional phrase and start from the next clause
+            # Look for capital letter or a verb that signals main clause
+            for i in range(1, min(6, len(words))):
+                if words[i][0].isupper() or words[i].lower() in ['the', 'these', 'those', 'there']:
+                    words = words[i:]
+                    break
+
+        # Take first 5 words as a starting point
+        title_words = words[:5]
+        title = ' '.join(title_words)
+
+        # If this creates certain problematic patterns, try to fix
+        # Pattern: ends with incomplete connector or helping verb
+        incomplete_endings = [
+            'in', 'to', 'of', 'that', 'with', 'by', 'for', 'at', 'on',
+            'the', 'a', 'an',
+            'will', 'would', 'should', 'could', 'may', 'might',
+            'is', 'are', 'was', 'were', 'be', 'been',
+            'has', 'have', 'had'
+        ]
+
+        if title_words[-1].lower() in incomplete_endings and len(words) > 5:
+            # Add one or two more words to complete the thought
+            title_words.append(words[5])
+            if len(words) > 6 and words[5].lower() in ['be', 'been', 'have', 'been']:
+                title_words.append(words[6])
+            title = ' '.join(title_words)
+
+        # Truncate at 50 chars if needed
+        if len(title) > 50:
+            title = title[:50]
+            last_space = title.rfind(' ')
             if last_space > 20:  # At least 20 chars
-                short_title = short_title[:last_space]
+                title = title[:last_space]
 
-        return short_title.strip()
+        return title.strip()
     
     def _process_click_markers(self, content: str) -> str:
         """Process [CLICK] markers to create separate content blocks for new slides"""
