@@ -177,7 +177,7 @@
 
             <form id="upload-form" enctype="multipart/form-data">
                 <!-- Progressive Enhancement Banner -->
-                <div class="info-box rounded-lg p-4 mb-6 border-2 border-blue-200">
+                <div id="quality-info-banner" class="info-box rounded-lg p-4 mb-6 border-2 border-blue-200">
                     <div class="text-sm text-slate-700 space-y-2">
                         <div class="flex items-start">
                             <span class="mr-2">🤖</span>
@@ -601,10 +601,16 @@
                 document.getElementById('clear-key-btn').classList.remove('hidden');
             }
 
-            // Show/hide Gmail connect button based on authentication
+            // Show/hide Gmail connect button and quality info banner based on authentication
             const gmailConnectSection = document.getElementById('gmail-connect-section');
+            const qualityInfoBanner = document.getElementById('quality-info-banner');
+
             if (!accessToken) {
+                // Not authenticated - show connect button
                 gmailConnectSection.classList.remove('hidden');
+            } else {
+                // Authenticated - hide quality info banner
+                qualityInfoBanner.classList.add('hidden');
             }
         };
 
