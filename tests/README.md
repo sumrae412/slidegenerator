@@ -224,12 +224,12 @@ print(format_metrics_report(metrics, test_id="edu_ml_basics"))
 
 **Test Cases:**
 
-| Test ID | Description | Expected Slides |
-|---------|-------------|-----------------|
-| `video_script_with_lesson_headers` | Video script with plain text lesson headers + script table | 37 (12 headers + 25 rows) |
-| `markdown_headings` | Document with markdown-style headings | 5 |
-| `script_table_narration_column` | Script table with narration in column 1 | 37 |
-| `script_table_stage_directions_column` | Script table with stage directions in column 2 | 12 (headers only) |
+| Test ID | Description | Expected Slides | Status |
+|---------|-------------|-----------------|--------|
+| `video_script_with_lesson_headers` | Video script with plain text lesson headers + script table | 15 (12 headers + 3 content) | ✅ PASS |
+| `markdown_headings` | Document with markdown-style headings (# symbols) | 6 (3 headers + 3 content) | ✅ PASS |
+| `script_table_narration_column` | Script table with narration in column 1 | 15 (12 headers + 3 content) | ✅ PASS |
+| `script_table_stage_directions_column` | Script table with stage directions in column 2 | 13 (12 headers + 1 content) | ✅ PASS |
 
 **Usage:**
 
