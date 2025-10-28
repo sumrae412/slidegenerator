@@ -918,6 +918,15 @@ Return your analysis as a JSON object with:
             is_heading = False
             heading_level = None
 
+            # MARKDOWN HEADING detection: Lines starting with # symbols
+            if line.startswith('#'):
+                # Count the number of # symbols
+                heading_level = len(line) - len(line.lstrip('#'))
+                heading_level = min(heading_level, 6)  # Max H6
+                is_heading = True
+                # Keep the line as-is with markdown syntax
+                logger.info(f"Detected markdown H{heading_level} heading: {line}")
+
             # Check if line looks like a heading (short, capitalized, no punctuation at end)
             is_short = len(line) < 80
             is_capitalized = line[0].isupper() if line else False
@@ -959,8 +968,8 @@ Return your analysis as a JSON object with:
                 is_heading = True
                 heading_level = 4
 
-            # Format headings with markdown
-            if is_heading and heading_level:
+            # Format headings with markdown (only if not already in markdown format)
+            if is_heading and heading_level and not line.startswith('#'):
                 line = '#' * heading_level + ' ' + line
                 logger.info(f"Detected H{heading_level} heading: {line}")
 

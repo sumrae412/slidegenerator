@@ -67,14 +67,15 @@ STRUCTURE_TEST_SET = [
     StructureTest(
         id="markdown_headings",
         description="Document with markdown-style headings",
-        file_path=None,  # Will use inline content
+        file_path="tests/test_markdown_doc.txt",
         script_column=0,
-        expected_slide_count=5,
-        expected_title_slides=2,  # H1 and H2 headings
-        expected_content_slides=3,  # Paragraph content
+        expected_slide_count=6,
+        expected_title_slides=3,  # H1 (1) + H2s (2) = 3 title slides
+        expected_content_slides=3,  # 3 content paragraph groups (intro, section1, section2)
         expected_heading_patterns=[
-            "# Main Title",
-            "## Section 1"
+            "Main Title",
+            "Section 1",
+            "Section 2"
         ]
     ),
 
@@ -126,17 +127,12 @@ class StructureValidator:
         print(f"{'=' * 70}")
 
         # Parse the document
-        if test.file_path:
-            doc_structure = self.parser.parse_file(
-                test.file_path,
-                test.file_path,
-                script_column=test.script_column,
-                fast_mode=False
-            )
-        else:
-            # For inline tests, create test content
-            # (Not implemented yet - placeholder)
-            return {"error": "Inline content tests not yet implemented"}
+        doc_structure = self.parser.parse_file(
+            test.file_path,
+            test.file_path,
+            script_column=test.script_column,
+            fast_mode=False
+        )
 
         # Count slides
         total_slides = len(doc_structure.slides)
