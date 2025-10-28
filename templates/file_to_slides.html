@@ -259,43 +259,6 @@
                     </div>
                 </div>
 
-                <!-- Combined Document Selection Area -->
-                <div class="border-2 border-slate-300 rounded-xl p-6 mb-6 bg-slate-50">
-                    <!-- Google Drive Browser Button -->
-                    <div class="mb-5">
-                        <button type="button" id="browse-drive-btn" class="w-full p-5 border-2 border-slate-300 rounded-lg bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-center">
-                            <svg class="mx-auto h-10 w-10 text-slate-600 mb-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
-                            </svg>
-                            <h3 class="text-base font-semibold text-slate-800 mb-1">Browse Google Drive</h3>
-                            <p class="text-sm text-slate-600">Select a document from your Drive</p>
-                        </button>
-                    </div>
-
-                    <!-- Divider -->
-                    <div class="relative mb-5">
-                        <div class="absolute inset-0 flex items-center">
-                            <div class="w-full border-t border-slate-300"></div>
-                        </div>
-                        <div class="relative flex justify-center text-sm">
-                            <span class="px-3 bg-slate-50 text-slate-500 font-medium">or</span>
-                        </div>
-                    </div>
-
-                    <!-- Google Docs URL Input -->
-                    <div>
-                        <label for="google-docs-url" class="block text-sm font-semibold text-slate-800 mb-2">
-                            Paste a Google Docs URL
-                        </label>
-                        <input type="url" id="google-docs-url" name="google_docs_url"
-                               class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                               placeholder="https://docs.google.com/document/d/...">
-                        <p class="text-xs text-slate-600 mt-2">
-                            Make sure the document is set to "Anyone with the link can view"
-                        </p>
-                    </div>
-                </div>
-
                 <!-- Document Structure Guide -->
                 <div class="card p-6 mb-6 bg-white border-2 border-slate-200 rounded-lg">
                     <button type="button" id="guide-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
@@ -335,6 +298,43 @@
                                 <span class="font-semibold">Best Practice:</span> Structure your Word document with clear headings and organized content. AI will generate contextually relevant bullet points and visual prompts for each slide.
                             </p>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Combined Document Selection Area -->
+                <div class="border-2 border-slate-300 rounded-xl p-6 mb-6 bg-slate-50">
+                    <!-- Google Drive Browser Button -->
+                    <div class="mb-5">
+                        <button type="button" id="browse-drive-btn" class="w-full p-5 border-2 border-slate-300 rounded-lg bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-center">
+                            <svg class="mx-auto h-10 w-10 text-slate-600 mb-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+                            </svg>
+                            <h3 class="text-base font-semibold text-slate-800 mb-1">Browse Google Drive</h3>
+                            <p class="text-sm text-slate-600">Select a document from your Drive</p>
+                        </button>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="relative mb-5">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-slate-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-3 bg-slate-50 text-slate-500 font-medium">or</span>
+                        </div>
+                    </div>
+
+                    <!-- Google Docs URL Input -->
+                    <div>
+                        <label for="google-docs-url" class="block text-sm font-semibold text-slate-800 mb-2">
+                            Paste a Google Docs URL
+                        </label>
+                        <input type="url" id="google-docs-url" name="google_docs_url"
+                               class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                               placeholder="https://docs.google.com/document/d/...">
+                        <p class="text-xs text-slate-600 mt-2">
+                            Make sure the document is set to "Anyone with the link can view"
+                        </p>
                     </div>
                 </div>
 
