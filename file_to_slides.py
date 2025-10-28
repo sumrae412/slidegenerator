@@ -1614,24 +1614,25 @@ Return your analysis as a JSON object with:
         logger.info(f"Converting script content to slides, processing {len(lines)} lines ({len(non_heading_lines)} content blocks)")
         
         pending_h4_title = None  # Store H4 title waiting for content
-        
+        content_buffer = []  # Buffer to accumulate paragraphs under current H4
+
         for line_num, line in enumerate(lines):
             line = line.strip()
             if not line:
                 continue
-            
+
             # Check if this is a heading
             is_heading = False
             heading_text = line
             heading_level = None
-            
+
             # In no-table mode, be much more restrictive about what counts as headings
             # Only treat obvious markdown headings as headings, treat everything else as content
             if line.startswith('#'):
                 # Even with markdown, be restrictive for educational content
                 potential_heading_level = len(line) - len(line.lstrip('#'))
                 potential_heading_text = line.lstrip('#').strip()
-                
+
                 # Check if this is educational/instructional content that should be treated as content
                 if potential_heading_level == 1 and self._is_conversational_heading(potential_heading_text):
                     # Treat as content, not heading
@@ -1644,12 +1645,30 @@ Return your analysis as a JSON object with:
                 # For all non-markdown content, treat as content slides with extracted titles
                 # Do NOT use heading patterns for content in no-table mode
                 is_heading = False
-            
+
             if is_heading:
+                # Before processing new heading, flush any buffered content
+                if content_buffer:
+                    combined_text = ' '.join(content_buffer)
+                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode)
+
+                    slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
+
+                    slides.append(SlideContent(
+                        title=slide_title,
+                        content=bullet_points,
+                        slide_type='script',
+                        heading_level=4 if pending_h4_title else None,
+                        subheader=topic_sentence
+                    ))
+                    logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from {len(content_buffer)} paragraphs")
+                    script_slide_counter += 1
+                    content_buffer = []
+
                 if heading_level == 4:
                     # H4 heading - store it to use as title for next content slide
                     pending_h4_title = heading_text
-                    logger.info(f"Found H4 heading: '{heading_text}' - will use as title for next content slide")
+                    logger.info(f"Found H4 heading: '{heading_text}' - will group following paragraphs")
                 else:
                     # H1, H2, H3 - create title/section slides
                     slides.append(SlideContent(
@@ -1661,33 +1680,26 @@ Return your analysis as a JSON object with:
                     logger.info(f"Created H{heading_level} section slide: '{heading_text}'")
                     # Clear any pending H4 title since we found a higher-level heading
                     pending_h4_title = None
-                
+
             else:
-                # This is content - create a slide with bullet points
-                topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode)
+                # This is content - buffer it for grouping
+                content_buffer.append(line)
 
-                # Use pending H4 title if available, otherwise use simple content-based title
-                if pending_h4_title:
-                    slide_title = pending_h4_title
-                else:
-                    # For regular content slides, create a simple descriptive title
-                    slide_title = self._create_simple_content_title(line)
+        # Flush any remaining buffered content at end of document
+        if content_buffer:
+            combined_text = ' '.join(content_buffer)
+            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode)
 
-                slides.append(SlideContent(
-                    title=slide_title,
-                    content=bullet_points,
-                    slide_type='script',
-                    heading_level=4 if pending_h4_title else None,
-                    subheader=topic_sentence  # Bold subheader above bullets
-                ))
-                
-                if pending_h4_title:
-                    logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullet points")
-                    pending_h4_title = None  # Clear the H4 title after using it
-                else:
-                    logger.info(f"Created content slide {script_slide_counter}: [blank title] with {len(bullet_points)} bullet points")
-                
-                script_slide_counter += 1
+            slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
+
+            slides.append(SlideContent(
+                title=slide_title,
+                content=bullet_points,
+                slide_type='script',
+                heading_level=4 if pending_h4_title else None,
+                subheader=topic_sentence
+            ))
+            logger.info(f"Created final content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from {len(content_buffer)} paragraphs")
         
         logger.info(f"FINAL RESULT: Created {len(slides)} total slides")
         
