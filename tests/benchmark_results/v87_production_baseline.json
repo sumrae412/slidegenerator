@@ -1,0 +1,256 @@
+{
+  "version": "v87_production_baseline",
+  "timestamp": "2025-10-28T12:31:11.405796",
+  "results": [
+    {
+      "test_id": "edu_ml_basics",
+      "category": "educational",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:07.281069",
+      "bullets": [
+        "Students in this course will learn to apply machine learning algorithms to real-world datasets.",
+        "The curriculum covers supervised learning fundamentals including linear regression, logistic regression, and decision trees.",
+        "Each module includes hands-on coding exercises using Python and scikit-learn.",
+        "Students complete a final project analyzing a dataset of their choice."
+      ],
+      "metrics": {
+        "structure_score": 100,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 75.0,
+        "golden_similarity": 48.49702380952381,
+        "overall_quality": 95.0,
+        "bullet_count": 4,
+        "avg_word_count": 12.25,
+        "avg_char_length": 91.5
+      },
+      "passed": true
+    },
+    {
+      "test_id": "tech_microservices",
+      "category": "technical",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:07.886296",
+      "bullets": [
+        "The microservices architecture enables independent deployment and scaling of application components.",
+        "Each service communicates via REST APIs using JSON payloads.",
+        "Load balancing distributes requests across service instances using NGINX.",
+        "Service discovery is handled by Consul with health checks monitoring endpoint availability."
+      ],
+      "metrics": {
+        "structure_score": 90.0,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 75.0,
+        "golden_similarity": 40.60064935064935,
+        "overall_quality": 92.5,
+        "bullet_count": 4,
+        "avg_word_count": 10.25,
+        "avg_char_length": 81.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "exec_digital_transform",
+      "category": "executive",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:08.501756",
+      "bullets": [
+        "The digital transformation initiative reduced operational costs by 23% in Q3 2025.",
+        "Employee productivity increased 18% after implementing the new workflow automation tools.",
+        "Customer satisfaction scores improved from 72% to 86% following the new UX redesign.",
+        "The cloud migration project completed two months ahead of schedule, saving $1.2M in infrastructure costs."
+      ],
+      "metrics": {
+        "structure_score": 90.0,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 80.0,
+        "golden_similarity": 63.87631975867269,
+        "overall_quality": 93.5,
+        "bullet_count": 4,
+        "avg_word_count": 12.75,
+        "avg_char_length": 90.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "pro_cloud_benefits",
+      "category": "professional",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:09.106059",
+      "bullets": [
+        "Cloud computing provides scalable resources on demand, allowing organizations to adjust infrastructure capacity based on actual usage.",
+        "Cloud providers manage security and compliance with extensive expertise and certifications.",
+        "Companies reduce capital expenditure by eliminating upfront hardware costs and paying only for consumed resources.",
+        "Global reach enables companies to serve customers worldwide with low-latency performance."
+      ],
+      "metrics": {
+        "structure_score": 100,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 80.0,
+        "golden_similarity": 38.10935441370224,
+        "overall_quality": 96.0,
+        "bullet_count": 4,
+        "avg_word_count": 13.5,
+        "avg_char_length": 107.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "table_feature_comparison",
+      "category": "table",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:09.106260",
+      "bullets": [
+        "Comparison of 4 options across Basic, Premium",
+        "Storage: Basic = 10GB",
+        "Users: Basic = 5",
+        "Support: Basic = Email"
+      ],
+      "metrics": {
+        "structure_score": 75.0,
+        "relevance_score": 100,
+        "style_score": 85.0,
+        "readability_score": 65.0,
+        "golden_similarity": 17.997835497835496,
+        "overall_quality": 83.75,
+        "bullet_count": 4,
+        "avg_word_count": 4.75,
+        "avg_char_length": 26.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "list_consolidation",
+      "category": "list",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:09.403615",
+      "bullets": [
+        "\u2022 Scalable infrastructure\n\u2022 Cost optimization\n\u2022 Pay-as-you-go pricing\n\u2022 Global availability\n\u2022 Automatic backups\n\u2022 High availability\n\u2022 Disaster recovery\n\u2022 Security compliance."
+      ],
+      "metrics": {
+        "structure_score": 50.0,
+        "relevance_score": 90.0,
+        "style_score": 85.0,
+        "readability_score": 75.0,
+        "golden_similarity": 17.028985507246375,
+        "overall_quality": 76.0,
+        "bullet_count": 1,
+        "avg_word_count": 24.0,
+        "avg_char_length": 174.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "heading_expansion",
+      "category": "heading",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:09.403921",
+      "bullets": [
+        "Introduction to Neural Networks"
+      ],
+      "metrics": {
+        "structure_score": 65.0,
+        "relevance_score": 100,
+        "style_score": 85.0,
+        "readability_score": 75.0,
+        "golden_similarity": 5.555555555555555,
+        "overall_quality": 83.25,
+        "bullet_count": 1,
+        "avg_word_count": 4.0,
+        "avg_char_length": 31.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "edge_very_short",
+      "category": "edge_case",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:09.403987",
+      "bullets": [],
+      "metrics": {
+        "structure_score": 0.0,
+        "relevance_score": 0.0,
+        "style_score": 0.0,
+        "readability_score": 0.0,
+        "overall_quality": 0.0,
+        "bullet_count": 0,
+        "avg_word_count": 0.0,
+        "avg_char_length": 0.0
+      },
+      "passed": false
+    },
+    {
+      "test_id": "edge_very_long",
+      "category": "edge_case",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:10.176921",
+      "bullets": [
+        "The shift from on-premises data centers to cloud-based services represents a paradigm change in IT strategy.",
+        "Global reach enables organizations to serve customers worldwide with low-latency performance through distributed data centers.",
+        "Development teams leverage platform services to accelerate application delivery, utilizing managed databases, container orchestration, and serverless computing.",
+        "Organizations benefit from elastic scalability, allowing them to dynamically adjust resources based on demand patterns."
+      ],
+      "metrics": {
+        "structure_score": 80.0,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 75.0,
+        "golden_similarity": 24.74466403162055,
+        "overall_quality": 90.0,
+        "bullet_count": 4,
+        "avg_word_count": 15.75,
+        "avg_char_length": 128.25
+      },
+      "passed": true
+    },
+    {
+      "test_id": "mixed_paragraph_with_metrics",
+      "category": "mixed",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:10.791690",
+      "bullets": [
+        "The new analytics platform processes 10 million events per day with sub-second latency.",
+        "The system uses Apache Kafka for event streaming and ClickHouse for real-time analytics.",
+        "Development time decreased from 6 months to 2 months using microservices architecture.",
+        "Teams deploy updates 5x more frequently with zero downtime."
+      ],
+      "metrics": {
+        "structure_score": 100,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 80.0,
+        "golden_similarity": 47.738095238095234,
+        "overall_quality": 96.0,
+        "bullet_count": 4,
+        "avg_word_count": 11.75,
+        "avg_char_length": 80.0
+      },
+      "passed": true
+    },
+    {
+      "test_id": "pro_ai_ethics",
+      "category": "professional",
+      "version": "v87_production_baseline",
+      "timestamp": "2025-10-28T12:31:11.405779",
+      "bullets": [
+        "AI ethics considerations include fairness, accountability, transparency, and privacy protection.",
+        "Organizations must ensure AI systems do not perpetuate biases or discriminate against protected groups."
+      ],
+      "metrics": {
+        "structure_score": 80.0,
+        "relevance_score": 100,
+        "style_score": 100,
+        "readability_score": 75.0,
+        "golden_similarity": 26.083312112723878,
+        "overall_quality": 90.0,
+        "bullet_count": 2,
+        "avg_word_count": 12.0,
+        "avg_char_length": 99.5
+      },
+      "passed": true
+    }
+  ]
+}
