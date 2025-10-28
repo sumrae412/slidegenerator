@@ -2079,7 +2079,7 @@ Return only the bullet points, one per line, without symbols or numbering."""
                     bullet = self._format_bullet(sentence)
                     if bullet and bullet not in bullets:
                         bullets.append(bullet)
-                        if len(bullets) >= 4:  # Max 4 bullets
+                        if len(bullets) >= 6:  # Get more candidates for redundancy filtering
                             break
 
             # If we got very few bullets from strict filtering, be less strict
@@ -2098,10 +2098,23 @@ Return only the bullet points, one per line, without symbols or numbering."""
                         bullet = self._format_bullet(sentence)
                         if bullet:
                             bullets.append(bullet)
-                            if len(bullets) >= 2:
+                            if len(bullets) >= 4:
                                 break
 
-            logger.info(f"Smart NLP generated {len(bullets)} bullets using TF-IDF + spaCy")
+            # ENHANCEMENT 1: Apply redundancy reduction
+            if len(bullets) > 1:
+                bullets = self._remove_redundant_bullets(bullets, similarity_threshold=0.7)
+
+            # ENHANCEMENT 2: Compress bullets for slide format (headline style)
+            bullets = [self._compress_bullet_for_slides(b) for b in bullets]
+
+            # Limit to 4 best bullets after processing
+            bullets = bullets[:4]
+
+            # ENHANCEMENT 3: Evaluate and log quality metrics
+            metrics = self._evaluate_bullet_quality(bullets)
+            logger.info(f"Smart NLP generated {len(bullets)} bullets using TF-IDF + spaCy (Quality: {metrics['quality_score']}/100)")
+
             return bullets
 
         except Exception as e:
@@ -2208,8 +2221,249 @@ Return only the bullet points, one per line, without symbols or numbering."""
                 bullets.append(bullet)
 
         return bullets[:3]  # Max 3 bullets as fallback
-    
-    
+
+    # ============================================================================
+    # ENHANCED NLP FALLBACK: Redundancy Reduction & Post-Processing
+    # ============================================================================
+
+    def _remove_redundant_bullets(self, bullets: List[str], similarity_threshold: float = 0.7) -> List[str]:
+        """
+        Remove redundant bullets using n-gram overlap and cosine similarity.
+
+        Addresses: "Bullets can sound repetitive" - ensures diversity in bullet points
+        Uses lightweight sklearn TF-IDF for semantic similarity without heavy embeddings
+        """
+        if len(bullets) <= 1:
+            return bullets
+
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+
+            # Calculate TF-IDF vectors for each bullet
+            vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words='english')
+            tfidf_matrix = vectorizer.fit_transform(bullets)
+
+            # Calculate pairwise cosine similarities
+            similarities = cosine_similarity(tfidf_matrix)
+
+            # Keep track of which bullets to keep
+            to_keep = []
+            for i in range(len(bullets)):
+                # Check if this bullet is too similar to any already-kept bullet
+                is_redundant = False
+                for j in to_keep:
+                    if similarities[i][j] > similarity_threshold:
+                        # Redundant - keep the longer/more detailed one
+                        if len(bullets[i]) > len(bullets[j]):
+                            to_keep.remove(j)
+                            to_keep.append(i)
+                        is_redundant = True
+                        break
+
+                if not is_redundant:
+                    to_keep.append(i)
+
+            # Also check for simple n-gram overlap as fallback
+            unique_bullets = [bullets[i] for i in to_keep]
+            final_bullets = []
+
+            for bullet in unique_bullets:
+                bullet_words = set(bullet.lower().split())
+                # Check overlap with already-added bullets
+                is_duplicate = False
+                for existing in final_bullets:
+                    existing_words = set(existing.lower().split())
+                    overlap = len(bullet_words & existing_words) / len(bullet_words | existing_words)
+                    if overlap > 0.6:  # More than 60% word overlap
+                        is_duplicate = True
+                        break
+
+                if not is_duplicate:
+                    final_bullets.append(bullet)
+
+            logger.info(f"Redundancy reduction: {len(bullets)} → {len(final_bullets)} bullets")
+            return final_bullets
+
+        except Exception as e:
+            logger.warning(f"Redundancy reduction failed: {e}, returning original bullets")
+            return bullets
+
+    def _compress_bullet_for_slides(self, bullet: str) -> str:
+        """
+        Aggressive post-processing to make bullets concise and slide-ready.
+
+        Addresses: "Make sure output reads like headlines, not paragraphs"
+        - Removes filler words and preambles
+        - Trims after natural pauses
+        - Ensures headline style, not paragraph style
+        """
+        import re
+
+        # Remove common preambles and filler phrases
+        preambles = [
+            r'^It is important (that|to note that|to understand that)\s+',
+            r'^It is (worth noting|essential|critical) that\s+',
+            r'^One (thing|important thing) to (note|understand|remember) is that\s+',
+            r'^(What this means is|This means that|Which means|In other words,?)\s+',
+            r'^(Basically,?|Essentially,?|Fundamentally,?)\s+',
+            r'^(You should know that|You need to understand that)\s+',
+            r'^(Keep in mind that|Remember that|Note that)\s+',
+        ]
+
+        for preamble in preambles:
+            bullet = re.sub(preamble, '', bullet, flags=re.IGNORECASE)
+
+        # Remove filler words that add no value
+        filler_patterns = [
+            r'\s+(really|very|quite|pretty|somewhat|fairly|rather)\s+',
+            r'\s+(actually|basically|essentially|generally)\s+',
+            r'\s+as (well|you know|you can see)\b',
+            r'\s+(of course|obviously|clearly)\s+',
+        ]
+
+        for pattern in filler_patterns:
+            bullet = re.sub(pattern, ' ', bullet, flags=re.IGNORECASE)
+
+        # Trim after natural pauses if bullet is too long
+        if len(bullet) > 100:
+            # Look for natural break points
+            break_patterns = [
+                (r'^([^,]{40,90}),\s+(?:which|that|and|but)', 1),  # Clause break
+                (r'^([^;]{40,90});', 1),  # Semicolon
+                (r'^(. {40,90}\.)\s+[A-Z]', 1),  # Period followed by new sentence
+            ]
+
+            for pattern, group in break_patterns:
+                match = re.search(pattern, bullet)
+                if match:
+                    bullet = match.group(group).rstrip('.,;')
+                    break
+
+        # Ensure bullet doesn't end mid-thought
+        # If we cut at a clause, make sure it's still grammatically complete
+        if not bullet.endswith(('.', '!', '?')):
+            # Check if it ends with an incomplete phrase
+            incomplete_endings = ['such as', 'including', 'like', 'for example', 'e.g', 'i.e']
+            if any(bullet.lower().endswith(ending) for ending in incomplete_endings):
+                # Remove the incomplete ending
+                for ending in incomplete_endings:
+                    if bullet.lower().endswith(ending):
+                        bullet = bullet[:- len(ending)].rstrip(',; ')
+                        break
+
+            bullet = bullet.rstrip(',;:') + '.'
+
+        # Clean up extra whitespace
+        bullet = re.sub(r'\s+', ' ', bullet).strip()
+
+        # Ensure proper capitalization
+        if bullet:
+            bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
+
+        return bullet
+
+    def _evaluate_bullet_quality(self, bullets: List[str]) -> dict:
+        """
+        Calculate quality metrics for generated bullets.
+
+        Addresses evaluation requirements:
+        - Track average bullet length
+        - Measure lexical overlap
+        - Calculate readability (using textstat)
+
+        Returns dict with metrics for monitoring and comparison
+        """
+        if not bullets:
+            return {
+                'count': 0,
+                'avg_length': 0,
+                'avg_words': 0,
+                'lexical_overlap': 0,
+                'avg_readability': 0,
+                'quality_score': 0
+            }
+
+        try:
+            import textstat
+            import numpy as np
+
+            # Basic metrics
+            lengths = [len(b) for b in bullets]
+            word_counts = [len(b.split()) for b in bullets]
+
+            avg_length = np.mean(lengths)
+            avg_words = np.mean(word_counts)
+
+            # Lexical overlap (measure diversity)
+            # Lower overlap = more diverse bullets
+            total_overlap = 0
+            comparisons = 0
+
+            for i in range(len(bullets)):
+                for j in range(i + 1, len(bullets)):
+                    words_i = set(bullets[i].lower().split())
+                    words_j = set(bullets[j].lower().split())
+                    if len(words_i | words_j) > 0:
+                        overlap = len(words_i & words_j) / len(words_i | words_j)
+                        total_overlap += overlap
+                        comparisons += 1
+
+            lexical_overlap = total_overlap / comparisons if comparisons > 0 else 0
+
+            # Readability scores (lower = easier to read, better for slides)
+            readability_scores = []
+            for bullet in bullets:
+                # Flesch Reading Ease: 60-70 is ideal for slides
+                # We normalize to 0-100 where 100 is best
+                flesch = textstat.flesch_reading_ease(bullet)
+                # Convert to 0-100 scale where 70+ flesch = 100 score
+                normalized = min(100, max(0, flesch))
+                readability_scores.append(normalized)
+
+            avg_readability = np.mean(readability_scores)
+
+            # Composite quality score (0-100)
+            # Factors:
+            # - Ideal length: 50-120 chars (100 points for perfect, decreasing outside range)
+            # - Low overlap: <0.3 is ideal (100 points), >0.6 is poor (0 points)
+            # - Good readability: 60-80 is ideal for slides
+
+            length_score = 100 - abs(avg_length - 85) / 85 * 100  # 85 chars is ideal
+            length_score = max(0, min(100, length_score))
+
+            overlap_score = max(0, 100 - (lexical_overlap * 166.67))  # 0.6 overlap = 0 score
+
+            readability_score = 100 - abs(avg_readability - 70) / 70 * 100
+            readability_score = max(0, min(100, readability_score))
+
+            quality_score = (length_score * 0.3 + overlap_score * 0.4 + readability_score * 0.3)
+
+            metrics = {
+                'count': len(bullets),
+                'avg_length': round(avg_length, 1),
+                'avg_words': round(avg_words, 1),
+                'lexical_overlap': round(lexical_overlap, 3),
+                'avg_readability': round(avg_readability, 1),
+                'quality_score': round(quality_score, 1)
+            }
+
+            logger.info(f"Bullet quality metrics: {metrics}")
+            return metrics
+
+        except Exception as e:
+            logger.warning(f"Quality evaluation failed: {e}")
+            return {
+                'count': len(bullets),
+                'avg_length': round(np.mean([len(b) for b in bullets]), 1) if bullets else 0,
+                'avg_words': round(np.mean([len(b.split()) for b in bullets]), 1) if bullets else 0,
+                'lexical_overlap': 0,
+                'avg_readability': 0,
+                'quality_score': 0
+            }
+
+
     def _create_fusion_bullets(self, text: str) -> List[str]:
         """Fusion approach: Combine NLP semantic analysis with LLM API calls for optimal results"""
         try:
