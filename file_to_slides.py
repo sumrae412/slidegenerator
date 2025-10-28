@@ -1736,8 +1736,34 @@ Return your analysis as a JSON object with:
                     pending_h4_title = None
 
             else:
-                # This is content - buffer it for grouping
-                content_buffer.append(line)
+                # This is content
+                # FILTER META-NOTES: Skip lines starting with *, [, or containing meta-instructions
+                if (line.startswith('*') or line.startswith('[') or
+                    'Note to reviewer' in line or 'Word count' in line):
+                    logger.info(f"Skipping meta-note: {line[:60]}...")
+                    continue
+
+                # BETTER CONTENT GROUPING: Create slide per substantial paragraph
+                # If this is a substantial paragraph (>150 chars), create slide immediately
+                if len(line) > 150:
+                    # Create slide from this single paragraph
+                    slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(line)
+                    topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=slide_title)
+
+                    if bullet_points:  # Only create slide if we got bullets
+                        slides.append(SlideContent(
+                            title=slide_title,
+                            content=bullet_points,
+                            slide_type='script',
+                            heading_level=4 if pending_h4_title else None,
+                            subheader=topic_sentence
+                        ))
+                        logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from paragraph")
+                        script_slide_counter += 1
+                        pending_h4_title = None  # Clear H4 title after using it
+                else:
+                    # Buffer shorter fragments for grouping
+                    content_buffer.append(line)
 
         # Flush any remaining buffered content at end of document
         if content_buffer:
@@ -1851,6 +1877,9 @@ Return your analysis as a JSON object with:
 
         # Use unified bullet generation that combines best approaches
         bullets = self._create_unified_bullets(remaining_text if topic_sentence else text, context_heading=context_heading)
+
+        # APPLY 15-WORD COMPRESSION to ALL bullets before returning (top-level enforcement)
+        bullets = [self._compress_bullet_for_slides(b) for b in bullets]
 
         logger.info(f"Final unified bullets: {bullets}")
         return topic_sentence, bullets[:4]  # Limit to 4 bullets for readability
@@ -2039,7 +2068,9 @@ Return your analysis as a JSON object with:
                 logger.warning("All basic fallback bullets were vague - returning empty list")
                 return []
 
-            return filtered_bullets[:3]  # Maximum 3 bullets
+            # APPLY 15-WORD COMPRESSION to all bullets before returning
+            compressed_bullets = [self._compress_bullet_for_slides(b) for b in filtered_bullets[:3]]
+            return compressed_bullets
 
         except Exception as e:
             logger.error(f"Basic fallback bullet generation failed: {e}")
@@ -2709,7 +2740,9 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             if bullet:
                 bullets.append(bullet)
 
-        return bullets[:3]  # Max 3 bullets as fallback
+        # APPLY 15-WORD COMPRESSION before returning
+        compressed_bullets = [self._compress_bullet_for_slides(b) for b in bullets[:3]]
+        return compressed_bullets
 
     # ============================================================================
     # ENHANCED NLP FALLBACK: Redundancy Reduction & Post-Processing
@@ -2933,6 +2966,14 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
         # Ensure proper capitalization
         if bullet:
             bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
+
+        # HARD LIMIT: Enforce 15-word maximum for slide readability
+        words = bullet.split()
+        if len(words) > 15:
+            # Truncate at 15 words and add period if needed
+            bullet = ' '.join(words[:15])
+            if not bullet.endswith(('.', '!', '?')):
+                bullet = bullet.rstrip(',;:') + '.'
 
         return bullet
 
