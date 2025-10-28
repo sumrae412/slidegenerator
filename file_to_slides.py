@@ -1829,8 +1829,15 @@ Return your analysis as a JSON object with:
 
         # Try LLM first if API key is available
         if self.api_key and not self.force_basic_mode:
-            logger.info("Using LLM approach for bullet generation")
-            llm_bullets = self._create_llm_only_bullets(text)
+            logger.info("Using enhanced LLM approach with structured prompts")
+            # Auto-detect style based on content (can be made configurable later)
+            style = 'educational' if any(term in text.lower() for term in ['learn', 'student', 'course', 'lesson']) else 'professional'
+            llm_bullets = self._create_llm_only_bullets(
+                text,
+                context_heading=context_heading,
+                style=style,
+                enable_refinement=False  # Set to True for extra quality pass (uses more API tokens)
+            )
             if llm_bullets and len(llm_bullets) >= 1:
                 logger.info(f"✅ LLM SUCCESS: Generated {len(llm_bullets)} LLM bullets")
                 unique_bullets = self._deduplicate_bullets(llm_bullets)
@@ -1976,33 +1983,328 @@ Return your analysis as a JSON object with:
         except Exception as e:
             logger.error(f"Basic fallback bullet generation failed: {e}")
             return []  # Return empty instead of generic fallback
-    
-    def _create_llm_only_bullets(self, text: str) -> List[str]:
-        """Create bullets using Claude with optimized prompt for content relevance"""
+
+    # ==================================================================================
+    # LLM ENHANCEMENT SYSTEM - Structured Prompts & Adaptive Summarization
+    # ==================================================================================
+
+    def _detect_content_type(self, text: str) -> dict:
+        """
+        Detect content structure to route to appropriate summarization strategy.
+
+        Returns dict with:
+            - type: 'heading', 'paragraph', 'table', 'list', 'mixed'
+            - characteristics: list of detected features
+            - complexity: 'simple', 'moderate', 'complex'
+        """
+        characteristics = []
+
+        # Check for table structure
+        has_tabs = '\t' in text
+        tab_lines = text.count('\n\t') if has_tabs else 0
+        if has_tabs and tab_lines >= 2:
+            characteristics.append('tabular')
+
+        # Check for list structure
+        lines = text.split('\n')
+        bullet_lines = sum(1 for line in lines if line.strip().startswith(('•', '-', '*', '1.', '2.', '3.')))
+        if bullet_lines >= 3:
+            characteristics.append('list')
+
+        # Check length and sentence count
+        word_count = len(text.split())
+        sentence_count = text.count('.') + text.count('!') + text.count('?')
+
+        if word_count < 30:
+            characteristics.append('short')
+            complexity = 'simple'
+        elif word_count > 150:
+            characteristics.append('long')
+            complexity = 'complex'
+        else:
+            complexity = 'moderate'
+
+        # Check for technical indicators
+        technical_terms = ['data', 'system', 'process', 'framework', 'pipeline',
+                          'model', 'algorithm', 'function', 'method', 'class']
+        if any(term in text.lower() for term in technical_terms):
+            characteristics.append('technical')
+
+        # Determine primary type
+        if 'tabular' in characteristics:
+            content_type = 'table'
+        elif 'list' in characteristics:
+            content_type = 'list'
+        elif sentence_count <= 2 and word_count < 50:
+            content_type = 'heading'
+        elif sentence_count >= 3:
+            content_type = 'paragraph'
+        else:
+            content_type = 'mixed'
+
+        logger.info(f"Content type detected: {content_type} ({complexity}, {len(characteristics)} characteristics)")
+
+        return {
+            'type': content_type,
+            'characteristics': characteristics,
+            'complexity': complexity,
+            'word_count': word_count,
+            'sentence_count': sentence_count
+        }
+
+    def _build_structured_prompt(self, text: str, content_info: dict,
+                                 context_heading: str = None, style: str = 'professional') -> str:
+        """
+        Build adaptive prompt based on content type and context.
+
+        Args:
+            text: Content to summarize
+            content_info: Output from _detect_content_type()
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', 'executive'
+
+        Returns:
+            Structured prompt string optimized for content type
+        """
+        content_type = content_info['type']
+        complexity = content_info['complexity']
+        word_count = content_info['word_count']
+
+        # Style-specific instructions
+        style_guides = {
+            'professional': 'Use clear, active voice with concrete details',
+            'educational': 'Explain concepts clearly with learning objectives focus',
+            'technical': 'Include technical terms and precise implementation details',
+            'executive': 'Focus on insights, outcomes, and strategic implications'
+        }
+        style_guide = style_guides.get(style, style_guides['professional'])
+
+        # Context enhancement
+        context_note = f"\n\nCONTEXT: This content appears under the heading '{context_heading}'. Ensure bullets are relevant to this topic." if context_heading else ""
+
+        # Few-shot examples based on style
+        examples = {
+            'professional': [
+                "Cloud platforms enable rapid deployment of scalable applications",
+                "Organizations reduce infrastructure costs through pay-as-you-go pricing",
+                "Security and compliance are managed by certified cloud providers"
+            ],
+            'educational': [
+                "Students learn to apply machine learning algorithms to real datasets",
+                "Course covers supervised learning fundamentals including regression and classification",
+                "Hands-on projects reinforce theoretical concepts through practical implementation"
+            ],
+            'technical': [
+                "TensorFlow 2.x supports eager execution for dynamic computational graphs",
+                "Kubernetes orchestrates containerized applications across distributed clusters",
+                "REST APIs use HTTP methods (GET, POST, PUT, DELETE) for resource manipulation"
+            ],
+            'executive': [
+                "Initiative projected to reduce operational costs by 25% within 18 months",
+                "Customer retention improved 40% following UX redesign implementation",
+                "Strategic partnership expands market reach to three additional regions"
+            ]
+        }
+
+        example_bullets = examples.get(style, examples['professional'])
+        examples_text = '\n'.join(f"  - {ex}" for ex in example_bullets[:2])
+
+        # Type-specific prompt templates
+        if content_type == 'table':
+            prompt = f"""You are creating slide bullets from structured data. Analyze this {word_count}-word content and extract 3-5 key insights.
+
+CONTENT TYPE: Tabular/Structured Data
+STYLE: {style}
+
+INSTRUCTIONS:
+• Describe patterns, comparisons, or trends rather than listing raw data
+• Start with comparative insights ("X outperforms Y in...")
+• Include specific numbers when highlighting key findings
+• {style_guide}
+• Keep each bullet 8-15 words{context_note}
+
+GOOD EXAMPLES ({style} style):
+{examples_text}
+
+CONTENT TO ANALYZE:
+{text}
+
+OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+
+        elif content_type == 'list':
+            prompt = f"""You are consolidating existing list items into concise slide bullets. Analyze this {word_count}-word content and create 3-5 synthesized bullets.
+
+CONTENT TYPE: Existing List/Enumeration
+STYLE: {style}
+
+INSTRUCTIONS:
+• Group similar items into thematic categories
+• Don't just repeat list items - synthesize them
+• Extract the underlying pattern or principle
+• {style_guide}
+• Keep each bullet 8-15 words{context_note}
+
+GOOD EXAMPLES ({style} style):
+{examples_text}
+
+CONTENT TO ANALYZE:
+{text}
+
+OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+
+        elif content_type == 'heading':
+            prompt = f"""You are expanding a heading/title into supporting slide bullets. Analyze this {word_count}-word content and create 2-4 bullets that elaborate on the main idea.
+
+CONTENT TYPE: Heading/Short Statement
+STYLE: {style}
+
+INSTRUCTIONS:
+• Expand on the main concept with specific supporting points
+• Each bullet should add new information, not repeat the heading
+• Focus on actionable implications or key aspects
+• {style_guide}
+• Keep each bullet 8-15 words{context_note}
+
+GOOD EXAMPLES ({style} style):
+{examples_text}
+
+CONTENT TO ANALYZE:
+{text}
+
+OUTPUT: Return 2-4 bullets, one per line, no symbols or numbering."""
+
+        else:  # paragraph or mixed
+            prompt = f"""You are creating slide bullets from narrative content. Analyze this {word_count}-word {complexity} passage and extract 3-5 key points.
+
+CONTENT TYPE: {content_type.title()} Content
+STYLE: {style}
+COMPLEXITY: {complexity}
+
+INSTRUCTIONS:
+• Extract the most important actionable insights and key concepts
+• Each bullet must be self-contained and specific to this content
+• Start with action verbs when describing processes or steps
+• Include concrete details, examples, or data points mentioned
+• Avoid generic phrases - be specific to what's discussed
+• {style_guide}
+• Keep each bullet 8-15 words{context_note}
+
+GOOD EXAMPLES ({style} style):
+{examples_text}
+
+CONTENT TO ANALYZE:
+{text}
+
+OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+
+        return prompt
+
+    def _refine_bullets(self, bullets: List[str], original_text: str) -> List[str]:
+        """
+        Second-pass refinement: improve clarity, conciseness, and parallel structure.
+
+        Args:
+            bullets: Initial bullet points from first pass
+            original_text: Original content (for fact-checking)
+
+        Returns:
+            Refined bullet points
+        """
+        if not self.client or not bullets:
+            return bullets
+
+        try:
+            bullets_text = '\n'.join(f"{i+1}. {bullet}" for i, bullet in enumerate(bullets))
+
+            refinement_prompt = f"""Review these slide bullets for quality and consistency. Improve them while maintaining accuracy.
+
+ORIGINAL CONTENT (for reference):
+{original_text[:500]}...
+
+CURRENT BULLETS:
+{bullets_text}
+
+REFINEMENT CHECKLIST:
+• ✓ Each bullet 8-15 words (shorten if needed)
+• ✓ Parallel grammatical structure (all start similarly)
+• ✓ Active voice preferred over passive
+• ✓ Specific and concrete (no vague generalities)
+• ✓ Factually accurate to source material
+• ✓ No redundancy between bullets
+
+INSTRUCTIONS:
+- Keep the core message of each bullet
+- Make minimal changes - only improve clarity/conciseness
+- If a bullet is already good, keep it unchanged
+- Remove any redundant or low-value bullets
+- Ensure parallel phrasing (e.g., all start with action verbs)
+
+OUTPUT: Return the refined bullets, one per line, no numbering."""
+
+            message = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=400,
+                temperature=0.1,  # Lower temperature for refinement
+                messages=[
+                    {"role": "user", "content": refinement_prompt}
+                ]
+            )
+
+            refined_text = message.content[0].text.strip()
+
+            # Parse refined bullets
+            refined_bullets = []
+            for line in refined_text.split('\n'):
+                line = line.strip()
+                if line and len(line) > 15:
+                    line = line.lstrip('•-*123456789. ')
+                    if line and len(line) > 15:
+                        refined_bullets.append(line)
+
+            if len(refined_bullets) >= len(bullets) - 1:  # Allow slight reduction
+                logger.info(f"Refinement pass: {len(bullets)} → {len(refined_bullets)} bullets")
+                return refined_bullets
+            else:
+                logger.warning(f"Refinement removed too many bullets, keeping original")
+                return bullets
+
+        except Exception as e:
+            logger.error(f"Bullet refinement failed: {e}, keeping original bullets")
+            return bullets
+
+    def _create_llm_only_bullets(self, text: str, context_heading: str = None,
+                                style: str = 'professional', enable_refinement: bool = False) -> List[str]:
+        """
+        Create bullets using Claude with structured, adaptive prompts.
+
+        ENHANCEMENT: Uses content-aware prompts with few-shot examples and optional refinement.
+
+        Args:
+            text: Content to summarize
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', or 'executive'
+            enable_refinement: If True, run second pass for quality improvement
+
+        Returns:
+            List of bullet points
+        """
         if not self.client:
             return []
 
         try:
-            # Advanced prompt with context-aware summarization
-            word_count = len(text.split())
-            content_type = "technical" if any(term in text.lower() for term in ["data", "system", "process", "framework", "pipeline", "model"]) else "general"
+            # STEP 1: Detect content type for adaptive strategy
+            content_info = self._detect_content_type(text)
+            logger.info(f"LLM bullet generation: {content_info['type']} content, {content_info['word_count']} words")
 
-            prompt = f"""You are an expert at creating slide content from educational material. Analyze the following {content_type} content ({word_count} words) and create 3-5 specific bullet points.
+            # STEP 2: Build structured prompt based on content type and style
+            prompt = self._build_structured_prompt(
+                text,
+                content_info,
+                context_heading=context_heading,
+                style=style
+            )
 
-CONTEXT-AWARE INSTRUCTIONS:
-• Focus on the most actionable insights and key concepts
-• Each bullet should be self-contained and specific to this content
-• Use concise, professional language (8-15 words per bullet)
-• Start bullets with action verbs when describing processes or skills
-• Include concrete details, tools, or examples mentioned in the text
-• Avoid generic phrases - be specific to what's actually discussed
-
-CONTENT TO SUMMARIZE:
-{text}
-
-OUTPUT FORMAT:
-Return only the bullet points, one per line, without symbols or numbering."""
-
+            # STEP 3: Generate initial bullets
             message = self.client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=500,
@@ -2014,7 +2316,7 @@ Return only the bullet points, one per line, without symbols or numbering."""
 
             content = message.content[0].text.strip()
 
-            # Parse bullets from response
+            # STEP 4: Parse bullets from response
             bullets = []
             for line in content.split('\n'):
                 line = line.strip()
@@ -2024,7 +2326,13 @@ Return only the bullet points, one per line, without symbols or numbering."""
                     if line and not line.startswith('(') and len(line) > 15:
                         bullets.append(line)
 
-            logger.info(f"Claude generated {len(bullets)} content-specific bullets")
+            logger.info(f"LLM generated {len(bullets)} bullets (type: {content_info['type']}, style: {style})")
+
+            # STEP 5: Optional refinement pass for quality improvement
+            if enable_refinement and bullets:
+                logger.info("Running refinement pass...")
+                bullets = self._refine_bullets(bullets, text)
+
             return bullets
 
         except Exception as e:
