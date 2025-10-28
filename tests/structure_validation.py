@@ -40,13 +40,13 @@ STRUCTURE_TEST_SET = [
         description="Video script with plain text lesson headers + script table",
         file_path="ryans_doc.txt",
         script_column=1,
-        expected_slide_count=37,  # 12 lesson headers + ~25 script table rows
+        expected_slide_count=15,  # 12 lesson headers + 3 content groups
         expected_title_slides=12,  # Lesson headers should be title slides
-        expected_content_slides=25,  # Script table rows with narration
+        expected_content_slides=3,  # Narration paragraphs grouped by headings
         expected_heading_patterns=[
             "Lesson 1 - Specialization & Course Introduction",
             "C1W1L1_1 - Welcome to AI for Good",
-            "C1W1L1_2 - What is \"AI for Good\"?",
+            "C1W1L1_2 - What is \u201cAI for Good\u201d?",  # Unicode curly quotes
             "C1W1L1_3 - Microsoft AI for Good Lab",
             "C1W1L1_4 - The Courses in this Specialization",
             "C1W1L1_5 - Project spotlight: Charles Onu",
@@ -83,9 +83,9 @@ STRUCTURE_TEST_SET = [
         description="Script table with narration in column 1",
         file_path="ryans_doc.txt",
         script_column=1,
-        expected_slide_count=37,
+        expected_slide_count=15,  # Same as video_script test
         expected_title_slides=12,
-        expected_content_slides=25,
+        expected_content_slides=3,  # Narration paragraphs grouped by headings
         expected_heading_patterns=[
             "Lesson 1 - Specialization & Course Introduction",
             "C1W1L1_1 - Welcome to AI for Good"
@@ -94,12 +94,12 @@ STRUCTURE_TEST_SET = [
 
     StructureTest(
         id="script_table_stage_directions_column",
-        description="Script table with stage directions in column 2 (should skip)",
+        description="Script table with stage directions in column 2 (extracts visual cues)",
         file_path="ryans_doc.txt",
         script_column=2,
-        expected_slide_count=12,  # Only lesson headers, table rows skipped as stage directions
+        expected_slide_count=13,  # 12 lesson headers + 1 content slide from stage directions
         expected_title_slides=12,
-        expected_content_slides=0,  # Stage direction rows should be filtered out
+        expected_content_slides=1,  # Stage direction lines grouped into content
         expected_heading_patterns=[
             "Lesson 1 - Specialization & Course Introduction"
         ]

@@ -855,30 +855,59 @@ Return your analysis as a JSON object with:
         for i, line in enumerate(lines):
             # Check if this line is a tab-separated table row BEFORE stripping (tabs might be at start)
             if '\t' in line:
-                cells = line.split('\t')
-                # Strip each cell individually
-                cells = [cell.strip() for cell in cells]
+                # Detect format: leading tab (column indicator) vs traditional tab-delimited
+                is_leading_tab_format = line.startswith('\t')
 
-                # If column mode is active (script_column > 0), only extract from that column
-                if script_column > 0:
-                    if len(cells) >= script_column:
-                        cell_text = cells[script_column - 1]
-                        if cell_text:
-                            # Clean up the text
-                            cleaned_text = self._clean_script_text(cell_text)
-                            if cleaned_text and len(cleaned_text) > 10:
-                                processed_lines.append(cleaned_text)
-                                logger.info(f"Extracted from column {script_column}: {cleaned_text[:50]}...")
+                if is_leading_tab_format:
+                    # LEADING TAB FORMAT: Line starting with tab = column 2, no tab = column 1
+                    # Example:
+                    #   "Narration text here"           <- column 1
+                    #   "\t[Stage direction here]"      <- column 2 (starts with tab)
+
+                    if script_column > 0:
+                        if script_column == 2:
+                            # Extract lines starting with tab (stage directions)
+                            cell_text = line.lstrip('\t').strip()
+                            if cell_text:
+                                cleaned_text = self._clean_script_text(cell_text)
+                                if cleaned_text and len(cleaned_text) > 10:
+                                    processed_lines.append(cleaned_text)
+                                    logger.info(f"Extracted from column 2 (leading tab): {cleaned_text[:50]}...")
+                        # If script_column == 1, skip lines with leading tabs
+                        continue
                     else:
-                        logger.debug(f"Row has only {len(cells)} columns, cannot access column {script_column}")
-                    continue
-                else:
-                    # In paragraph mode (script_column == 0), extract all cells from table
-                    for cell in cells:
-                        cell_text = cell.strip()
+                        # In paragraph mode, extract tab-prefixed content
+                        cell_text = line.lstrip('\t').strip()
                         if cell_text and len(cell_text) > 10:
                             processed_lines.append(cell_text)
-                    continue
+                        continue
+
+                else:
+                    # TRADITIONAL TAB-DELIMITED FORMAT: narration[TAB]stage_direction
+                    cells = line.split('\t')
+                    # Strip each cell individually
+                    cells = [cell.strip() for cell in cells]
+
+                    # If column mode is active (script_column > 0), only extract from that column
+                    if script_column > 0:
+                        if len(cells) >= script_column:
+                            cell_text = cells[script_column - 1]
+                            if cell_text:
+                                # Clean up the text
+                                cleaned_text = self._clean_script_text(cell_text)
+                                if cleaned_text and len(cleaned_text) > 10:
+                                    processed_lines.append(cleaned_text)
+                                    logger.info(f"Extracted from column {script_column}: {cleaned_text[:50]}...")
+                        else:
+                            logger.debug(f"Row has only {len(cells)} columns, cannot access column {script_column}")
+                        continue
+                    else:
+                        # In paragraph mode (script_column == 0), extract all cells from table
+                        for cell in cells:
+                            cell_text = cell.strip()
+                            if cell_text and len(cell_text) > 10:
+                                processed_lines.append(cell_text)
+                        continue
 
             # Process non-table lines (headings and paragraphs)
             line = line.strip()
@@ -895,8 +924,17 @@ Return your analysis as a JSON object with:
             no_ending_punct = not line.endswith(('.', ',', ';', ':'))
             has_multiple_words = len(line.split()) >= 2
 
+            # VIDEO SCRIPT HEADER detection: Lesson N - Title OR C#W#L#_# - Title
+            # Pattern 1: "Lesson 1 - Specialization & Course Introduction"
+            # Pattern 2: "C1W1L1_1 - Welcome to AI for Good"
+            video_script_pattern = re.match(r'^(Lesson\s+\d+|C\d+W\d+L\d+_\d+)\s*-\s*.+$', line, re.IGNORECASE)
+            if video_script_pattern:
+                is_heading = True
+                heading_level = 2  # Treat as H2 (section heading)
+                logger.info(f"Detected video script header: {line}")
+
             # H1 detection: All caps, short, typically at start
-            if (is_short and line.isupper() and has_multiple_words and i < 5):
+            elif (is_short and line.isupper() and has_multiple_words and i < 5):
                 is_heading = True
                 heading_level = 1
                 line = line.title()  # Convert to title case
@@ -926,13 +964,19 @@ Return your analysis as a JSON object with:
                 line = '#' * heading_level + ' ' + line
                 logger.info(f"Detected H{heading_level} heading: {line}")
 
-            # Include headings and paragraphs always (paragraphs are outside tables)
+            # Include headings always
             if is_heading:
                 processed_lines.append(line)
             elif len(line) > 30:
-                # Include substantial paragraph content regardless of column mode
-                # (Tables handle column filtering separately)
-                processed_lines.append(line)
+                # Include substantial paragraph content (narration = column 1)
+                # Only include if script_column=0 (paragraph mode) or script_column=1 (narration)
+                if script_column == 0 or script_column == 1:
+                    processed_lines.append(line)
+                    if script_column == 1:
+                        logger.info(f"Extracted narration (column 1): {line[:50]}...")
+                        # Add blank line after narration to prevent merging paragraphs into one slide
+                        processed_lines.append('')
+                # If script_column=2, skip narration lines (only want stage directions from leading tabs)
 
         # Join lines with single newlines
         result = '\n'.join(processed_lines)
