@@ -1984,11 +1984,12 @@ Return your analysis as a JSON object with:
 
                     # Get pending visual cues if any
                     slide_visual_cues = getattr(self, '_pending_visual_cues', None)
+                    slide_heading_level = 4 if pending_h4_title else None
                     slides.append(SlideContent(
-                        title=self._prepare_slide_title(slide_title),
+                        title=self._prepare_slide_title(slide_title, heading_level=slide_heading_level),
                         content=bullet_points,
                         slide_type='script',
-                        heading_level=4 if pending_h4_title else None,
+                        heading_level=slide_heading_level,
                         subheader=topic_sentence,
                         visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
                     ))
@@ -2006,7 +2007,7 @@ Return your analysis as a JSON object with:
                 else:
                     # H1, H2, H3 - create title/section slides
                     slides.append(SlideContent(
-                        title=self._prepare_slide_title(heading_text),
+                        title=self._prepare_slide_title(heading_text, heading_level=heading_level),
                         content=[],
                         slide_type='heading',
                         heading_level=heading_level
@@ -2079,11 +2080,12 @@ Return your analysis as a JSON object with:
 
             # Get pending visual cues if any
             slide_visual_cues = getattr(self, '_pending_visual_cues', None)
+            slide_heading_level = 4 if pending_h4_title else None
             slides.append(SlideContent(
-                title=self._prepare_slide_title(slide_title),
+                title=self._prepare_slide_title(slide_title, heading_level=slide_heading_level),
                 content=bullet_points,
                 slide_type='script',
-                heading_level=4 if pending_h4_title else None,
+                heading_level=slide_heading_level,
                 subheader=topic_sentence,
                 visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
             ))
@@ -2729,12 +2731,97 @@ Return your analysis as a JSON object with:
 
         return title
 
-    def _prepare_slide_title(self, raw_title: str) -> str:
+    def _apply_sentence_case(self, title: str) -> str:
         """
-        Prepare slide title by optimizing and applying smart title case.
+        Apply sentence case: capitalize first word and preserve acronyms/proper nouns.
+
+        Used for H2, H3, H4 headings to create a more professional, less shouty appearance.
+
+        Args:
+            title: The title text to convert
+
+        Returns:
+            Title in sentence case with acronyms preserved
+        """
+        if not title:
+            return title
+
+        # Same acronyms list as _smart_title_case for consistency
+        acronyms = {
+            'ai', 'ml', 'api', 'apis', 'rest', 'crud', 'http', 'https', 'url', 'uri',
+            'html', 'css', 'js', 'sql', 'nosql', 'json', 'xml', 'yaml',
+            'aws', 'gcp', 'azure', 'saas', 'paas', 'iaas',
+            'ui', 'ux', 'ui/ux', 'roi', 'kpi', 'ceo', 'cto', 'cfo',
+            'iot', 'ar', 'vr', 'xr', 'devops', 'cicd', 'ci/cd',
+            'seo', 'crm', 'erp', 'sdk', 'ide', 'cli', 'gui',
+            'tcp', 'udp', 'ip', 'dns', 'ssl', 'tls', 'ssh', 'ftp',
+            'ram', 'rom', 'cpu', 'gpu', 'ssd', 'hdd', 'usb',
+            'pdf', 'csv', 'xlsx', 'docx', 'pptx',
+            'github', 'gitlab', 'docker', 'kubernetes', 'k8s',
+            'react', 'vue', 'angular', 'node', 'nodejs', 'npm',
+            'python', 'java', 'javascript', 'typescript', 'golang', 'php', 'ruby',
+            'mysql', 'postgresql', 'mongodb', 'redis', 'elasticsearch',
+            'oauth', 'jwt', 'saml', 'ldap', 'ad',
+            'gdpr', 'hipaa', 'pci', 'sox', 'iso'
+        }
+
+        # Split into words, preserving spaces and punctuation
+        words = []
+        current_word = []
+
+        for char in title:
+            if char.isalnum() or char in ["'", "'"]:
+                current_word.append(char)
+            else:
+                if current_word:
+                    words.append((''.join(current_word), False))
+                    current_word = []
+                words.append((char, True))  # Mark as punctuation
+
+        if current_word:
+            words.append((''.join(current_word), False))
+
+        # Process words: first word and acronyms capitalized, rest lowercase
+        result = []
+        is_first_word = True
+
+        for word, is_punct in words:
+            if is_punct:
+                result.append(word)
+                continue
+
+            word_lower = word.lower()
+
+            # Check if it's an acronym that should stay uppercase
+            if word_lower in acronyms:
+                result.append(word.upper())
+            # First word gets capitalized
+            elif is_first_word:
+                result.append(word.capitalize())
+                is_first_word = False
+            # Everything else stays lowercase
+            else:
+                result.append(word_lower)
+
+        final_title = ''.join(result)
+
+        # Ensure first character is capitalized (in case title started with punctuation)
+        if final_title:
+            final_title = final_title[0].upper() + final_title[1:]
+
+        return final_title
+
+    def _prepare_slide_title(self, raw_title: str, heading_level: int = None) -> str:
+        """
+        Prepare slide title by optimizing and applying appropriate casing.
+
+        - H1 headings: Title Case (capitalize major words)
+        - H2-H4 headings: Sentence case (capitalize first word only)
+        - No heading level: Title Case (for content slides)
 
         Args:
             raw_title: Raw title from document
+            heading_level: Optional heading level (1-4)
 
         Returns:
             Optimized and properly formatted title
@@ -2745,8 +2832,13 @@ Return your analysis as a JSON object with:
         # Step 1: Optimize (shorten if needed)
         optimized = self._optimize_title(raw_title)
 
-        # Step 2: Apply smart title case
-        final_title = self._smart_title_case(optimized)
+        # Step 2: Apply appropriate casing based on heading level
+        if heading_level and heading_level >= 2:
+            # H2, H3, H4: Use sentence case for professional appearance
+            final_title = self._apply_sentence_case(optimized)
+        else:
+            # H1 or no heading level: Use title case
+            final_title = self._smart_title_case(optimized)
 
         return final_title
 
