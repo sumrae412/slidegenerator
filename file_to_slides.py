@@ -2457,28 +2457,33 @@ CONTENT TO ANALYZE:
 OUTPUT: Return 2-4 bullets, one per line, no symbols or numbering."""
 
         else:  # paragraph or mixed
-            prompt = f"""You are creating slide bullets from narrative content. Analyze this {word_count}-word {complexity} passage and extract 3-5 key points.
+            prompt = f"""You are creating slide bullets from narrative content. Analyze this {word_count}-word {complexity} passage and extract 3-5 key statements.
 
 CONTENT TYPE: {content_type.title()} Content
 STYLE: {style}
 COMPLEXITY: {complexity}
 
 INSTRUCTIONS:
-• Extract the most important actionable insights and key concepts
-• Each bullet must be self-contained and specific to this content
-• Start with action verbs when describing processes or steps
+• Extract complete thoughts and key statements directly from the text
+• Remove conversational filler ("As you've seen", "I'd like to", "Now let's", "whether that's", etc.)
+• Preserve the substance of each key idea in clean, grammatically complete sentences
+• Each bullet should capture one main concept or point
 • Include concrete details, examples, or data points mentioned
-• Avoid generic phrases - be specific to what's discussed
+• Start with the core statement - eliminate preambles and transitions
 • {style_guide}
-• Keep each bullet 8-15 words{context_note}
+• Keep each bullet 10-20 words (allow longer if needed for completeness){context_note}
 
-GOOD EXAMPLES ({style} style):
-{examples_text}
+EXTRACTION EXAMPLES:
+Input: "As you've seen from the previous videos, the possible applications of AI are wide ranging..."
+Output: "the possible applications of AI are wide ranging"
+
+Input: "I'd now like to spend time discussing how being able to get an algorithm to reliably perform what might be a relatively simple task can actually be a powerful tool."
+Output: "being able to get an algorithm to reliably perform a relatively simple task can be a powerful tool in many projects"
 
 CONTENT TO ANALYZE:
 {text}
 
-OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering. Extract key statements directly, preserving complete thoughts."""
 
         return prompt
 
