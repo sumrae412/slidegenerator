@@ -2457,33 +2457,35 @@ CONTENT TO ANALYZE:
 OUTPUT: Return 2-4 bullets, one per line, no symbols or numbering."""
 
         else:  # paragraph or mixed
-            prompt = f"""You are creating slide bullets from narrative content. Analyze this {word_count}-word {complexity} passage and extract 3-5 key statements.
+            prompt = f"""Extract slide bullets from transcript/narrative content. Your goal: identify KEY FACTS while completely removing conversational filler.
 
-CONTENT TYPE: {content_type.title()} Content
-STYLE: {style}
-COMPLEXITY: {complexity}
+CRITICAL RULES:
+1. NO transitional phrases: "As you've seen", "I'd like to", "Now let's", "In this video", "whether that's"
+2. NO incomplete sentences - complete every thought you start
+3. NO truncation mid-sentence - finish the statement
+4. Extract SUBSTANCE only - ignore filler words
 
-INSTRUCTIONS:
-• Extract complete thoughts and key statements directly from the text
-• Remove conversational filler ("As you've seen", "I'd like to", "Now let's", "whether that's", etc.)
-• Preserve the substance of each key idea in clean, grammatically complete sentences
-• Each bullet should capture one main concept or point
-• Include concrete details, examples, or data points mentioned
-• Start with the core statement - eliminate preambles and transitions
-• {style_guide}
-• Keep each bullet 10-20 words (allow longer if needed for completeness){context_note}
+WRONG EXAMPLES (what NOT to output):
+❌ "I'd now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying."
+❌ "As you've seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform."
+❌ "The goal of any AI for Good project is to have a positive impact in the world, whether that's."
 
-EXTRACTION EXAMPLES:
-Input: "As you've seen from the previous videos, the possible applications of AI are wide ranging..."
-Output: "the possible applications of AI are wide ranging"
+RIGHT EXAMPLES (correct extraction):
+✓ "the possible applications of AI are wide ranging"
+✓ "being able to get an algorithm to reliably perform what might be a relatively simple task for you or me can actually be a powerful tool in many types of projects"
+✓ "the goal of any AI for Good project is to have a positive impact in the world"
 
-Input: "I'd now like to spend time discussing how being able to get an algorithm to reliably perform what might be a relatively simple task can actually be a powerful tool."
-Output: "being able to get an algorithm to reliably perform a relatively simple task can be a powerful tool in many projects"
+PROCESS:
+1. Read entire text
+2. Identify key facts (ignore conversational language)
+3. Extract each as complete sentence
+4. Remove ALL filler words
+5. Ensure bullets can stand alone
 
-CONTENT TO ANALYZE:
+CONTENT:
 {text}
 
-OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering. Extract key statements directly, preserving complete thoughts."""
+OUTPUT: 3-5 bullets, one per line, no symbols. Complete sentences only. Remove all conversational filler.
 
         return prompt
 
@@ -2595,7 +2597,7 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             # STEP 3: Generate initial bullets
             message = self.client.messages.create(
                 model="claude-3-5-sonnet-20241022",
-                max_tokens=500,
+                max_tokens=800,  # Increased to prevent truncation of complete sentences
                 temperature=0.3,
                 messages=[
                     {"role": "user", "content": prompt}
