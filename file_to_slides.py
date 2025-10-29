@@ -2245,8 +2245,8 @@ Return your analysis as a JSON object with:
         # Try LLM first if API key is available
         if self.api_key and not self.force_basic_mode:
             logger.info("Using enhanced LLM approach with structured prompts")
-            # Auto-detect style based on content (can be made configurable later)
-            style = 'educational' if any(term in text.lower() for term in ['learn', 'student', 'course', 'lesson']) else 'professional'
+            # Auto-detect style based on content and context
+            style = self._detect_content_style(text, context_heading)
             llm_bullets = self._create_llm_only_bullets(
                 text,
                 context_heading=context_heading,
@@ -2472,6 +2472,104 @@ Return your analysis as a JSON object with:
             'word_count': word_count,
             'sentence_count': sentence_count
         }
+
+    def _detect_content_style(self, text: str, context_heading: str = None) -> str:
+        """
+        Detect the writing style of content to optimize bullet generation.
+
+        Analyzes both text content and heading context to determine if content is:
+        - 'educational': Learning-focused, tutorials, courses
+        - 'technical': Implementation details, code, architecture
+        - 'executive': Business metrics, strategy, outcomes
+        - 'professional': General business communication (default)
+
+        Args:
+            text: Content to analyze
+            context_heading: Optional heading for additional context
+
+        Returns:
+            Style string: 'educational', 'technical', 'executive', or 'professional'
+        """
+        text_lower = text.lower()
+        heading_lower = (context_heading or "").lower()
+        combined = f"{text_lower} {heading_lower}"
+
+        # Score each style based on keyword presence
+        style_scores = {
+            'educational': 0,
+            'technical': 0,
+            'executive': 0,
+            'professional': 0
+        }
+
+        # Educational indicators (learning, teaching, student-focused)
+        educational_keywords = [
+            'learn', 'student', 'course', 'lesson', 'tutorial', 'teach', 'understand',
+            'practice', 'exercise', 'homework', 'assignment', 'quiz', 'exam',
+            'classroom', 'instructor', 'professor', 'semester', 'curriculum',
+            'fundamentals', 'introduction', 'beginner', 'basic concepts', 'learning objectives'
+        ]
+        style_scores['educational'] = sum(2 if keyword in combined else 0 for keyword in educational_keywords)
+
+        # Technical indicators (implementation, code, architecture)
+        technical_keywords = [
+            'api', 'function', 'class', 'method', 'algorithm', 'implementation', 'code',
+            'framework', 'library', 'database', 'query', 'compile', 'runtime', 'debug',
+            'architecture', 'protocol', 'endpoint', 'microservice', 'kubernetes', 'docker',
+            'git', 'deployment', 'configuration', 'parameter', 'variable', 'syntax',
+            'inheritance', 'polymorphism', 'asynchronous', 'synchronous', 'cache'
+        ]
+        style_scores['technical'] = sum(2 if keyword in combined else 0 for keyword in technical_keywords)
+
+        # Executive indicators (metrics, strategy, business outcomes)
+        executive_keywords = [
+            'revenue', 'growth', 'roi', 'profit', 'cost', 'savings', 'investment',
+            'quarter', 'quarterly', 'annual', 'forecast', 'target', 'goal', 'kpi',
+            'strategy', 'strategic', 'initiative', 'roadmap', 'priority', 'milestone',
+            'market', 'customer', 'retention', 'acquisition', 'expansion', 'partnership',
+            'risk', 'opportunity', 'competitive', 'advantage', 'performance', 'results',
+            'budget', 'stakeholder', 'board', 'executive', 'leadership'
+        ]
+        style_scores['executive'] = sum(2 if keyword in combined else 0 for keyword in executive_keywords)
+
+        # Professional indicators (general business language - gets base score)
+        professional_keywords = [
+            'team', 'project', 'process', 'workflow', 'management', 'organization',
+            'communication', 'collaboration', 'efficiency', 'quality', 'improvement',
+            'policy', 'procedure', 'standard', 'guideline', 'best practice'
+        ]
+        style_scores['professional'] = sum(1 if keyword in combined else 0 for keyword in professional_keywords)
+
+        # Boost from heading context (headings carry more weight)
+        if context_heading:
+            if any(word in heading_lower for word in ['learn', 'course', 'tutorial', 'lesson']):
+                style_scores['educational'] += 5
+            if any(word in heading_lower for word in ['api', 'technical', 'implementation', 'architecture']):
+                style_scores['technical'] += 5
+            if any(word in heading_lower for word in ['results', 'metrics', 'performance', 'revenue', 'strategy']):
+                style_scores['executive'] += 5
+
+        # Pattern detection (beyond keywords)
+        # Detect code-like patterns (increases technical score)
+        if any(pattern in text for pattern in ['()', '{', '}', '[]', '==', '!=', '->', '=>']):
+            style_scores['technical'] += 3
+
+        # Detect percentage/currency patterns (increases executive score)
+        if any(pattern in text for pattern in ['%', '$', '€', '£', '₹']) or \
+           any(word in text_lower for word in ['million', 'billion', 'percent']):
+            style_scores['executive'] += 3
+
+        # Get highest scoring style
+        max_score = max(style_scores.values())
+
+        # Require minimum threshold to override default 'professional'
+        if max_score >= 4:  # At least 2 strong indicators
+            detected_style = max(style_scores, key=style_scores.get)
+            logger.info(f"🎨 Style detected: {detected_style} (score: {max_score}, scores: {style_scores})")
+            return detected_style
+        else:
+            logger.info(f"🎨 Style defaulting to: professional (max score {max_score} below threshold, scores: {style_scores})")
+            return 'professional'
 
     def _build_structured_prompt(self, text: str, content_info: dict,
                                  context_heading: str = None, style: str = 'professional') -> str:
