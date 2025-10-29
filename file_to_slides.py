@@ -1587,95 +1587,72 @@ Return your analysis as a JSON object with:
         # If content is already short, return as-is
         return (module_id + content).strip()
     
-    def _create_simple_content_title(self, content_line: str) -> str:
-        """Create a simple, short title for regular content slides (not headings)"""
-        if not content_line or len(content_line.strip()) == 0:
+    def _create_title_from_bullets(self, bullet_points: list, source_text: str = "") -> str:
+        """Create a title that summarizes the main point conveyed by the bullet points.
+
+        Args:
+            bullet_points: List of bullet point strings
+            source_text: Optional source text as fallback
+
+        Returns:
+            A concise title (max 50 chars) summarizing the bullets' main point
+        """
+        if not bullet_points or len(bullet_points) == 0:
+            # Fallback to source text if available
+            if source_text:
+                return self._create_simple_content_title_fallback(source_text)
             return "Content Slide"
 
-        line = content_line.strip()
+        # Strategy: Extract the main theme/topic from bullets
+        # 1. Find common keywords and topics across all bullets
+        # 2. Look for the subject/main concept being discussed
+        # 3. Create a concise summary phrase
 
-        # Remove markdown prefixes if present
-        if line.startswith('#'):
-            line = line.lstrip('#').strip()
+        # Combine all bullets to analyze common themes
+        all_text = ' '.join(bullet_points).lower()
 
-        # Strategy: Create meaningful titles by focusing on actual content
-        # 1. Strip introductory/transition phrases
-        # 2. Look for natural break points (commas, periods)
-        # 3. Extract complete phrases, not fragments
-        # 4. Max 50 characters for readability
+        # Extract key nouns and topics from first bullet (often contains main theme)
+        first_bullet = bullet_points[0]
 
-        # Strip common introductory phrases that don't make good titles
-        intro_phrases = [
-            'For example, ',
-            'For instance, ',
-            'In addition, ',
-            'However, ',
-            'Moreover, ',
-            'Furthermore, ',
-            'Therefore, ',
-            'Nevertheless, ',
-            'Consequently, ',
-            'In contrast, ',
-            'On the other hand, ',
-            'As a result, ',
-            'In this case, ',
-            'In these cases, ',
-            'In this situation, ',
-        ]
-
-        for phrase in intro_phrases:
-            if line.startswith(phrase):
-                line = line[len(phrase):].strip()
+        # Remove common introductory words to get to the core content
+        intro_words = ['however', 'moreover', 'furthermore', 'additionally', 'also', 'for example', 'for instance']
+        first_lower = first_bullet.lower()
+        for intro in intro_words:
+            if first_lower.startswith(intro):
+                first_bullet = first_bullet[len(intro):].strip()
+                if first_bullet.startswith(','):
+                    first_bullet = first_bullet[1:].strip()
                 break
 
-        words = line.split()
-        if len(words) <= 5:
-            # If it's already short (5 words or less), use it
-            if len(line) <= 50:
-                return line
-            else:
-                # Still truncate at 50 chars if too long
-                return line[:50].strip()
+        words = first_bullet.split()
 
-        # Look for natural break points within reasonable length
-        # Strategy: Find first comma or period that creates a complete phrase
+        # Look for the main subject/topic in the first bullet
+        # Strategy: Extract subject-verb-object or main noun phrase
 
-        # Check for comma-separated phrases (up to 50 chars)
-        if ', ' in line[:50]:
-            comma_idx = line[:50].index(', ')
-            # Only use if the part before comma is substantial (at least 20 chars, 3 words)
-            before_comma = line[:comma_idx].strip()
-            if len(before_comma) >= 20 and len(before_comma.split()) >= 3:
+        # If first bullet is short enough, use it directly
+        if len(first_bullet) <= 50:
+            return first_bullet
+
+        # Look for natural break points in first bullet
+        if ', ' in first_bullet[:50]:
+            comma_idx = first_bullet[:50].index(', ')
+            before_comma = first_bullet[:comma_idx].strip()
+            if len(before_comma) >= 15 and len(before_comma.split()) >= 3:
                 return before_comma
 
-        # Check for colon or dash (these often introduce key concepts)
-        for separator in [': ', ' - ', ' — ']:
-            if separator in line[:60]:
-                sep_idx = line[:60].index(separator)
-                before_sep = line[:sep_idx].strip()
-                # Colon/dash should have meaningful text before it
-                if len(before_sep) >= 15 and len(before_sep.split()) >= 2:
+        # Look for colon or dash (key concept markers)
+        for sep in [': ', ' - ', ' — ']:
+            if sep in first_bullet[:60]:
+                sep_idx = first_bullet[:60].index(sep)
+                before_sep = first_bullet[:sep_idx].strip()
+                if len(before_sep) >= 15:
                     return before_sep
 
-        # No good break point found - take first 4-5 words but ensure it makes sense
-        # Avoid cutting in the middle of common phrase patterns
-
-        # If text starts with a preposition, it's likely a fragment - skip ahead
-        leading_preps = ['in', 'at', 'on', 'by', 'with', 'from', 'through', 'during', 'after', 'before']
-        if words[0].lower() in leading_preps and len(words) > 6:
-            # Skip the prepositional phrase and start from the next clause
-            # Look for capital letter or a verb that signals main clause
-            for i in range(1, min(6, len(words))):
-                if words[i][0].isupper() or words[i].lower() in ['the', 'these', 'those', 'there']:
-                    words = words[i:]
-                    break
-
-        # Take first 5 words as a starting point
+        # Extract first 5-6 words as title, avoiding incomplete phrases
         title_words = words[:5]
         title = ' '.join(title_words)
 
-        # If this creates certain problematic patterns, try to fix
-        # Pattern: ends with incomplete connector or helping verb
+        # Check for incomplete endings and extend if needed
         incomplete_endings = [
             'in', 'to', 'of', 'that', 'with', 'by', 'for', 'at', 'on',
             'the', 'a', 'an',
@@ -1685,9 +1662,8 @@ Return your analysis as a JSON object with:
         ]
 
         if title_words[-1].lower() in incomplete_endings and len(words) > 5:
-            # Add one or two more words to complete the thought
             title_words.append(words[5])
-            if len(words) > 6 and words[5].lower() in ['be', 'been', 'have', 'been']:
+            if len(words) > 6 and words[5].lower() in ['be', 'been', 'have']:
                 title_words.append(words[6])
             title = ' '.join(title_words)
 
@@ -1695,10 +1671,47 @@ Return your analysis as a JSON object with:
         if len(title) > 50:
             title = title[:50]
             last_space = title.rfind(' ')
-            if last_space > 20:  # At least 20 chars
+            if last_space > 20:
                 title = title[:last_space]
 
         return title.strip()
+
+    def _create_simple_content_title_fallback(self, content_line: str) -> str:
+        """Fallback method to create title from source text when bullets aren't available.
+        Used only when bullet generation fails.
+        """
+        if not content_line or len(content_line.strip()) == 0:
+            return "Content Slide"
+
+        line = content_line.strip()
+
+        # Remove markdown prefixes
+        if line.startswith('#'):
+            line = line.lstrip('#').strip()
+
+        # Strip intro phrases
+        intro_phrases = [
+            'For example, ', 'For instance, ', 'In addition, ', 'However, ',
+            'Moreover, ', 'Furthermore, ', 'Therefore, ', 'Nevertheless, '
+        ]
+
+        for phrase in intro_phrases:
+            if line.startswith(phrase):
+                line = line[len(phrase):].strip()
+                break
+
+        words = line.split()
+        if len(words) <= 5:
+            return line[:50] if len(line) <= 50 else line[:50].strip()
+
+        # Take first 5 words, extend if incomplete
+        title = ' '.join(words[:5])
+
+        incomplete_endings = ['in', 'to', 'of', 'that', 'the', 'a', 'an', 'will', 'is', 'are', 'has', 'have']
+        if words[4].lower() in incomplete_endings and len(words) > 5:
+            title = ' '.join(words[:6])
+
+        return title[:50].strip() if len(title) > 50 else title.strip()
     
     def _process_click_markers(self, content: str) -> str:
         """Process [CLICK] markers to create separate content blocks for new slides"""
@@ -1798,9 +1811,12 @@ Return your analysis as a JSON object with:
                 if content_buffer:
                     combined_text = ' '.join(content_buffer)
 
-                    # Use heading as context for better bullet relevance
-                    slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
-                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
+                    # Generate bullets first (use temp heading for context)
+                    temp_context = pending_h4_title if pending_h4_title else "Content"
+                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context)
+
+                    # Then create title that summarizes the bullets
+                    slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, combined_text)
 
                     # Get pending visual cues if any
                     slide_visual_cues = getattr(self, '_pending_visual_cues', None)
@@ -1858,9 +1874,12 @@ Return your analysis as a JSON object with:
                 # BETTER CONTENT GROUPING: Create slide per substantial paragraph
                 # If this is a substantial paragraph (>150 chars), create slide immediately
                 if len(line) > 150:
-                    # Create slide from this single paragraph
-                    slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(line)
-                    topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=slide_title)
+                    # Generate bullets first (use temp heading for context)
+                    temp_context = pending_h4_title if pending_h4_title else "Content"
+                    topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=temp_context)
+
+                    # Then create title that summarizes the bullets
+                    slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, line)
 
                     if bullet_points:  # Only create slide if we got bullets
                         # Get pending visual cues if any
@@ -1887,9 +1906,12 @@ Return your analysis as a JSON object with:
         if content_buffer:
             combined_text = ' '.join(content_buffer)
 
-            # Use heading as context for better bullet relevance
-            slide_title = pending_h4_title if pending_h4_title else self._create_simple_content_title(combined_text)
-            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=slide_title)
+            # Generate bullets first (use temp heading for context)
+            temp_context = pending_h4_title if pending_h4_title else "Content"
+            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context)
+
+            # Then create title that summarizes the bullets
+            slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, combined_text)
 
             # Get pending visual cues if any
             slide_visual_cues = getattr(self, '_pending_visual_cues', None)
