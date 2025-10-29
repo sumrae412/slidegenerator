@@ -703,10 +703,18 @@
                 // Update progress text
                 const progressText = document.getElementById('progress-text');
                 const progressSubtitle = document.getElementById('progress-subtitle');
-                
+
+                // Check if Claude API key is provided for conditional messaging
+                const claudeKey = document.getElementById('claude-key').value.trim();
+                const hasApiKey = claudeKey.length > 0;
+
                 progressText.textContent = 'Converting your document...';
-                progressSubtitle.textContent = 'Processing document and generating visual prompts...';
-                
+                if (hasApiKey) {
+                    progressSubtitle.textContent = 'Processing document and generating visual prompts...';
+                } else {
+                    progressSubtitle.textContent = 'Processing document and generating bullets...';
+                }
+
                 // Simulate progress with dynamic text updates
                 let progressValue = 0;
                 let progressStage = 'converting';
@@ -714,11 +722,16 @@
                     progressValue += Math.random() * 15;
                     if (progressValue > 90) progressValue = 90;
                     progressBar.style.width = progressValue + '%';
-                    
+
                     // Update text based on progress
                     if (progressValue > 30 && progressStage === 'converting') {
-                        progressText.textContent = 'Generating visual prompts...';
-                        progressSubtitle.textContent = 'Creating copyable prompts for image generation';
+                        if (hasApiKey) {
+                            progressText.textContent = 'Generating visual prompts...';
+                            progressSubtitle.textContent = 'Creating copyable prompts for image generation';
+                        } else {
+                            progressText.textContent = 'Generating content...';
+                            progressSubtitle.textContent = 'Creating bullets and formatting slides';
+                        }
                         progressStage = 'generating';
                     }
                 }, 300);
