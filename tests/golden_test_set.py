@@ -312,20 +312,234 @@ The goal of any AI for Good project is to have a positive impact in the world, w
             "must_start_lowercase": True,  # Direct extraction style - preserve original casing
             "no_truncation": True  # Must not end with incomplete thoughts
         }
+    },
+
+    {
+        "id": "tech_code_documentation",
+        "category": "technical",
+        "input_text": """The authenticate() function validates user credentials against the database.
+It accepts username and password parameters, returns a JWT token on success or null on failure.
+Rate limiting prevents brute force attacks by allowing maximum 5 attempts per minute.
+Implementation uses bcrypt for password hashing with salt rounds set to 12.""",
+        "context_heading": "Authentication API",
+        "expected_style": "technical",
+        "expected_bullets": [
+            "authenticate() validates credentials and returns JWT token or null",
+            "Rate limiting restricts login attempts to 5 per minute preventing brute force",
+            "Password security implemented with bcrypt hashing using 12 salt rounds"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 4,
+            "avg_word_length": (8, 14),
+            "must_contain_keywords": ["authenticate", "JWT", "rate limiting"],
+            "technical_terms": ["bcrypt", "salt", "token"]
+        }
+    },
+
+    {
+        "id": "exec_quarterly_results",
+        "category": "executive",
+        "input_text": """Q4 revenue reached $2.8M, up 34% year-over-year.
+Customer retention improved to 94%, highest in company history.
+New enterprise contracts signed with 3 Fortune 500 companies.
+Operating margin expanded from 12% to 18% through efficiency gains.""",
+        "context_heading": "Q4 Performance",
+        "expected_style": "executive",
+        "expected_bullets": [
+            "Q4 revenue hit $2.8M with 34% year-over-year growth",
+            "Customer retention reached record 94%",
+            "Secured 3 new Fortune 500 enterprise contracts",
+            "Operating margin expanded from 12% to 18% via efficiency improvements"
+        ],
+        "quality_criteria": {
+            "min_bullets": 4,
+            "max_bullets": 4,
+            "avg_word_length": (7, 12),
+            "must_contain_keywords": ["revenue", "retention", "margin"],
+            "metrics_indicators": ["%", "$", "Q4"],
+            "preserve_metrics": True
+        }
+    },
+
+    {
+        "id": "edu_python_basics",
+        "category": "educational",
+        "input_text": """This module introduces Python programming fundamentals.
+Students learn variables, data types, and control flow structures.
+Hands-on exercises cover loops, conditionals, and function definitions.
+Final project builds a simple calculator application.""",
+        "context_heading": "Python Programming 101",
+        "expected_style": "educational",
+        "expected_bullets": [
+            "Module introduces Python fundamentals including variables and data types",
+            "Students practice control flow with loops and conditionals",
+            "Hands-on exercises reinforce function definition concepts",
+            "Final project applies learning through calculator application development"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 4,
+            "avg_word_length": (8, 14),
+            "must_contain_keywords": ["students", "Python", "project"],
+            "style_indicators": ["learn", "introduces", "practice"]
+        }
+    },
+
+    {
+        "id": "pro_remote_work",
+        "category": "professional",
+        "input_text": """Remote work provides flexibility for employees to balance professional and personal commitments.
+Companies reduce overhead costs by minimizing office space requirements.
+Asynchronous communication enables global teams to collaborate across time zones.
+Video conferencing technology facilitates face-to-face interaction despite physical distance.""",
+        "context_heading": "Remote Work Benefits",
+        "expected_style": "professional",
+        "expected_bullets": [
+            "Remote work enables employees to balance professional and personal commitments",
+            "Companies reduce overhead by minimizing physical office space needs",
+            "Asynchronous communication supports global team collaboration across time zones",
+            "Video conferencing maintains face-to-face interaction despite distance"
+        ],
+        "quality_criteria": {
+            "min_bullets": 4,
+            "max_bullets": 4,
+            "avg_word_length": (8, 13),
+            "must_contain_keywords": ["remote", "employees", "companies"]
+        }
+    },
+
+    {
+        "id": "table_api_endpoints",
+        "category": "table",
+        "input_text": """Endpoint\tMethod\tDescription
+/users\tGET\tRetrieve user list
+/users/{id}\tGET\tGet specific user
+/users\tPOST\tCreate new user
+/users/{id}\tPUT\tUpdate user
+/users/{id}\tDELETE\tRemove user""",
+        "context_heading": "REST API Endpoints",
+        "expected_style": "technical",
+        "expected_bullets": [
+            "GET /users retrieves complete user list",
+            "GET /users/{id} fetches specific user details",
+            "POST /users creates new user records",
+            "PUT and DELETE enable user updates and removal"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 4,
+            "avg_word_length": (6, 12),
+            "must_contain_keywords": ["GET", "POST", "users"],
+            "table_specific": True
+        }
+    },
+
+    {
+        "id": "list_nested_features",
+        "category": "list",
+        "input_text": """Core Features:
+• User Management
+  - Role-based access control
+  - Single sign-on integration
+  - Activity logging
+• Data Analytics
+  - Real-time dashboards
+  - Custom report builder
+  - Export to CSV/PDF
+• API Integration
+  - REST endpoints
+  - Webhook support
+  - Rate limiting""",
+        "context_heading": "Platform Features",
+        "expected_style": "professional",
+        "expected_bullets": [
+            "User management includes role-based access, SSO integration, and activity logging",
+            "Data analytics provides real-time dashboards and custom reports with CSV/PDF export",
+            "API integration supports REST endpoints, webhooks, and rate limiting"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 3,
+            "avg_word_length": (10, 16),
+            "must_synthesize": True
+        }
+    },
+
+    {
+        "id": "edge_dense_technical",
+        "category": "edge_case",
+        "input_text": """The algorithm implements a modified A* pathfinding with bidirectional search optimization. Time complexity reduces from O(b^d) to O(b^(d/2)) through simultaneous forward-backward traversal. Memory overhead increases linearly with branching factor but remains manageable for typical graph densities. Heuristic admissibility ensures optimal path discovery while maintaining monotonicity constraints.""",
+        "context_heading": "Pathfinding Algorithm",
+        "expected_style": "technical",
+        "expected_bullets": [
+            "Modified A* uses bidirectional search for optimization",
+            "Time complexity improves from O(b^d) to O(b^(d/2)) via simultaneous traversal",
+            "Memory scales linearly with branching factor",
+            "Heuristic maintains admissibility and monotonicity for optimal paths"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 4,
+            "avg_word_length": (8, 14),
+            "handle_technical_density": True
+        }
+    },
+
+    {
+        "id": "edge_multiple_metrics",
+        "category": "edge_case",
+        "input_text": """Performance improved 45% (from 2.3s to 1.26s average response time). Database queries reduced 67% through caching. Memory consumption decreased from 512MB to 187MB (-63%). Error rate dropped from 0.8% to 0.1% (87.5% reduction). CPU utilization optimized from 78% to 34%.""",
+        "context_heading": "Optimization Results",
+        "expected_style": "executive",
+        "expected_bullets": [
+            "Performance improved 45% reducing response time from 2.3s to 1.26s",
+            "Database queries decreased 67% through caching implementation",
+            "Memory consumption reduced 63% from 512MB to 187MB",
+            "Error rate dropped 87.5% from 0.8% to 0.1%"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 4,
+            "avg_word_length": (8, 13),
+            "preserve_metrics": True,
+            "metrics_indicators": ["%", "MB", "s"]
+        }
+    },
+
+    {
+        "id": "pro_change_management",
+        "category": "professional",
+        "input_text": """Successful organizational change requires clear communication of objectives and rationale. Leadership must actively engage stakeholders throughout the transition process. Training programs prepare employees for new systems and workflows. Regular feedback loops identify concerns and enable course corrections. Celebrating milestones maintains momentum and reinforces positive behaviors.""",
+        "context_heading": "Change Management Best Practices",
+        "expected_style": "professional",
+        "expected_bullets": [
+            "Clear communication establishes change objectives and rationale for stakeholders",
+            "Leadership engagement throughout transition builds stakeholder commitment",
+            "Training programs prepare employees for new systems and workflows",
+            "Feedback loops enable concern identification and course corrections",
+            "Milestone celebrations maintain momentum and reinforce progress"
+        ],
+        "quality_criteria": {
+            "min_bullets": 4,
+            "max_bullets": 5,
+            "avg_word_length": (8, 13),
+            "must_contain_keywords": ["change", "employees", "stakeholders"]
+        }
     }
 ]
 
 # Test categories for organized testing
 TEST_CATEGORIES = {
-    "educational": ["edu_ml_basics"],
-    "technical": ["tech_microservices", "mixed_paragraph_with_metrics"],
-    "executive": ["exec_digital_transform"],
-    "professional": ["pro_cloud_benefits", "pro_ai_ethics"],
-    "table": ["table_feature_comparison"],
-    "list": ["list_consolidation"],
+    "educational": ["edu_ml_basics", "edu_python_basics"],
+    "technical": ["tech_microservices", "mixed_paragraph_with_metrics", "tech_code_documentation"],
+    "executive": ["exec_digital_transform", "exec_quarterly_results"],
+    "professional": ["pro_cloud_benefits", "pro_ai_ethics", "pro_remote_work", "pro_change_management"],
+    "table": ["table_feature_comparison", "table_api_endpoints"],
+    "list": ["list_consolidation", "list_nested_features"],
     "heading": ["heading_expansion"],
     "transcript": ["transcript_ai_for_good"],
-    "edge_cases": ["edge_very_short", "edge_very_long"]
+    "edge_cases": ["edge_very_short", "edge_very_long", "edge_dense_technical", "edge_multiple_metrics"]
 }
 
 # Minimum quality thresholds (fail tests below these)

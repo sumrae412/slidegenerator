@@ -1976,7 +1976,7 @@ Return your analysis as a JSON object with:
                     # Get pending visual cues if any
                     slide_visual_cues = getattr(self, '_pending_visual_cues', None)
                     slides.append(SlideContent(
-                        title=slide_title,
+                        title=self._prepare_slide_title(slide_title),
                         content=bullet_points,
                         slide_type='script',
                         heading_level=4 if pending_h4_title else None,
@@ -1997,7 +1997,7 @@ Return your analysis as a JSON object with:
                 else:
                     # H1, H2, H3 - create title/section slides
                     slides.append(SlideContent(
-                        title=heading_text,
+                        title=self._prepare_slide_title(heading_text),
                         content=[],
                         slide_type='heading',
                         heading_level=heading_level
@@ -2071,7 +2071,7 @@ Return your analysis as a JSON object with:
             # Get pending visual cues if any
             slide_visual_cues = getattr(self, '_pending_visual_cues', None)
             slides.append(SlideContent(
-                title=slide_title,
+                title=self._prepare_slide_title(slide_title),
                 content=bullet_points,
                 slide_type='script',
                 heading_level=4 if pending_h4_title else None,
@@ -2570,6 +2570,176 @@ Return your analysis as a JSON object with:
         else:
             logger.info(f"🎨 Style defaulting to: professional (max score {max_score} below threshold, scores: {style_scores})")
             return 'professional'
+
+    def _smart_title_case(self, title: str) -> str:
+        """
+        Apply intelligent title case with proper handling of acronyms and special terms.
+
+        Args:
+            title: Raw title string (any case)
+
+        Returns:
+            Properly formatted title with smart capitalization
+        """
+        if not title:
+            return title
+
+        # Common acronyms and abbreviations that should stay uppercase
+        acronyms = {
+            'ai', 'ml', 'api', 'apis', 'rest', 'crud', 'http', 'https', 'url', 'uri',
+            'html', 'css', 'js', 'sql', 'nosql', 'json', 'xml', 'yaml',
+            'aws', 'gcp', 'azure', 'saas', 'paas', 'iaas',
+            'ui', 'ux', 'ui/ux', 'roi', 'kpi', 'ceo', 'cto', 'cfo',
+            'iot', 'ar', 'vr', 'xr', 'devops', 'cicd', 'ci/cd',
+            'nlp', 'llm', 'genai', 'gpu', 'cpu', 'ram',
+            'b2b', 'b2c', 'seo', 'sem', 'crm', 'erp',
+            'gdpr', 'hipaa', 'iso', 'pci', 'sox', 'sla',
+            'mvp', 'poc', 'qa', 'qos', 'rfi', 'rfp',
+            'i/o', 'etl', 'olap', 'oltp', 'rdbms',
+            'usa', 'uk', 'eu', 'usd', 'gbp', 'eur',
+            'nyc', 'sf', 'la', 'dc', 'id'
+        }
+
+        # Words that should stay lowercase (unless at start)
+        lowercase_words = {
+            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for',
+            'from', 'in', 'into', 'nor', 'of', 'on', 'or', 'the',
+            'to', 'up', 'via', 'with', 'per', 'vs'
+        }
+
+        # Split by spaces and process each word
+        words = title.split()
+        processed_words = []
+
+        for i, word in enumerate(words):
+            # Remove leading/trailing punctuation for analysis
+            word_clean = word.strip('.,;:!?()[]{}"\'-/')
+            word_lower = word_clean.lower()
+
+            # Get any leading/trailing punctuation to preserve
+            leading_punct = word[:len(word) - len(word.lstrip('.,;:!?()[]{}"\'-/'))]
+            trailing_punct = word[len(word_clean) + len(leading_punct):]
+
+            # Check if it's an acronym
+            if word_lower in acronyms:
+                # Special handling for mixed acronyms like "I/O", "CI/CD"
+                if '/' in word_lower:
+                    result = word_lower.upper()
+                else:
+                    result = word_lower.upper()
+            # First word or after colon/hyphen - always capitalize
+            elif i == 0 or (i > 0 and words[i-1].endswith(':')):
+                result = word_clean.capitalize()
+            # Small words - keep lowercase (unless after colon)
+            elif word_lower in lowercase_words:
+                result = word_lower
+            # Regular word - capitalize first letter
+            else:
+                result = word_clean.capitalize()
+
+            # Reconstruct with original punctuation
+            processed_words.append(leading_punct + result + trailing_punct)
+
+        final_title = ' '.join(processed_words)
+
+        # Log if changed significantly
+        if title.lower() != final_title.lower() or title != final_title:
+            logger.info(f"📝 Title case: '{title}' → '{final_title}'")
+
+        return final_title
+
+    def _optimize_title(self, title: str, max_length: int = 60) -> str:
+        """
+        Intelligently shorten long titles while preserving meaning.
+
+        Args:
+            title: Original title
+            max_length: Maximum desired character length (default: 60)
+
+        Returns:
+            Optimized title
+        """
+        if not title:
+            return title
+
+        original_title = title
+        import re
+
+        # Remove redundant introductory phrases (even if title is short)
+        intro_patterns = [
+            (r'^Introduction to\s+', ''),
+            (r'^An Introduction to\s+', ''),
+            (r'^Overview of\s+', ''),
+            (r'^An Overview of\s+', ''),
+            (r'^Understanding\s+', ''),
+            (r'^Learning about\s+', ''),
+            (r'^How to\s+', ''),
+            (r'^What (?:is|are)\s+', ''),
+            (r'^The Basics of\s+', ''),
+            (r'^A Guide to\s+', ''),
+            (r'^Getting Started with\s+', ''),
+            (r'^Working with\s+', ''),
+            (r'\s+- A Complete Guide$', ''),
+            (r'\s+- An Overview$', ''),
+            (r'\s+for Beginners$', ''),
+            (r'\s+\(Complete Guide\)$', ''),
+        ]
+
+        for pattern, replacement in intro_patterns:
+            new_title = re.sub(pattern, replacement, title, flags=re.IGNORECASE)
+            if new_title != title:
+                title = new_title
+                logger.info(f"✂️  Removed intro phrase: '{original_title}' → '{title}'")
+                break  # Only remove one pattern
+
+        # Remove verbose phrases
+        verbose_replacements = [
+            (' in order to ', ' to '),
+            (' as well as ', ' and '),
+            (' by using ', ' using '),
+            (' by means of ', ' via '),
+            (' with the use of ', ' with '),
+            (' for the purpose of ', ' for '),
+            (' in the process of ', ' in '),
+        ]
+
+        for old_phrase, new_phrase in verbose_replacements:
+            if old_phrase in title.lower():
+                title = re.sub(re.escape(old_phrase), new_phrase, title, flags=re.IGNORECASE)
+                if len(title) <= max_length:
+                    logger.info(f"✂️  Simplified phrase: '{original_title}' → '{title}'")
+                    return title
+
+        # If still too long, truncate at word boundary and add ellipsis
+        if len(title) > max_length:
+            # Find last complete word before max_length
+            truncated = title[:max_length].rsplit(' ', 1)[0]
+            if len(truncated) < max_length - 10:  # Only truncate if we save meaningful space
+                title = truncated + '...'
+                logger.info(f"✂️  Truncated: '{original_title}' → '{title}'")
+
+        return title
+
+    def _prepare_slide_title(self, raw_title: str) -> str:
+        """
+        Prepare slide title by optimizing and applying smart title case.
+
+        Args:
+            raw_title: Raw title from document
+
+        Returns:
+            Optimized and properly formatted title
+        """
+        if not raw_title:
+            return raw_title
+
+        # Step 1: Optimize (shorten if needed)
+        optimized = self._optimize_title(raw_title)
+
+        # Step 2: Apply smart title case
+        final_title = self._smart_title_case(optimized)
+
+        return final_title
 
     def _build_structured_prompt(self, text: str, content_info: dict,
                                  context_heading: str = None, style: str = 'professional') -> str:
