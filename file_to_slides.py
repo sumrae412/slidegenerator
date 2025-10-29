@@ -2696,6 +2696,101 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
 
         return consensus_scores
 
+    def _apply_transcript_penalties(self, sentences: List[str], scores):
+        """
+        Apply penalties for transcript/conversational content that's inappropriate for slides.
+
+        This filters out:
+        - Conversational transitions ("I'd now like...", "As you've seen...")
+        - Incomplete sentences (ends with preposition, trailing comma)
+        - First-person narrative (heavy use of "I", "we", "you")
+        - Meta-references ("previous videos", "this course")
+
+        Args:
+            sentences: List of sentence strings
+            scores: Array of importance scores (will be penalized)
+
+        Returns:
+            Modified scores array with penalties applied
+        """
+        import numpy as np
+        import re
+
+        # Conversational transition phrases (heavy penalty)
+        conversational_starts = [
+            "i'd now like", "as you've seen", "with that being said", "let me",
+            "i want to emphasize", "first off", "i'm going to", "let's talk about",
+            "what i want to", "i'd like to", "as we've discussed", "as mentioned",
+            "going back to", "moving on to", "before we", "after we"
+        ]
+
+        # Meta-references (moderate penalty)
+        meta_references = [
+            "previous video", "this video", "next video", "this course",
+            "this lesson", "these resources", "this section", "earlier",
+            "last time", "next time"
+        ]
+
+        # Incomplete sentence indicators (broader detection)
+        incomplete_endings = [
+            "to.", "whether.", "because.", "that's.", "when.",
+            "where.", "which.", "that.", "to applying.", "to perform.",
+            "applying.", "perform.", "ranging and", "whether that's",
+            "that is.", "which is.", "or.", "and."
+        ]
+
+        # Also check for trailing prepositions/conjunctions
+        trailing_weak_words = ['to', 'and', 'or', 'but', 'when', 'where', 'which', 'that', 'because', 'whether']
+
+        penalized_scores = scores.copy()
+
+        for i, sentence in enumerate(sentences):
+            sentence_lower = sentence.lower()
+            penalty_factor = 1.0
+
+            # 1. Penalize conversational transitions (80% reduction)
+            for phrase in conversational_starts:
+                if sentence_lower.startswith(phrase):
+                    penalty_factor *= 0.2
+                    break
+
+            # 2. Penalize meta-references (50% reduction)
+            for ref in meta_references:
+                if ref in sentence_lower:
+                    penalty_factor *= 0.5
+                    break
+
+            # 3. Penalize incomplete sentences (90% reduction - nearly eliminate)
+            for ending in incomplete_endings:
+                if sentence.strip().endswith(ending):
+                    penalty_factor *= 0.1
+                    break
+
+            # 3b. Check for trailing weak words (prepositions/conjunctions without proper ending)
+            last_word = sentence.strip().rstrip('.').split()[-1].lower() if sentence.strip() else ""
+            if last_word in trailing_weak_words:
+                penalty_factor *= 0.1
+
+            # 4. Penalize heavy first-person usage (30% reduction per occurrence)
+            first_person_pronouns = len(re.findall(r'\b(i|i\'d|i\'m|i\'ve|we|we\'re|we\'ve|my|our)\b', sentence_lower, re.IGNORECASE))
+            if first_person_pronouns >= 2:
+                penalty_factor *= (0.7 ** first_person_pronouns)
+
+            # 5. Penalize questions (questions are rarely good slide bullets)
+            if '?' in sentence:
+                penalty_factor *= 0.3
+
+            # 6. Boost declarative statements with strong verbs
+            strong_verbs = ['requires', 'provides', 'enables', 'demonstrates', 'shows',
+                          'indicates', 'reveals', 'proves', 'confirms', 'establishes']
+            if any(verb in sentence_lower for verb in strong_verbs):
+                penalty_factor *= 1.3  # 30% boost
+
+            # Apply cumulative penalty
+            penalized_scores[i] *= penalty_factor
+
+        return penalized_scores
+
     def _create_lightweight_nlp_bullets(self, text: str, context_heading: str = None) -> List[str]:
         """
         Create bullets using ensemble NLP: TF-IDF + TextRank + spaCy validation
@@ -2783,10 +2878,13 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
                 if heading_keywords:
                     ensemble_scores = self._boost_contextual_sentences(sentences, ensemble_scores, heading_keywords)
 
+                # ENHANCEMENT: Apply transcript/conversational penalties
+                ensemble_scores = self._apply_transcript_penalties(sentences, ensemble_scores)
+
                 # Rank sentences by ensemble consensus
                 ranked_indices = ensemble_scores.argsort()[::-1]
 
-                logger.info(f"Ensemble voting complete: TF-IDF + TextRank consensus ranking applied")
+                logger.info(f"Ensemble voting complete: TF-IDF + TextRank + transcript filtering applied")
 
             except Exception as e:
                 logger.warning(f"Ensemble ranking failed: {e}, using order-based selection")
