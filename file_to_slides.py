@@ -1214,6 +1214,9 @@ Return your analysis as a JSON object with:
             # Validate and correct heading hierarchy
             slides = self._validate_heading_hierarchy(slides)
 
+            # Optimize slide density (merge sparse, split dense)
+            slides = self._optimize_slide_density(slides)
+
             metadata = {
                 'filename': filename,
                 'file_type': file_ext,
@@ -9509,6 +9512,142 @@ Generated: {timestamp}
             logger.info(f"📐 Heading hierarchy validation: {corrections_made} corrections applied")
 
         return slides
+
+    def _optimize_slide_density(self, slides: List[SlideContent]) -> List[SlideContent]:
+        """
+        Optimize slide density by merging sparse slides and splitting dense slides.
+
+        Rules:
+        - Sparse slides (1-2 bullets): Merge consecutive content slides under same section
+        - Dense slides (7+ bullets): Split into multiple slides
+        - Optimal range: 3-6 bullets per slide
+        - Don't merge across heading boundaries (H1/H2)
+        - Preserve bullet order and slide metadata
+
+        Args:
+            slides: List of SlideContent objects
+
+        Returns:
+            Optimized list with better slide density
+        """
+        optimized_slides = []
+        merges_made = 0
+        splits_made = 0
+
+        i = 0
+        while i < len(slides):
+            slide = slides[i]
+
+            # Skip heading slides (never merge/split these)
+            if slide.slide_type == 'heading':
+                optimized_slides.append(slide)
+                i += 1
+                continue
+
+            # DENSE SLIDE SPLITTING (7+ bullets)
+            if slide.content and len(slide.content) >= 7:
+                # Split into chunks of 4-5 bullets
+                bullets = slide.content
+                chunk_size = 5
+                num_chunks = (len(bullets) + chunk_size - 1) // chunk_size
+
+                for chunk_idx in range(num_chunks):
+                    start_idx = chunk_idx * chunk_size
+                    end_idx = min(start_idx + chunk_size, len(bullets))
+                    chunk_bullets = bullets[start_idx:end_idx]
+
+                    # Add continuation marker to title if not first chunk
+                    chunk_title = slide.title
+                    if chunk_idx > 0:
+                        chunk_title = f"{slide.title} (cont.)"
+
+                    optimized_slides.append(SlideContent(
+                        title=chunk_title,
+                        content=chunk_bullets,
+                        slide_type=slide.slide_type,
+                        heading_level=slide.heading_level,
+                        subheader=slide.subheader if chunk_idx == 0 else None,
+                        visual_cues=slide.visual_cues if chunk_idx == 0 else None
+                    ))
+
+                splits_made += 1
+                logger.info(f"📊 Split dense slide '{slide.title}' ({len(bullets)} bullets) into {num_chunks} slides")
+                i += 1
+                continue
+
+            # SPARSE SLIDE MERGING (1-2 bullets)
+            if slide.content and len(slide.content) <= 2:
+                # Look ahead to find consecutive sparse content slides under same section
+                merge_candidates = [slide]
+                j = i + 1
+
+                # Track the last major heading we've seen
+                last_major_heading = None
+                for k in range(i - 1, -1, -1):
+                    if slides[k].slide_type == 'heading' and slides[k].heading_level and slides[k].heading_level <= 2:
+                        last_major_heading = slides[k]
+                        break
+
+                # Collect consecutive sparse slides (up to 6 bullets total)
+                while j < len(slides):
+                    next_slide = slides[j]
+
+                    # Stop if we hit a heading slide
+                    if next_slide.slide_type == 'heading':
+                        # If it's H1/H2, definitely stop (section boundary)
+                        if next_slide.heading_level and next_slide.heading_level <= 2:
+                            break
+                        # If it's H3/H4, still stop (different subsection)
+                        break
+
+                    # Stop if next slide has good density (3+ bullets)
+                    if next_slide.content and len(next_slide.content) >= 3:
+                        break
+
+                    # Stop if adding would exceed optimal range
+                    total_bullets = sum(len(c.content) for c in merge_candidates)
+                    if next_slide.content and total_bullets + len(next_slide.content) > 6:
+                        break
+
+                    # Add to merge candidates
+                    if next_slide.content and len(next_slide.content) > 0:
+                        merge_candidates.append(next_slide)
+
+                    j += 1
+
+                # Only merge if we found at least 2 slides to combine
+                if len(merge_candidates) >= 2:
+                    # Merge bullets from all candidates
+                    merged_bullets = []
+                    for candidate in merge_candidates:
+                        merged_bullets.extend(candidate.content)
+
+                    # Use first slide's title
+                    merged_slide = SlideContent(
+                        title=merge_candidates[0].title,
+                        content=merged_bullets,
+                        slide_type=merge_candidates[0].slide_type,
+                        heading_level=merge_candidates[0].heading_level,
+                        subheader=merge_candidates[0].subheader,
+                        visual_cues=merge_candidates[0].visual_cues
+                    )
+
+                    optimized_slides.append(merged_slide)
+                    merges_made += 1
+                    logger.info(f"📊 Merged {len(merge_candidates)} sparse slides into '{merged_slide.title}' ({len(merged_bullets)} bullets)")
+
+                    # Skip all merged slides
+                    i = j
+                    continue
+
+            # No optimization needed - keep slide as-is
+            optimized_slides.append(slide)
+            i += 1
+
+        if merges_made > 0 or splits_made > 0:
+            logger.info(f"📊 Slide density optimization: {merges_made} merges, {splits_made} splits applied")
+
+        return optimized_slides
 
     def _determine_heading_level(self, title: str, position_ratio: float = 0.5) -> int:
         """
