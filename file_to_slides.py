@@ -2485,7 +2485,7 @@ PROCESS:
 CONTENT:
 {text}
 
-OUTPUT: 3-5 bullets, one per line, no symbols. Complete sentences only. Remove all conversational filler.
+OUTPUT: 3-5 bullets, one per line, no symbols. Complete sentences only. Remove all conversational filler."""
 
         return prompt
 

@@ -285,6 +285,33 @@ personal information. Continuous monitoring detects drift and performance degrad
             "avg_word_length": (8, 15),
             "must_contain_keywords": ["ethics", "fairness", "privacy"]
         }
+    },
+
+    {
+        "id": "transcript_ai_for_good",
+        "category": "transcript",
+        "input_text": """[full screen TH]
+As you've seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform what might be a relatively simple task for you or me, like recognizing what's in an image, can actually be a powerful tool in many types of projects.
+
+I'd now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying AI in your projects.
+
+The goal of any AI for Good project is to have a positive impact in the world, whether that's""",
+        "context_heading": "Draft Script",
+        "expected_style": "educational",
+        "expected_bullets": [
+            "the possible applications of AI are wide ranging",
+            "being able to get an algorithm to reliably perform what might be a relatively simple task for you or me can actually be a powerful tool in many types of projects",
+            "the goal of any AI for Good project is to have a positive impact in the world"
+        ],
+        "quality_criteria": {
+            "min_bullets": 3,
+            "max_bullets": 3,
+            "avg_word_length": (10, 25),
+            "must_not_contain_filler": ["I'd", "As you've seen", "Now let's", "whether that's", "I'm going to"],
+            "must_be_complete_sentences": True,
+            "must_start_lowercase": True,  # Direct extraction style - preserve original casing
+            "no_truncation": True  # Must not end with incomplete thoughts
+        }
     }
 ]
 
@@ -297,6 +324,7 @@ TEST_CATEGORIES = {
     "table": ["table_feature_comparison"],
     "list": ["list_consolidation"],
     "heading": ["heading_expansion"],
+    "transcript": ["transcript_ai_for_good"],
     "edge_cases": ["edge_very_short", "edge_very_long"]
 }
 

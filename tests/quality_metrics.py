@@ -130,6 +130,25 @@ class BulletQualityMetrics:
             if bullet.endswith(('...', '..', 'such as', 'including')):
                 score -= 5  # Incomplete
 
+        # TRANSCRIPT-SPECIFIC QUALITY CHECKS
+        # Check for conversational filler (transcript extraction quality)
+        if 'must_not_contain_filler' in criteria:
+            filler_penalty = self._check_conversational_filler(
+                bullets,
+                criteria['must_not_contain_filler']
+            )
+            score -= filler_penalty
+
+        # Check for sentence truncation
+        if criteria.get('no_truncation', False):
+            truncation_penalty = self._check_sentence_truncation(bullets)
+            score -= truncation_penalty
+
+        # Check for complete sentences (must start and end properly)
+        if criteria.get('must_be_complete_sentences', False):
+            completeness_penalty = self._check_sentence_completeness(bullets)
+            score -= completeness_penalty
+
         return max(0, min(100, score))
 
     def _score_relevance(self, bullets: List[str], input_text: str, context_heading: str = None) -> float:
@@ -310,6 +329,93 @@ class BulletQualityMetrics:
 
         # Convert to 0-100 score
         return avg_similarity * 100
+
+    def _check_conversational_filler(self, bullets: List[str], filler_list: List[str]) -> float:
+        """
+        Check for conversational filler phrases (returns penalty score 0-50)
+
+        Used for transcript extraction quality - detects phrases like:
+        - "As you've seen"
+        - "I'd like to"
+        - "Now let's"
+
+        Returns penalty points (0 = no filler, higher = more filler found)
+        """
+        total_penalty = 0.0
+
+        for bullet in bullets:
+            bullet_lower = bullet.lower()
+
+            # Check for each filler phrase
+            for filler_phrase in filler_list:
+                if filler_phrase.lower() in bullet_lower:
+                    # Heavy penalty for conversational filler in extracted bullets
+                    total_penalty += 20  # -20 points per occurrence
+
+        return min(50, total_penalty)  # Cap at 50 point penalty
+
+    def _check_sentence_truncation(self, bullets: List[str]) -> float:
+        """
+        Check for mid-sentence truncation (returns penalty score 0-40)
+
+        Detects incomplete sentences that end abruptly like:
+        - "...when it comes to applying."
+        - "...whether that's."
+
+        Returns penalty points (0 = no truncation, higher = truncation detected)
+        """
+        total_penalty = 0.0
+
+        # Common truncation indicators
+        truncation_patterns = [
+            r'\b(when|where|what|whether|while|which|that)\s*["\']?s?\.',  # Ends with subordinating conjunction
+            r'\b(to|of|for|with|by|in|on|at)\s*["\']?\.',  # Ends with preposition
+            r'\b(and|or|but)\s*["\']?\.',  # Ends with coordinating conjunction
+            r',\s*["\']?$',  # Ends with comma (incomplete)
+        ]
+
+        for bullet in bullets:
+            bullet_stripped = bullet.strip()
+
+            # Check each truncation pattern
+            for pattern in truncation_patterns:
+                if re.search(pattern, bullet_stripped, re.IGNORECASE):
+                    total_penalty += 15  # -15 points per truncation
+                    break  # Only penalize once per bullet
+
+        return min(40, total_penalty)  # Cap at 40 point penalty
+
+    def _check_sentence_completeness(self, bullets: List[str]) -> float:
+        """
+        Check that bullets are complete, well-formed sentences (returns penalty 0-30)
+
+        Checks:
+        - Minimum length (too short = likely incomplete)
+        - Proper sentence structure
+        - Not just fragments
+
+        Returns penalty points (0 = complete sentences, higher = incomplete)
+        """
+        total_penalty = 0.0
+
+        for bullet in bullets:
+            words = bullet.strip().split()
+
+            # Too short to be a complete sentence
+            if len(words) < 5:
+                total_penalty += 10
+                continue
+
+            # Check for sentence fragments (starts with conjunctions/pronouns only)
+            first_word = words[0].lower()
+            if first_word in ['and', 'or', 'but', 'because', 'since', 'while', 'although']:
+                total_penalty += 5
+
+            # Ends with ellipsis or incomplete punctuation
+            if bullet.strip().endswith(('...', '..', '..')):
+                total_penalty += 10
+
+        return min(30, total_penalty)  # Cap at 30 point penalty
 
     def _empty_result(self) -> dict:
         """Return empty/failed result"""
