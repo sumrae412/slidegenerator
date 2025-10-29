@@ -182,10 +182,42 @@ def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[st
             for element in document.get('body', {}).get('content', []):
                 # Extract paragraph text
                 if 'paragraph' in element:
-                    paragraph_elements = element['paragraph'].get('elements', [])
+                    paragraph = element['paragraph']
+
+                    # Check if this is a heading by examining the paragraph style
+                    paragraph_style = paragraph.get('paragraphStyle', {})
+                    named_style_type = paragraph_style.get('namedStyleType', 'NORMAL_TEXT')
+
+                    # Map Google Docs heading styles to markdown heading levels
+                    heading_map = {
+                        'HEADING_1': 1,
+                        'HEADING_2': 2,
+                        'HEADING_3': 3,
+                        'HEADING_4': 4,
+                        'HEADING_5': 5,
+                        'HEADING_6': 6
+                    }
+
+                    heading_level = heading_map.get(named_style_type)
+
+                    # Extract text from paragraph elements
+                    paragraph_text = ''
+                    paragraph_elements = paragraph.get('elements', [])
                     for elem in paragraph_elements:
                         if 'textRun' in elem:
-                            content.append(elem['textRun']['content'])
+                            paragraph_text += elem['textRun']['content']
+
+                    # Strip whitespace and newlines
+                    paragraph_text = paragraph_text.strip()
+
+                    # Only add non-empty paragraphs
+                    if paragraph_text:
+                        # Format headings with markdown syntax
+                        if heading_level:
+                            content.append('#' * heading_level + ' ' + paragraph_text)
+                            logger.info(f"Extracted H{heading_level} heading from Google Doc: {paragraph_text[:50]}...")
+                        else:
+                            content.append(paragraph_text)
 
                 # Extract table content (tab-delimited, matching .txt export format)
                 elif 'table' in element:
