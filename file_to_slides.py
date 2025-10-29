@@ -2696,6 +2696,43 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
 
         return consensus_scores
 
+    def _is_transcript_mode(self, text: str) -> bool:
+        """
+        Detect if content is transcript/conversational (vs. structured document).
+
+        Transcript indicators:
+        - High first-person pronoun density
+        - Conversational phrases
+        - Informal language patterns
+
+        Returns True if transcript mode, False if structured document mode.
+        """
+        import re
+
+        text_lower = text.lower()
+        word_count = len(text.split())
+
+        if word_count < 50:
+            return False  # Too short to determine
+
+        # Count first-person pronouns
+        first_person = len(re.findall(r'\b(i|i\'ll|i\'m|i\'d|i\'ve|we|we\'ll|we\'re|we\'d|we\'ve|my|our)\b', text_lower))
+        first_person_density = first_person / word_count
+
+        # Count conversational phrases
+        conversational_phrases = [
+            "i want to", "let me", "i'll go", "i'm going", "let's",
+            "as you", "you'll", "you can", "you might", "you should"
+        ]
+        conversational_count = sum(1 for phrase in conversational_phrases if phrase in text_lower)
+
+        # Transcript mode if:
+        # - High first-person density (>3% of words are first-person pronouns)
+        # - OR multiple conversational phrases present
+        is_transcript = (first_person_density > 0.03) or (conversational_count >= 2)
+
+        return is_transcript
+
     def _apply_transcript_penalties(self, sentences: List[str], scores):
         """
         Apply penalties for transcript/conversational content that's inappropriate for slides.
@@ -2927,8 +2964,10 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             if len(bullets) > 1:
                 bullets = self._remove_redundant_bullets(bullets, similarity_threshold=0.7)
 
-            # ENHANCEMENT 2: Compress bullets for slide format (headline style)
-            bullets = [self._compress_bullet_for_slides(b) for b in bullets]
+            # ENHANCEMENT 2: Clean bullets for transcript/presentation content
+            # For video scripts and presentations, keep full sentences (don't compress)
+            # Just clean conversational artifacts and format properly
+            bullets = [self._clean_transcript_bullet(b) for b in bullets]
 
             # Limit to 4 best bullets after processing
             bullets = bullets[:4]
@@ -3267,6 +3306,80 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             logger.error(f"Error in minimal input handler: {e}")
             # Fallback: return the original text as a single bullet
             return [text.strip('.')]
+
+    def _clean_transcript_bullet(self, bullet: str) -> str:
+        """
+        Clean transcript bullet for slides - keep full sentence, just remove conversational artifacts.
+
+        This method is used for video scripts/presentations where full informational sentences
+        are desired, but conversational fluff needs to be removed.
+
+        Cleaning operations:
+        - Remove leading conversational connectors ("And so", "But", "So")
+        - Capitalize first letter
+        - Ensure proper ending punctuation
+        - Remove redundant spaces
+
+        Does NOT compress or shorten - preserves informational content.
+        """
+        import re
+
+        if not bullet:
+            return bullet
+
+        # Remove leading conversational connectors and transitions
+        conversational_starts = [
+            "when it comes to the impact of using ai in various projects, first off, i want to emphasize that",
+            "just to be clear, for",
+            "first off, i want to emphasize that",
+            "i want to emphasize that",
+            "first off",
+            "with that being said",
+            "just to be clear",
+            "and so this is why",
+            "and so this",
+            "and so",
+            "and this is",
+            "and this",
+            "but this",
+            "so this",
+            "however,",
+            "but",
+            "and"
+        ]
+
+        # Iteratively remove conversational phrases (keep trying until no more matches)
+        max_iterations = 5  # Prevent infinite loop
+        for _ in range(max_iterations):
+            bullet_lower = bullet.lower().strip()
+            matched = False
+
+            for phrase in conversational_starts:
+                # Check if starts with phrase (with or without trailing comma/space)
+                if bullet_lower.startswith(phrase + " ") or bullet_lower.startswith(phrase + ","):
+                    # Remove the phrase
+                    if bullet_lower.startswith(phrase + ","):
+                        bullet = bullet[len(phrase)+1:].strip()
+                    else:
+                        bullet = bullet[len(phrase):].strip()
+                    matched = True
+                    break
+
+            if not matched:
+                break
+
+        # Capitalize first letter
+        if bullet:
+            bullet = bullet[0].upper() + bullet[1:]
+
+        # Ensure proper ending punctuation
+        if bullet and bullet[-1] not in '.!?':
+            bullet += '.'
+
+        # Clean up multiple spaces
+        bullet = re.sub(r'\s+', ' ', bullet)
+
+        return bullet.strip()
 
     def _compress_bullet_for_slides(self, bullet: str) -> str:
         """
