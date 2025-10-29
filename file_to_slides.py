@@ -1210,7 +1210,10 @@ Return your analysis as a JSON object with:
             
             # Convert content to slides
             slides = self._content_to_slides(content, fast_mode)
-            
+
+            # Validate and correct heading hierarchy
+            slides = self._validate_heading_hierarchy(slides)
+
             metadata = {
                 'filename': filename,
                 'file_type': file_ext,
@@ -1218,7 +1221,7 @@ Return your analysis as a JSON object with:
                 'slide_count': len(slides),
                 'script_column': script_column
             }
-            
+
             return DocumentStructure(
                 title=doc_title,
                 slides=slides,
@@ -9301,50 +9304,233 @@ Generated: {timestamp}
                 # Connect to center
                 draw.line([center_x, center_y, x, y], fill='black', width=1)
     
-    def _determine_heading_level(self, title: str) -> int:
-        """Determine the heading level of a title"""
+    def _calculate_heading_score(self, title: str, position_ratio: float = 0.5) -> dict:
+        """
+        Calculate multi-factor scores for each heading level (1-4).
+        Returns dict with scores for each level and recommended level.
+
+        Args:
+            title: The heading text
+            position_ratio: Where in document (0.0 = start, 1.0 = end)
+
+        Returns:
+            {'level_1_score': float, 'level_2_score': float, ..., 'recommended_level': int}
+        """
         title_lower = title.lower()
-        
-        # Level 1 indicators (major sections)
-        level_1_keywords = [
-            'introduction', 'overview', 'what is', 'types of', 'getting started',
-            'conclusion', 'summary', 'applications', 'key concepts', 'fundamentals'
-        ]
-        
-        # Level 2 indicators (subsections)
-        level_2_keywords = [
-            'supervised', 'unsupervised', 'reinforcement', 'algorithm', 'example',
-            'healthcare', 'finance', 'technology', 'prerequisites', 'learning path'
-        ]
-        
-        # Level 3 indicators (sub-subsections)
-        level_3_keywords = [
-            'step', 'phase', 'stage', 'part', 'section', 'lesson', 'chapter'
-        ]
-        
-        # Level 4 indicators (individual slide titles)
-        level_4_keywords = [
-            'how to', 'why', 'when', 'where', 'what', 'which', 'who',
-            'implementation', 'details', 'features', 'benefits', 'challenges',
-            'best practices', 'tips', 'tricks', 'common', 'key points'
-        ]
-        
-        if any(keyword in title_lower for keyword in level_1_keywords):
-            return 1
-        elif any(keyword in title_lower for keyword in level_2_keywords):
-            return 2
-        elif any(keyword in title_lower for keyword in level_3_keywords):
-            return 3
-        elif any(keyword in title_lower for keyword in level_4_keywords):
-            return 4
-        else:
-            # Default: shorter titles are usually more specific (higher level)
-            if len(title.split()) <= 3:
-                return 4  # Short titles are usually slide titles
-            elif len(title.split()) <= 6:
-                return 3  # Medium titles are subsections
+        word_count = len(title.split())
+        char_count = len(title)
+
+        # Initialize scores
+        scores = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+
+        # LEVEL 1 SCORING (Major sections: Introduction, Overview, Conclusion)
+        # Strong indicators (weight: 3.0)
+        level_1_strong = ['introduction', 'overview', 'conclusion', 'summary', 'abstract',
+                          'table of contents', 'appendix', 'references', 'about']
+        # Medium indicators (weight: 2.0)
+        level_1_medium = ['what is', 'getting started', 'fundamentals', 'key concepts',
+                          'background', 'motivation', 'objectives', 'goals']
+        # Weak indicators (weight: 1.0)
+        level_1_weak = ['welcome', 'agenda', 'outline', 'roadmap']
+
+        for keyword in level_1_strong:
+            if keyword in title_lower:
+                scores[1] += 3.0
+        for keyword in level_1_medium:
+            if keyword in title_lower:
+                scores[1] += 2.0
+        for keyword in level_1_weak:
+            if keyword in title_lower:
+                scores[1] += 1.0
+
+        # Position bonus for H1 (early in document = more likely H1)
+        if position_ratio < 0.2:  # First 20% of document
+            scores[1] += 2.0
+        elif position_ratio > 0.8:  # Last 20% of document (conclusions)
+            scores[1] += 1.5
+
+        # LEVEL 2 SCORING (Major subsections)
+        # Strong indicators
+        level_2_strong = ['types of', 'categories', 'classification', 'approaches',
+                          'methodology', 'architecture', 'components', 'applications']
+        # Medium indicators
+        level_2_medium = ['supervised', 'unsupervised', 'reinforcement', 'algorithm',
+                          'healthcare', 'finance', 'technology', 'prerequisites',
+                          'requirements', 'setup', 'installation', 'configuration']
+        # Weak indicators
+        level_2_weak = ['first', 'second', 'third', 'next', 'then', 'finally']
+
+        for keyword in level_2_strong:
+            if keyword in title_lower:
+                scores[2] += 3.0
+        for keyword in level_2_medium:
+            if keyword in title_lower:
+                scores[2] += 2.0
+        for keyword in level_2_weak:
+            if keyword in title_lower:
+                scores[2] += 1.0
+
+        # LEVEL 3 SCORING (Subsections)
+        level_3_strong = ['step', 'phase', 'stage', 'part', 'section', 'module']
+        level_3_medium = ['lesson', 'chapter', 'unit', 'topic', 'case study',
+                          'example', 'scenario', 'workflow']
+        level_3_weak = ['process', 'procedure', 'method', 'technique']
+
+        for keyword in level_3_strong:
+            if keyword in title_lower:
+                scores[3] += 3.0
+        for keyword in level_3_medium:
+            if keyword in title_lower:
+                scores[3] += 2.0
+        for keyword in level_3_weak:
+            if keyword in title_lower:
+                scores[3] += 1.0
+
+        # LEVEL 4 SCORING (Individual slide titles - specific topics)
+        level_4_strong = ['how to', 'why', 'when to', 'best practices', 'tips', 'tricks']
+        level_4_medium = ['implementation', 'details', 'features', 'benefits',
+                          'challenges', 'limitations', 'advantages', 'disadvantages']
+        level_4_weak = ['what', 'which', 'who', 'where', 'common', 'key points',
+                        'important', 'note', 'remember']
+
+        for keyword in level_4_strong:
+            if keyword in title_lower:
+                scores[4] += 3.0
+        for keyword in level_4_medium:
+            if keyword in title_lower:
+                scores[4] += 2.0
+        for keyword in level_4_weak:
+            if keyword in title_lower:
+                scores[4] += 1.0
+
+        # LENGTH-BASED SCORING (optimal ranges per level)
+        # H1: 15-40 chars, 2-5 words
+        # H2: 20-50 chars, 3-7 words
+        # H3: 15-45 chars, 2-6 words
+        # H4: 10-60 chars, 2-10 words (most flexible)
+
+        if 15 <= char_count <= 40 and 2 <= word_count <= 5:
+            scores[1] += 1.5
+        if 20 <= char_count <= 50 and 3 <= word_count <= 7:
+            scores[2] += 1.5
+        if 15 <= char_count <= 45 and 2 <= word_count <= 6:
+            scores[3] += 1.5
+        if 10 <= char_count <= 60 and 2 <= word_count <= 10:
+            scores[4] += 1.5
+
+        # Very short titles lean toward H4 (specific topics)
+        if word_count <= 3:
+            scores[4] += 1.0
+
+        # Very long titles lean toward H2/H3 (descriptive sections)
+        if word_count >= 8:
+            scores[2] += 0.5
+            scores[3] += 0.5
+
+        # Determine recommended level (highest score)
+        recommended_level = max(scores.keys(), key=lambda k: scores[k])
+
+        # If all scores are zero or very low, use length-based fallback
+        if max(scores.values()) < 1.0:
+            if word_count <= 3:
+                recommended_level = 4
+            elif word_count <= 6:
+                recommended_level = 3
             else:
-                return 2  # Longer titles are sections
+                recommended_level = 2
+
+        result = {
+            'level_1_score': scores[1],
+            'level_2_score': scores[2],
+            'level_3_score': scores[3],
+            'level_4_score': scores[4],
+            'recommended_level': recommended_level
+        }
+
+        logger.debug(f"Heading score for '{title}': {result}")
+        return result
+
+    def _validate_heading_hierarchy(self, slides: List[SlideContent]) -> List[SlideContent]:
+        """
+        Validate and correct heading hierarchy to ensure logical progression.
+        Rules:
+        - H3 cannot appear without parent H2
+        - H4 cannot appear without parent H3
+        - Large jumps (H1 → H4) are corrected
+        - First heading slide should be H1 or H2
+
+        Args:
+            slides: List of SlideContent objects
+
+        Returns:
+            Updated list with corrected heading levels
+        """
+        last_heading_level = 0
+        corrections_made = 0
+
+        for i, slide in enumerate(slides):
+            if slide.slide_type == 'heading' and slide.heading_level:
+                current_level = slide.heading_level
+                original_level = current_level
+
+                # First heading should be H1 or H2
+                if last_heading_level == 0:
+                    if current_level > 2:
+                        current_level = 2
+                        logger.info(f"📐 Corrected first heading from H{original_level} to H{current_level}: '{slide.title}'")
+                        corrections_made += 1
+
+                # Cannot skip levels downward (H1 → H3 or H1 → H4)
+                elif current_level > last_heading_level + 1:
+                    # Allow max 1 level jump
+                    current_level = last_heading_level + 1
+                    logger.info(f"📐 Corrected heading jump from H{last_heading_level} → H{original_level} to H{last_heading_level} → H{current_level}: '{slide.title}'")
+                    corrections_made += 1
+
+                # Cannot have H3 without H2 parent
+                elif current_level == 3 and last_heading_level < 2:
+                    current_level = 2
+                    logger.info(f"📐 Promoted orphaned H3 to H2: '{slide.title}'")
+                    corrections_made += 1
+
+                # Cannot have H4 without H3 parent
+                elif current_level == 4 and last_heading_level < 3:
+                    current_level = 3
+                    logger.info(f"📐 Promoted orphaned H4 to H3: '{slide.title}'")
+                    corrections_made += 1
+
+                # Update slide if level changed
+                if current_level != original_level:
+                    slide.heading_level = current_level
+
+                last_heading_level = current_level
+
+        if corrections_made > 0:
+            logger.info(f"📐 Heading hierarchy validation: {corrections_made} corrections applied")
+
+        return slides
+
+    def _determine_heading_level(self, title: str, position_ratio: float = 0.5) -> int:
+        """
+        Determine the heading level of a title using multi-factor scoring.
+
+        Args:
+            title: The heading text
+            position_ratio: Position in document (0.0 = start, 1.0 = end)
+
+        Returns:
+            Heading level (1-4)
+        """
+        scoring_result = self._calculate_heading_score(title, position_ratio)
+        recommended_level = scoring_result['recommended_level']
+
+        logger.debug(f"📊 Determined '{title}' as H{recommended_level} (scores: " +
+                    f"H1={scoring_result['level_1_score']:.1f}, " +
+                    f"H2={scoring_result['level_2_score']:.1f}, " +
+                    f"H3={scoring_result['level_3_score']:.1f}, " +
+                    f"H4={scoring_result['level_4_score']:.1f})")
+
+        return recommended_level
     
     def _create_section_overview(self, content: List[str]) -> str:
         """Create a brief overview for section intro slides"""
