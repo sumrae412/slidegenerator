@@ -1217,6 +1217,9 @@ Return your analysis as a JSON object with:
             # Optimize slide density (merge sparse, split dense)
             slides = self._optimize_slide_density(slides)
 
+            # Insert section divider slides before major headings
+            slides = self._insert_section_dividers(slides)
+
             metadata = {
                 'filename': filename,
                 'file_type': file_ext,
@@ -7311,6 +7314,36 @@ class SlideGenerator:
                 # This is handled by the main title slide above, skip
                 continue
                 
+            elif section['type'] == 'divider':
+                # Section divider - visual break slide
+                divider_slide_layout = prs.slide_layouts[6]  # Blank layout for custom design
+                slide = prs.slides.add_slide(divider_slide_layout)
+                pptx_slides_created += 1
+                logger.info(f"Created section divider slide: '{section['title']}'")
+
+                # Center the section title on a minimal slide
+                # Add centered title shape
+                title_shape = slide.shapes.add_textbox(
+                    left=Inches(1), top=Inches(3),
+                    width=Inches(8), height=Inches(1.5)
+                )
+                title_frame = title_shape.text_frame
+                title_paragraph = title_frame.paragraphs[0]
+                title_paragraph.text = section['title']
+                title_paragraph.font.size = Pt(54)
+                title_paragraph.font.bold = True
+                title_paragraph.font.color.rgb = RGBColor(66, 66, 66)  # Dark gray
+                title_paragraph.alignment = PP_ALIGN.CENTER
+
+                # Optional: Add a subtle horizontal line above title for visual effect
+                line_shape = slide.shapes.add_shape(
+                    1,  # Line shape type
+                    left=Inches(2), top=Inches(2.7),
+                    width=Inches(6), height=Inches(0)
+                )
+                line_shape.line.color.rgb = RGBColor(189, 189, 189)  # Light gray
+                line_shape.line.width = Pt(2)
+
             elif section['type'] == 'section_title':
                 # H2 = Section title page
                 section_slide_layout = prs.slide_layouts[5]  # Title and content layout
@@ -7319,13 +7352,13 @@ class SlideGenerator:
                 title_shape.text = section['title']
                 pptx_slides_created += 1
                 logger.info(f"Created section title slide: '{section['title']}'")
-                
+
                 # Style as section title
                 title_paragraph = title_shape.text_frame.paragraphs[0]
                 title_paragraph.font.size = Pt(48)
                 title_paragraph.font.bold = True
                 title_paragraph.font.color.rgb = RGBColor(25, 118, 210)  # Blue color
-                
+
                 # Add overview if available
                 if section.get('overview'):
                     content_shape = None
@@ -7632,7 +7665,16 @@ class SlideGenerator:
                         'content': content,
                         'level': 4
                     })
-                    
+
+            elif slide_type == 'divider':
+                # Section divider - visual break slide
+                organized.append({
+                    'type': 'divider',
+                    'title': title,
+                    'content': [],  # Dividers have no content
+                    'level': getattr(slide, 'heading_level', 2)
+                })
+
             elif slide_type == 'script':
                 # Script content slides - each table row becomes one slide with bullet points
                 organized.append({
@@ -9649,6 +9691,63 @@ Generated: {timestamp}
 
         return optimized_slides
 
+    def _insert_section_dividers(self, slides: List[SlideContent]) -> List[SlideContent]:
+        """
+        Insert visual divider slides before major section headings (H1 and H2).
+
+        Divider slides create visual breaks in presentations, helping presenters
+        transition between major topics and providing natural pause points.
+
+        Rules:
+        - Insert divider before H1 headings (except the very first heading)
+        - Insert divider before H2 headings (major section transitions)
+        - Dividers have type 'divider' for special rendering
+        - Dividers preserve the section title and heading level
+
+        Args:
+            slides: List of slide content objects
+
+        Returns:
+            List of slides with dividers inserted
+        """
+        enhanced_slides = []
+        dividers_added = 0
+        first_heading_seen = False
+
+        for i, slide in enumerate(slides):
+            # Check if this is a major heading (H1 or H2)
+            if slide.slide_type == 'heading' and slide.heading_level in [1, 2]:
+                # Skip divider for the very first heading (that's the title/intro)
+                if not first_heading_seen:
+                    first_heading_seen = True
+                    enhanced_slides.append(slide)
+                    continue
+
+                # Insert divider slide before this heading
+                divider_slide = SlideContent(
+                    title=slide.title,
+                    content=[],
+                    slide_type='divider',
+                    heading_level=slide.heading_level,
+                    subheader=None,
+                    visual_cues=None
+                )
+
+                enhanced_slides.append(divider_slide)
+                dividers_added += 1
+
+                logger.info(f"📑 Inserted section divider before H{slide.heading_level}: '{slide.title}'")
+
+            # Add the original slide
+            enhanced_slides.append(slide)
+
+        if dividers_added > 0:
+            logger.info(f"📑 Section divider insertion: {dividers_added} divider slides added")
+        else:
+            logger.info("📑 No section dividers needed (no major section transitions)")
+
+        return enhanced_slides
+
     def _determine_heading_level(self, title: str, position_ratio: float = 0.5) -> int:
         """
         Determine the heading level of a title using multi-factor scoring.
@@ -10440,6 +10539,10 @@ class GoogleSlidesGenerator:
                     content_requests.extend(
                         self._create_title_slide_requests(slide_id, slide, idx == 0, presentation_id)
                     )
+                elif slide.slide_type == 'divider':
+                    content_requests.extend(
+                        self._create_divider_slide_requests(slide_id, slide, presentation_id)
+                    )
                 elif slide.slide_type in ['section', 'subsection']:
                     content_requests.extend(
                         self._create_section_slide_requests(slide_id, slide, presentation_id)
@@ -10528,6 +10631,25 @@ class GoogleSlidesGenerator:
     def _create_section_slide_requests(self, slide_id: str, slide: SlideContent, presentation_id: str = None) -> List[Dict]:
         """Create requests for section/subsection slide"""
         return self._create_title_slide_requests(slide_id, slide, False, presentation_id)
+
+    def _create_divider_slide_requests(self, slide_id: str, slide: SlideContent, presentation_id: str = None) -> List[Dict]:
+        """Create requests for section divider slide - minimal centered title"""
+        requests = []
+
+        # Use placeholders if we have presentation_id
+        if presentation_id:
+            placeholders = self._get_placeholder_ids(presentation_id, slide_id)
+
+            if 'title' in placeholders:
+                requests.append({
+                    'insertText': {
+                        'objectId': placeholders['title'],
+                        'text': slide.title,
+                        'insertionIndex': 0
+                    }
+                })
+
+        return requests
 
     def _create_content_slide_requests(self, slide_id: str, slide: SlideContent, presentation_id: str = None) -> List[Dict]:
         """Create requests for content slide with bullets"""
