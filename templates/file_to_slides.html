@@ -370,15 +370,21 @@
             </form>
 
             <!-- Progress -->
-            <div id="progress" class="hidden mt-8 text-center">
+            <div id="progress" class="hidden mt-8">
                 <div class="flex justify-center items-center mb-4">
                     <div class="spinner mr-3"></div>
-                    <span id="progress-text" class="text-slate-700 font-medium">Converting your document...</span>
+                    <div class="text-center">
+                        <span id="progress-text" class="text-slate-700 font-medium block">Converting your document...</span>
+                        <span id="progress-percent" class="text-xs text-slate-500 mt-1 block">0%</span>
+                    </div>
                 </div>
-                <div class="w-full bg-slate-200 rounded-full h-2">
-                    <div id="progress-bar" class="bg-slate-700 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                <div class="w-full bg-slate-200 rounded-full h-3 relative overflow-hidden">
+                    <div id="progress-bar" class="bg-gradient-to-r from-slate-700 to-slate-600 h-3 rounded-full transition-all duration-500 relative" style="width: 0%">
+                        <div class="absolute inset-0 bg-white opacity-20 animate-pulse"></div>
+                    </div>
                 </div>
-                <p id="progress-subtitle" class="text-sm text-slate-600 mt-2">This may take a few moments depending on file size</p>
+                <p id="progress-subtitle" class="text-sm text-slate-600 mt-3 text-center">This may take a few moments depending on file size</p>
+                <p id="progress-step" class="text-xs text-slate-500 mt-1 text-center">Step 1 of 7</p>
             </div>
 
             <!-- Results -->
@@ -715,26 +721,42 @@
                     progressSubtitle.textContent = 'Processing document and generating bullets...';
                 }
 
-                // Simulate progress with dynamic text updates
+                // Enhanced progress tracking with realistic stages
                 let progressValue = 0;
-                let progressStage = 'converting';
-                const progressInterval = setInterval(() => {
-                    progressValue += Math.random() * 15;
-                    if (progressValue > 90) progressValue = 90;
-                    progressBar.style.width = progressValue + '%';
+                let progressStage = 0;
+                const progressStages = [
+                    { threshold: 0, text: 'Fetching document from Google Docs...', subtitle: 'Retrieving content and structure', increment: 5 },
+                    { threshold: 15, text: 'Analyzing document structure...', subtitle: 'Processing headings and content blocks', increment: 3 },
+                    { threshold: 30, text: 'Parsing content...', subtitle: 'Extracting paragraphs and tables', increment: 4 },
+                    { threshold: 45, text: 'Generating slide bullets...', subtitle: hasApiKey ? 'Using Claude AI for content generation' : 'Creating bullets from paragraphs', increment: 2 },
+                    { threshold: 65, text: 'Creating presentation slides...', subtitle: 'Building slide structure and formatting', increment: 3 },
+                    { threshold: 80, text: 'Uploading to Google Slides...', subtitle: 'Creating slides in your Drive', increment: 2 },
+                    { threshold: 95, text: 'Finalizing...', subtitle: 'Almost done!', increment: 1 }
+                ];
 
-                    // Update text based on progress
-                    if (progressValue > 30 && progressStage === 'converting') {
-                        if (hasApiKey) {
-                            progressText.textContent = 'Generating visual prompts...';
-                            progressSubtitle.textContent = 'Creating copyable prompts for image generation';
-                        } else {
-                            progressText.textContent = 'Generating content...';
-                            progressSubtitle.textContent = 'Creating bullets and formatting slides';
-                        }
-                        progressStage = 'generating';
+                const progressInterval = setInterval(() => {
+                    // Find current stage
+                    const currentStage = progressStages[progressStage];
+
+                    // Increment progress with some randomness for realism
+                    const increment = currentStage.increment * (0.5 + Math.random());
+                    progressValue += increment;
+
+                    // Check if we've hit the next stage threshold
+                    if (progressStage < progressStages.length - 1 &&
+                        progressValue >= progressStages[progressStage + 1].threshold) {
+                        progressStage++;
+                        const nextStage = progressStages[progressStage];
+                        progressText.textContent = nextStage.text;
+                        progressSubtitle.textContent = nextStage.subtitle;
+                        document.getElementById('progress-step').textContent = `Step ${progressStage + 1} of ${progressStages.length}`;
                     }
-                }, 300);
+
+                    // Cap at 95% until actual completion
+                    if (progressValue > 95) progressValue = 95;
+                    progressBar.style.width = progressValue + '%';
+                    document.getElementById('progress-percent').textContent = Math.round(progressValue) + '%';
+                }, 400);
 
                 // Create abort controller for timeout handling
                 const controller = new AbortController();
@@ -750,6 +772,9 @@
 
                 clearInterval(progressInterval);
                 progressBar.style.width = '100%';
+                document.getElementById('progress-percent').textContent = '100%';
+                document.getElementById('progress-text').textContent = 'Conversion complete!';
+                document.getElementById('progress-subtitle').textContent = 'Your presentation is ready';
 
                 const result = await response.json();
 
