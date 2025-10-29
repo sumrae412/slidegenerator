@@ -2590,17 +2590,125 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             logger.error(f"Error in Claude bullet generation: {e}")
             return []
     
+    def _textrank_ranking(self, sentences: List[str], damping: float = 0.85):
+        """
+        Rank sentences using TextRank algorithm (graph-based PageRank).
+
+        Creates a graph where:
+        - Nodes = sentences
+        - Edges = cosine similarity between sentence embeddings
+        - PageRank scores = sentence importance
+
+        Args:
+            sentences: List of sentence strings
+            damping: PageRank damping factor (0.85 is standard)
+
+        Returns:
+            Array of importance scores (same order as input sentences)
+        """
+        try:
+            import networkx as nx
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+
+            if len(sentences) < 2:
+                return np.array([1.0] * len(sentences))
+
+            # Create TF-IDF vectors for sentence similarity
+            vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
+            tfidf_matrix = vectorizer.fit_transform(sentences)
+
+            # Calculate pairwise cosine similarities
+            similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+            # Build graph
+            graph = nx.Graph()
+            for i in range(len(sentences)):
+                graph.add_node(i)
+
+            # Add edges with similarity weights (threshold to avoid noise)
+            threshold = 0.1  # Minimum similarity to create edge
+            for i in range(len(sentences)):
+                for j in range(i + 1, len(sentences)):
+                    similarity = similarity_matrix[i][j]
+                    if similarity > threshold:
+                        graph.add_edge(i, j, weight=similarity)
+
+            # Run PageRank to get sentence importance scores
+            pagerank_scores = nx.pagerank(graph, alpha=damping, max_iter=100)
+
+            # Convert to array in sentence order
+            scores = np.array([pagerank_scores.get(i, 0.0) for i in range(len(sentences))])
+
+            # Normalize to 0-1 range
+            if scores.max() > 0:
+                scores = scores / scores.max()
+
+            return scores
+
+        except Exception as e:
+            logger.warning(f"TextRank ranking failed: {e}, returning uniform scores")
+            return np.array([1.0] * len(sentences))
+
+    def _ensemble_voting(self, sentences: List[str], tfidf_scores, textrank_scores):
+        """
+        Combine TF-IDF and TextRank rankings using consensus scoring.
+
+        Sentences that rank highly in BOTH methods get highest scores.
+        This reduces false positives from either method alone.
+
+        Args:
+            sentences: List of sentence strings
+            tfidf_scores: TF-IDF importance scores (normalized 0-1)
+            textrank_scores: TextRank PageRank scores (normalized 0-1)
+
+        Returns:
+            Combined consensus scores (0-1 range)
+        """
+        import numpy as np
+
+        # Normalize both score arrays to 0-1 range
+        def normalize(arr):
+            arr_max = arr.max()
+            if arr_max > 0:
+                return arr / arr_max
+            return arr
+
+        tfidf_norm = normalize(tfidf_scores)
+        textrank_norm = normalize(textrank_scores)
+
+        # Consensus scoring: Geometric mean (reduces impact of one method being wrong)
+        # Geometric mean is better than arithmetic mean because:
+        # - High score in both = high consensus score
+        # - High in one, low in other = moderate consensus score
+        # - Low in both = low consensus score
+        consensus_scores = np.sqrt(tfidf_norm * textrank_norm)
+
+        # Bonus for sentences ranked highly by BOTH (top 50% in each)
+        tfidf_threshold = np.percentile(tfidf_norm, 50)
+        textrank_threshold = np.percentile(textrank_norm, 50)
+
+        for i in range(len(sentences)):
+            if tfidf_norm[i] >= tfidf_threshold and textrank_norm[i] >= textrank_threshold:
+                # 20% bonus for consensus
+                consensus_scores[i] = min(1.0, consensus_scores[i] * 1.2)
+
+        return consensus_scores
+
     def _create_lightweight_nlp_bullets(self, text: str, context_heading: str = None) -> List[str]:
         """
-        Create bullets using smart NLP: TF-IDF ranking + spaCy structure validation
+        Create bullets using ensemble NLP: TF-IDF + TextRank + spaCy validation
 
         ⚠️ PERMANENT APPROACH - DO NOT REVERT TO MANUAL KEYWORDS ⚠️
 
-        This intelligent NLP method is the locked-in standard as of October 27, 2025.
-        DO NOT replace with manual keyword-based filtering unless explicitly requested
-        by the project owner.
+        This intelligent NLP method uses ensemble voting for maximum quality:
+        - TF-IDF ranking (keyword importance)
+        - TextRank ranking (graph-based importance)
+        - Consensus voting (sentences ranked highly by BOTH)
+        - spaCy validation (grammar and structure)
 
-        Quality: 80-85% success rate (up from 57% with manual approach)
+        Quality: Target 90-92% success rate (up from 80-85% with TF-IDF alone)
         See: NLP_APPROACH_DECISION.md for full rationale
 
         Args:
@@ -2655,25 +2763,33 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             if context_heading:
                 heading_keywords = self._extract_heading_keywords(context_heading)
 
-            # Use TF-IDF to rank sentences by importance
+            # Use ENSEMBLE VOTING: TF-IDF + TextRank for maximum quality
             try:
+                # Method 1: TF-IDF ranking (keyword importance)
                 vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
                 tfidf_matrix = vectorizer.fit_transform(sentences)
 
                 # Calculate sentence importance (similarity to overall document)
-                # Convert to dense array to avoid numpy matrix deprecation warning
                 doc_vector = np.asarray(tfidf_matrix.mean(axis=0))
-                similarities = cosine_similarity(tfidf_matrix, doc_vector).flatten()
+                tfidf_scores = cosine_similarity(tfidf_matrix, doc_vector).flatten()
+
+                # Method 2: TextRank ranking (graph-based importance)
+                textrank_scores = self._textrank_ranking(sentences)
+
+                # Combine with ensemble voting (consensus scoring)
+                ensemble_scores = self._ensemble_voting(sentences, tfidf_scores, textrank_scores)
 
                 # ENHANCEMENT: Apply contextual boost if heading keywords available
                 if heading_keywords:
-                    similarities = self._boost_contextual_sentences(sentences, similarities, heading_keywords)
+                    ensemble_scores = self._boost_contextual_sentences(sentences, ensemble_scores, heading_keywords)
 
-                # Rank sentences by importance
-                ranked_indices = similarities.argsort()[::-1]
+                # Rank sentences by ensemble consensus
+                ranked_indices = ensemble_scores.argsort()[::-1]
+
+                logger.info(f"Ensemble voting complete: TF-IDF + TextRank consensus ranking applied")
 
             except Exception as e:
-                logger.warning(f"TF-IDF ranking failed: {e}, using order-based selection")
+                logger.warning(f"Ensemble ranking failed: {e}, using order-based selection")
                 ranked_indices = list(range(len(sentences)))
 
             # Select top sentences and validate quality with spaCy
@@ -2721,7 +2837,7 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
 
             # ENHANCEMENT 3: Evaluate and log quality metrics
             metrics = self._evaluate_bullet_quality(bullets)
-            logger.info(f"Smart NLP generated {len(bullets)} bullets using TF-IDF + spaCy (Quality: {metrics['quality_score']}/100)")
+            logger.info(f"Ensemble NLP generated {len(bullets)} bullets using TF-IDF + TextRank + spaCy (Quality: {metrics['quality_score']}/100)")
 
             return bullets
 
