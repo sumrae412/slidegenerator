@@ -240,12 +240,12 @@
                     <!-- Claude API Key -->
                     <div id="claude-key-section">
                         <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
-                            Claude API Key <span class="text-xs text-slate-500 font-normal">(Optional)</span>
+                            Claude API Key <span class="text-xs text-red-600 font-normal">(Required)</span>
                         </label>
                         <div class="flex gap-2">
                             <input type="password" id="claude-key" name="claude_key"
                                    class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
-                                   placeholder="sk-ant-...">
+                                   placeholder="sk-ant-..." required>
                             <button type="button" id="clear-key-btn" class="hidden px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
                                 Clear
                             </button>
@@ -254,7 +254,7 @@
                             <span id="key-status"></span>
                         </div>
                         <p class="text-xs text-slate-500 mt-1.5">
-                            For enhanced AI bullet generation. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
+                            Required for AI-powered slide generation. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
                         </p>
                     </div>
                 </div>

@@ -10013,12 +10013,16 @@ def upload_file():
     script_column = int(script_column_raw)  # Default to column 2
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
-    claude_api_key = request.form.get('claude_key', '').strip()  # Optional Claude API key
+    claude_api_key = request.form.get('claude_key', '').strip()  # Required Claude API key
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     google_docs_url = request.form.get('google_docs_url', '').strip()
 
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
     logger.info(f"📊 Output format: {output_format}")
+
+    # REQUIRE Claude API key
+    if not claude_api_key:
+        return jsonify({'error': 'Claude API key is required. Please provide your API key to generate slides. Get one at https://console.anthropic.com/settings/keys'}), 400
 
     # Check if we have a Google Docs URL
     if not google_docs_url:
