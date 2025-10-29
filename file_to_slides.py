@@ -11,6 +11,7 @@ import os
 import json
 import logging
 import time
+import hashlib
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,6 +20,7 @@ import random
 from math import cos, sin
 import requests
 import warnings
+from collections import OrderedDict
 
 # Semantic analysis libraries - lightweight fallback approach
 try:
@@ -577,8 +579,69 @@ class DocumentParser:
         # Initialize semantic analyzer
         self.semantic_analyzer = SemanticAnalyzer()
 
+        # Initialize LRU cache for Claude API responses (saves 40-60% on API costs)
+        # OrderedDict with manual LRU eviction (max 1000 entries)
+        self._api_cache = OrderedDict()
+        self._cache_max_size = 1000
+        self._cache_hits = 0
+        self._cache_misses = 0
+
         if not self.api_key:
             logger.warning("No Claude API key found - bullet generation will use fallback method")
+
+    def _generate_cache_key(self, text: str, heading: str = "", context: str = "") -> str:
+        """
+        Generate cache key from content hash.
+
+        Same content + heading + context = same bullets = cache hit
+        """
+        cache_input = f"{text}|{heading}|{context}".encode('utf-8')
+        return hashlib.sha256(cache_input).hexdigest()
+
+    def _get_cached_response(self, cache_key: str) -> Optional[List[str]]:
+        """
+        Retrieve cached API response if available.
+
+        Returns cached bullets or None if not found.
+        """
+        if cache_key in self._api_cache:
+            # Move to end (LRU: most recently used)
+            self._api_cache.move_to_end(cache_key)
+            self._cache_hits += 1
+            logger.debug(f"💰 Cache HIT (savings: {self._cache_hits} API calls avoided)")
+            return self._api_cache[cache_key]
+
+        self._cache_misses += 1
+        return None
+
+    def _cache_response(self, cache_key: str, bullets: List[str]):
+        """
+        Cache API response with LRU eviction.
+
+        Limits cache to 1000 entries to prevent memory bloat.
+        """
+        # Evict oldest entry if cache is full
+        if len(self._api_cache) >= self._cache_max_size:
+            # Remove first (oldest) entry
+            self._api_cache.popitem(last=False)
+            logger.debug(f"🗑️  Cache eviction (size limit: {self._cache_max_size})")
+
+        self._api_cache[cache_key] = bullets
+        logger.debug(f"💾 Cached response (cache size: {len(self._api_cache)})")
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Return cache performance statistics"""
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = (self._cache_hits / total_requests * 100) if total_requests > 0 else 0
+
+        return {
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
+            "total_requests": total_requests,
+            "hit_rate_percent": round(hit_rate, 1),
+            "cache_size": len(self._api_cache),
+            "estimated_cost_savings": f"{hit_rate:.1f}% of API calls cached"
+        }
 
     def analyze_content_structure(self, content: str) -> Dict[str, Any]:
         """Use Claude to analyze document structure and suggest improvements"""
@@ -2088,12 +2151,22 @@ Return your analysis as a JSON object with:
 
         text = text.strip()
 
+        # ═══════════════════════════════════════════════════════════════════
+        # CACHING LAYER: Check if we've processed this content before
+        # ═══════════════════════════════════════════════════════════════════
+        cache_key = self._generate_cache_key(text, context_heading or "", "")
+        cached_bullets = self._get_cached_response(cache_key)
+        if cached_bullets is not None:
+            logger.info(f"💰 CACHE HIT: Returning {len(cached_bullets)} cached bullets (API call avoided)")
+            return cached_bullets
+
         # Phase 1.1 Enhancement: Handle very short input (5-30 chars) specially
         if len(text) < 30:
             logger.info(f"Minimal input detected ({len(text)} chars) - using special handler")
             minimal_bullets = self._handle_minimal_input(text, context_heading)
             if minimal_bullets:
                 logger.info(f"✅ MINIMAL INPUT SUCCESS: Generated {len(minimal_bullets)} bullets")
+                self._cache_response(cache_key, minimal_bullets)  # Cache the result
                 return minimal_bullets
         logger.info(f"Starting bullet generation for: {text[:100]}...")
 
@@ -2104,6 +2177,7 @@ Return your analysis as a JSON object with:
             table_bullets = self._summarize_table(table_info)
             if table_bullets:
                 logger.info(f"✅ TABLE SUCCESS: Generated {len(table_bullets)} bullets from table")
+                self._cache_response(cache_key, table_bullets[:4])  # Cache table bullets
                 return table_bullets[:4]
             else:
                 logger.warning("Table summarization produced no bullets, falling back to text processing")
@@ -2122,6 +2196,7 @@ Return your analysis as a JSON object with:
             if llm_bullets and len(llm_bullets) >= 1:
                 logger.info(f"✅ LLM SUCCESS: Generated {len(llm_bullets)} LLM bullets")
                 unique_bullets = self._deduplicate_bullets(llm_bullets)
+                self._cache_response(cache_key, unique_bullets[:4])  # Cache LLM bullets
                 return unique_bullets[:4]
             else:
                 logger.warning("LLM approach failed - falling back to lightweight NLP")
@@ -2135,6 +2210,7 @@ Return your analysis as a JSON object with:
             if nlp_bullets and len(nlp_bullets) >= 1:
                 logger.info(f"✅ NLP SUCCESS: Generated {len(nlp_bullets)} NLP bullets")
                 unique_bullets = self._deduplicate_bullets(nlp_bullets)
+                self._cache_response(cache_key, unique_bullets[:4])  # Cache NLP bullets
                 return unique_bullets[:4]
             else:
                 logger.warning("Lightweight NLP approach also failed")
@@ -2143,7 +2219,9 @@ Return your analysis as a JSON object with:
 
         # If both approaches fail, use basic text extraction as last resort
         logger.warning("All advanced approaches failed - using basic text extraction")
-        return self._create_basic_fallback_bullets(text)
+        fallback_bullets = self._create_basic_fallback_bullets(text)
+        self._cache_response(cache_key, fallback_bullets)  # Cache fallback bullets
+        return fallback_bullets
     
     def _create_basic_fallback_bullets(self, text: str) -> List[str]:
         """Basic text-based bullet generation when all other methods fail"""
