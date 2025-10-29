@@ -1971,6 +1971,11 @@ Return your analysis as a JSON object with:
                 is_heading = False
 
             if is_heading:
+                # FILTER CONVERSATIONAL HEADINGS: Skip non-content headings
+                if self._is_conversational_heading(heading_text):
+                    logger.info(f"Skipping conversational heading: '{heading_text}'")
+                    continue
+
                 # Before processing new heading, flush any buffered content
                 if content_buffer:
                     combined_text = ' '.join(content_buffer)
@@ -2841,6 +2846,90 @@ Return your analysis as a JSON object with:
             final_title = self._smart_title_case(optimized)
 
         return final_title
+
+    def _is_conversational_heading(self, heading_text: str) -> bool:
+        """
+        Detect if a heading is conversational/non-content and should be filtered out.
+
+        Filters headings that are:
+        - Meta/administrative (Agenda, Notes, References)
+        - Discussion/interactive (Discussion Questions, Q&A)
+        - Generic single-word placeholders (Introduction, Overview, Summary)
+        - Temporal (Today, This Week, Next Steps)
+
+        Preserves legitimate content headings like:
+        - "Introduction to Machine Learning" (specific topic)
+        - "Discussion of Market Trends" (has content)
+
+        Args:
+            heading_text: The heading text to evaluate
+
+        Returns:
+            True if heading should be filtered out, False if it should become a slide
+        """
+        if not heading_text or not heading_text.strip():
+            return True
+
+        # Normalize for comparison
+        heading_lower = heading_text.strip().lower()
+        word_count = len(heading_text.split())
+
+        # Pattern 1: Exact match conversational patterns (any word count)
+        conversational_exact = {
+            'discussion questions', 'q&a', 'q & a', 'questions',
+            'group activity', 'group activities', 'exercise', 'exercises',
+            'practice', 'breakout session', 'workshop',
+            'agenda', 'schedule', 'timeline',
+            'notes', 'action items', 'follow-up', 'follow up',
+            'references', 'resources', 'links', 'additional resources',
+            'appendix', 'additional information',
+            'today', 'this week', 'next steps', 'upcoming',
+            'future work', 'to do', 'todo'
+        }
+
+        if heading_lower in conversational_exact:
+            return True
+
+        # Pattern 2: Generic single-word headings (too vague to be useful)
+        # But allow multi-word headings containing these words
+        if word_count == 1:
+            generic_singles = {
+                'introduction', 'intro', 'overview', 'summary',
+                'conclusion', 'background', 'context', 'recap',
+                'review', 'outline', 'preface', 'foreword'
+            }
+            if heading_lower in generic_singles:
+                return True
+
+        # Pattern 3: Starts with conversational phrases (even if longer)
+        conversational_starts = [
+            'discussion:',
+            'note:',
+            'notes:',
+            'reminder:',
+            'todo:',
+            'action item:',
+            'question:',
+            'questions for',
+            'things to discuss',
+            'items to cover'
+        ]
+
+        for pattern in conversational_starts:
+            if heading_lower.startswith(pattern):
+                return True
+
+        # Pattern 4: Question headings (unless they're specific content questions)
+        # Filter: "What are we covering today?"
+        # Keep: "What is Machine Learning?"
+        if heading_text.strip().endswith('?'):
+            # Check if it's a generic meta-question
+            meta_question_words = ['we', 'today', 'now', 'next', 'you', 'your', 'our']
+            if any(word in heading_lower.split() for word in meta_question_words):
+                return True
+
+        # All other headings pass through (legitimate content)
+        return False
 
     def _build_structured_prompt(self, text: str, content_info: dict,
                                  context_heading: str = None, style: str = 'professional') -> str:
