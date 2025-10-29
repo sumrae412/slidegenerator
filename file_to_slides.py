@@ -10139,18 +10139,33 @@ def upload_file():
 
     # REQUIRE Claude API key
     if not claude_api_key:
-        return jsonify({'error': 'Claude API key is required. Please provide your API key to generate slides. Get one at https://console.anthropic.com/settings/keys'}), 400
+        return jsonify({
+            'error': 'Claude API key required',
+            'message': 'An API key is needed to generate AI-powered slides.',
+            'action': 'Enter your Claude API key above, or get one at https://console.anthropic.com/settings/keys',
+            'tip': 'Keys start with "sk-ant-" and are free to create'
+        }), 400
 
     # Check if we have a Google Docs URL
     if not google_docs_url:
-        return jsonify({'error': 'Please provide a Google Docs URL'}), 400
+        return jsonify({
+            'error': 'Google Docs URL required',
+            'message': 'Please provide a valid Google Docs document URL.',
+            'action': 'Paste a URL like: https://docs.google.com/document/d/YOUR_DOC_ID/edit',
+            'tip': 'You can also click "Browse Drive" to select a document'
+        }), 400
 
     logger.info(f"Processing Google Docs URL: {google_docs_url}")
 
     # Extract document ID
     doc_id = extract_google_doc_id(google_docs_url)
     if not doc_id:
-        return jsonify({'error': 'Invalid Google Docs URL. Please provide a valid Google Docs document URL.'}), 400
+        return jsonify({
+            'error': 'Invalid Google Docs URL',
+            'message': 'Could not extract document ID from the provided URL.',
+            'action': 'Make sure your URL looks like: https://docs.google.com/document/d/DOCUMENT_ID/edit',
+            'tip': 'Copy the URL from your browser address bar when viewing the Google Doc'
+        }), 400
 
     # Get Google credentials if available (for authenticated access)
     google_credentials = flask.session.get('google_credentials')
@@ -10178,14 +10193,24 @@ def upload_file():
         if not claude_api_key.startswith('sk-ant-'):
             if filepath and temp_file:
                 os.remove(filepath)
-            return jsonify({'error': 'Invalid Claude API key format. Key must start with "sk-ant-". Please check your key.'}), 400
+            return jsonify({
+                'error': 'Invalid API key format',
+                'message': 'Your Claude API key doesn\'t match the expected format.',
+                'action': 'Claude API keys always start with "sk-ant-" - please double-check your key',
+                'tip': 'Copy the key directly from https://console.anthropic.com/settings/keys to avoid typos'
+            }), 400
         logger.info("✅ Claude API key format valid")
 
     # Now check file size to prevent timeouts on huge files
     if file_size > 50 * 1024 * 1024:  # 50MB limit
         if filepath and temp_file:
             os.remove(filepath)
-        return jsonify({'error': 'File too large. Maximum size is 50MB for processing speed.'}), 400
+        return jsonify({
+            'error': 'Document too large',
+            'message': f'Your document is {file_size/(1024*1024):.1f}MB, which exceeds the 50MB limit.',
+            'action': 'Try splitting your document into smaller sections or removing large images',
+            'tip': 'Most presentations convert in under 5MB'
+        }), 400
 
     try:
         start_time = time.time()
@@ -10200,7 +10225,12 @@ def upload_file():
         # Check if we have too many slides (could cause timeout)
         if len(doc_structure.slides) > 200:
             os.remove(filepath)
-            return jsonify({'error': f'Document too complex with {len(doc_structure.slides)} slides. Maximum is 200 slides for processing speed.'}), 400
+            return jsonify({
+                'error': 'Document too complex',
+                'message': f'Your document would generate {len(doc_structure.slides)} slides, exceeding our 200-slide limit.',
+                'action': 'Try breaking your document into smaller presentations (50-100 slides each)',
+                'tip': 'Use H1 headings to split into separate presentations'
+            }), 400
 
         # Generate presentation based on output format
         ppt_start = time.time()

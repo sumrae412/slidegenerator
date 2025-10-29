@@ -410,13 +410,21 @@
 
             <!-- Error -->
             <div id="error" class="hidden mt-8 p-6 bg-red-50 border border-red-200 rounded-lg">
-                <div class="flex items-center">
-                    <svg class="h-6 w-6 text-red-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex">
+                    <svg class="h-6 w-6 text-red-600 mr-3 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-800 mb-1">Conversion Failed</h3>
-                        <p id="error-message" class="text-slate-700"></p>
+                    <div class="flex-1">
+                        <h3 id="error-title" class="text-lg font-semibold text-slate-800 mb-2">Conversion Failed</h3>
+                        <p id="error-message" class="text-slate-700 mb-3"></p>
+                        <div id="error-action" class="hidden mb-3 p-3 bg-red-100 border-l-4 border-red-600 rounded">
+                            <p class="font-medium text-slate-800 mb-1">How to fix:</p>
+                            <p id="error-action-text" class="text-slate-700"></p>
+                        </div>
+                        <div id="error-tip" class="hidden p-3 bg-amber-50 border-l-4 border-amber-500 rounded">
+                            <p class="font-medium text-slate-800 mb-1">Helpful tip:</p>
+                            <p id="error-tip-text" class="text-slate-700"></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -783,7 +791,8 @@
                 } else if (result.auth_required) {
                     showError('Google authentication required. Please click "Authorize Now" and try again.');
                 } else {
-                    showError(result.error || 'Conversion failed');
+                    // Pass the full result object for structured error display
+                    showError(result);
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
@@ -833,8 +842,43 @@
             results.classList.add('hidden');
         }
 
-        function showError(message) {
-            document.getElementById('error-message').textContent = message;
+        function showError(errorData) {
+            // Handle both string errors (backward compatibility) and structured errors
+            const errorTitle = document.getElementById('error-title');
+            const errorMessage = document.getElementById('error-message');
+            const errorAction = document.getElementById('error-action');
+            const errorActionText = document.getElementById('error-action-text');
+            const errorTip = document.getElementById('error-tip');
+            const errorTipText = document.getElementById('error-tip-text');
+
+            if (typeof errorData === 'string') {
+                // Legacy string error
+                errorTitle.textContent = 'Conversion Failed';
+                errorMessage.textContent = errorData;
+                errorAction.classList.add('hidden');
+                errorTip.classList.add('hidden');
+            } else {
+                // Structured error object
+                errorTitle.textContent = errorData.error || 'Conversion Failed';
+                errorMessage.textContent = errorData.message || errorData.error || 'An unknown error occurred';
+
+                // Show action if present
+                if (errorData.action) {
+                    errorActionText.textContent = errorData.action;
+                    errorAction.classList.remove('hidden');
+                } else {
+                    errorAction.classList.add('hidden');
+                }
+
+                // Show tip if present
+                if (errorData.tip) {
+                    errorTipText.textContent = errorData.tip;
+                    errorTip.classList.remove('hidden');
+                } else {
+                    errorTip.classList.add('hidden');
+                }
+            }
+
             error.classList.remove('hidden');
         }
 
