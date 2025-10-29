@@ -9966,6 +9966,10 @@ def oauth2callback():
 
         # Store credentials in session
         credentials = flow.credentials
+
+        # Mark session as permanent so it persists across page refreshes (1 hour lifetime)
+        flask.session.permanent = True
+
         flask.session['google_credentials'] = {
             'token': credentials.token,
             'refresh_token': credentials.refresh_token,
