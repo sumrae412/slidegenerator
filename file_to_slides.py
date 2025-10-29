@@ -10054,14 +10054,15 @@ def upload_file():
     temp_file = True
     logger.info(f"Google Doc fetched and saved temporarily (size: {file_size/1024:.1f}KB)")
 
-    # FIRST: Validate Claude API key if provided - do this before any file processing
+    # Check Claude API key format (don't validate with API call yet - do that during actual use)
+    # This prevents false negatives from network issues during upfront validation
     if claude_api_key:
-        logger.info("Validating Claude API key before processing...")
-        if not _validate_claude_api_key(claude_api_key):
+        logger.info(f"Claude API key provided (length: {len(claude_api_key)})")
+        if not claude_api_key.startswith('sk-ant-'):
             if filepath and temp_file:
                 os.remove(filepath)
-            return jsonify({'error': 'Invalid Claude API key. Please check your key and try again.'}), 400
-        logger.info("✅ Claude API key validation successful")
+            return jsonify({'error': 'Invalid Claude API key format. Key must start with "sk-ant-". Please check your key.'}), 400
+        logger.info("✅ Claude API key format valid")
 
     # Now check file size to prevent timeouts on huge files
     if file_size > 50 * 1024 * 1024:  # 50MB limit
