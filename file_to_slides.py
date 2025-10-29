@@ -643,6 +643,66 @@ class DocumentParser:
             "estimated_cost_savings": f"{hit_rate:.1f}% of API calls cached"
         }
 
+    def _call_claude_with_retry(self, **api_params) -> Any:
+        """
+        Call Claude API with exponential backoff retry logic.
+
+        Args:
+            **api_params: Parameters to pass to client.messages.create()
+
+        Returns:
+            API response message
+
+        Raises:
+            Exception: After all retries exhausted or on non-retryable errors
+        """
+        max_retries = 3
+        base_delay = 1.0  # Start with 1 second
+
+        for attempt in range(max_retries):
+            try:
+                message = self.client.messages.create(**api_params)
+
+                # Log success on retry
+                if attempt > 0:
+                    logger.info(f"🔄 API call succeeded on retry {attempt + 1}/{max_retries}")
+
+                return message
+
+            except Exception as e:
+                error_str = str(e).lower()
+                is_last_attempt = (attempt == max_retries - 1)
+
+                # Determine if error is retryable
+                retryable_errors = [
+                    'rate limit',
+                    'timeout',
+                    'connection',
+                    'network',
+                    'server error',
+                    '429',  # Too Many Requests
+                    '500',  # Internal Server Error
+                    '502',  # Bad Gateway
+                    '503',  # Service Unavailable
+                    '504',  # Gateway Timeout
+                ]
+
+                is_retryable = any(err in error_str for err in retryable_errors)
+
+                if not is_retryable or is_last_attempt:
+                    # Don't retry on client errors (4xx except 429) or if out of retries
+                    logger.error(f"❌ API call failed: {e}")
+                    raise
+
+                # Calculate exponential backoff delay
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"⚠️  API call failed (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.info(f"🔄 Retrying in {delay:.1f}s...")
+                time.sleep(delay)
+
+        # Should never reach here, but just in case
+        raise Exception("Max retries exhausted")
+
     def analyze_content_structure(self, content: str) -> Dict[str, Any]:
         """Use Claude to analyze document structure and suggest improvements"""
         if not self.client:
@@ -670,7 +730,7 @@ Return your analysis as a JSON object with:
 - "merge_recommendations": list of sections to combine
 - "summary": brief overview of main issues"""
 
-            message = self.client.messages.create(
+            message = self._call_claude_with_retry(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=1500,
                 temperature=0.3,
@@ -2609,7 +2669,7 @@ INSTRUCTIONS:
 
 OUTPUT: Return the refined bullets, one per line, no numbering."""
 
-            message = self.client.messages.create(
+            message = self._call_claude_with_retry(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=400,
                 temperature=0.1,  # Lower temperature for refinement
@@ -2673,7 +2733,7 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             )
 
             # STEP 3: Generate initial bullets
-            message = self.client.messages.create(
+            message = self._call_claude_with_retry(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=800,  # Increased to prevent truncation of complete sentences
                 temperature=0.3,
@@ -5129,7 +5189,7 @@ Return exactly 3-4 bullets in this format:
 - [Complete sentence about key point 3]
 - [Complete sentence about key point 4 if applicable]"""
 
-            message = self.client.messages.create(
+            message = self._call_claude_with_retry(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=400,
                 temperature=0.3,
