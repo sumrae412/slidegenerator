@@ -1934,7 +1934,11 @@ Return your analysis as a JSON object with:
         
         slides = []
         script_slide_counter = 1
-        
+
+        # Track document hierarchy for smart subtitles
+        current_h1 = None
+        current_h2 = None
+
         logger.info(f"Converting script content to slides, processing {len(lines)} lines ({len(non_heading_lines)} content blocks)")
         
         pending_h4_title = None  # Store H4 title waiting for content
@@ -2010,14 +2014,37 @@ Return your analysis as a JSON object with:
                     pending_h4_title = heading_text
                     logger.info(f"Found H4 heading: '{heading_text}' - will group following paragraphs")
                 else:
-                    # H1, H2, H3 - create title/section slides
+                    # H1, H2, H3 - create title/section slides with smart subtitles
+
+                    # Generate subtitle based on hierarchy
+                    subtitle = None
+                    if heading_level == 2 and current_h1:
+                        # H2 gets H1 as subtitle
+                        subtitle = current_h1
+                    elif heading_level == 3 and current_h2:
+                        # H3 gets H2 as subtitle
+                        subtitle = current_h2
+
                     slides.append(SlideContent(
                         title=self._prepare_slide_title(heading_text, heading_level=heading_level),
                         content=[],
                         slide_type='heading',
-                        heading_level=heading_level
+                        heading_level=heading_level,
+                        subheader=subtitle
                     ))
-                    logger.info(f"Created H{heading_level} section slide: '{heading_text}'")
+
+                    if subtitle:
+                        logger.info(f"Created H{heading_level} section slide: '{heading_text}' with subtitle: '{subtitle}'")
+                    else:
+                        logger.info(f"Created H{heading_level} section slide: '{heading_text}'")
+
+                    # Update hierarchy tracking
+                    if heading_level == 1:
+                        current_h1 = heading_text
+                        current_h2 = None  # Reset H2 when we encounter a new H1
+                    elif heading_level == 2:
+                        current_h2 = heading_text
+
                     # Clear any pending H4 title since we found a higher-level heading
                     pending_h4_title = None
 
