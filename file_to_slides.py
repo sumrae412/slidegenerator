@@ -1939,6 +1939,11 @@ Return your analysis as a JSON object with:
         current_h1 = None
         current_h2 = None
 
+        # Track section numbers for hierarchical numbering
+        h1_num = 0
+        h2_num = 0
+        h3_num = 0
+
         logger.info(f"Converting script content to slides, processing {len(lines)} lines ({len(non_heading_lines)} content blocks)")
         
         pending_h4_title = None  # Store H4 title waiting for content
@@ -2014,7 +2019,30 @@ Return your analysis as a JSON object with:
                     pending_h4_title = heading_text
                     logger.info(f"Found H4 heading: '{heading_text}' - will group following paragraphs")
                 else:
-                    # H1, H2, H3 - create title/section slides with smart subtitles
+                    # H1, H2, H3 - create title/section slides with smart subtitles and hierarchical numbering
+
+                    # Update section numbers based on heading level
+                    if heading_level == 1:
+                        h1_num += 1
+                        h2_num = 0  # Reset subsection numbers
+                        h3_num = 0
+                        section_number = f"{h1_num}."
+                    elif heading_level == 2:
+                        h2_num += 1
+                        h3_num = 0  # Reset sub-subsection numbers
+                        section_number = f"{h1_num}.{h2_num}"
+                    elif heading_level == 3:
+                        h3_num += 1
+                        section_number = f"{h1_num}.{h2_num}.{h3_num}"
+                    else:
+                        section_number = None
+
+                    # Prepare title with section number
+                    base_title = self._prepare_slide_title(heading_text, heading_level=heading_level)
+                    if section_number and h1_num > 0:  # Only add numbers if we've seen at least one H1
+                        numbered_title = f"{section_number} {base_title}"
+                    else:
+                        numbered_title = base_title
 
                     # Generate subtitle based on hierarchy
                     subtitle = None
@@ -2026,7 +2054,7 @@ Return your analysis as a JSON object with:
                         subtitle = current_h2
 
                     slides.append(SlideContent(
-                        title=self._prepare_slide_title(heading_text, heading_level=heading_level),
+                        title=numbered_title,
                         content=[],
                         slide_type='heading',
                         heading_level=heading_level,
@@ -2034,9 +2062,9 @@ Return your analysis as a JSON object with:
                     ))
 
                     if subtitle:
-                        logger.info(f"Created H{heading_level} section slide: '{heading_text}' with subtitle: '{subtitle}'")
+                        logger.info(f"Created H{heading_level} section slide: '{numbered_title}' with subtitle: '{subtitle}'")
                     else:
-                        logger.info(f"Created H{heading_level} section slide: '{heading_text}'")
+                        logger.info(f"Created H{heading_level} section slide: '{numbered_title}'")
 
                     # Update hierarchy tracking
                     if heading_level == 1:
@@ -2845,18 +2873,19 @@ Return your analysis as a JSON object with:
 
     def _prepare_slide_title(self, raw_title: str, heading_level: int = None) -> str:
         """
-        Prepare slide title by optimizing and applying appropriate casing.
+        Prepare slide title by optimizing, applying appropriate casing, and validating length.
 
         - H1 headings: Title Case (capitalize major words)
         - H2-H4 headings: Sentence case (capitalize first word only)
         - No heading level: Title Case (for content slides)
+        - Validates max length: 80 characters (PowerPoint best practice)
 
         Args:
             raw_title: Raw title from document
             heading_level: Optional heading level (1-4)
 
         Returns:
-            Optimized and properly formatted title
+            Optimized, properly formatted, and length-validated title
         """
         if not raw_title:
             return raw_title
@@ -2871,6 +2900,14 @@ Return your analysis as a JSON object with:
         else:
             # H1 or no heading level: Use title case
             final_title = self._smart_title_case(optimized)
+
+        # Step 3: Validate and truncate if needed (PowerPoint best practice: max 80 chars)
+        MAX_TITLE_LENGTH = 80
+        if len(final_title) > MAX_TITLE_LENGTH:
+            logger.warning(f"Title exceeds {MAX_TITLE_LENGTH} chars ({len(final_title)}): '{final_title[:50]}...'")
+            # Truncate and add ellipsis
+            final_title = final_title[:MAX_TITLE_LENGTH-3] + "..."
+            logger.info(f"Truncated to: '{final_title}'")
 
         return final_title
 
