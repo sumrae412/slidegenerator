@@ -1211,8 +1211,8 @@ Return your analysis as a JSON object with:
             # Convert content to slides
             slides = self._content_to_slides(content, fast_mode)
 
-            # Validate and correct heading hierarchy
-            slides = self._validate_heading_hierarchy(slides)
+            # v128: Temporarily disabled - method exists but may not be loaded in Heroku cache
+            # slides = self._validate_heading_hierarchy(slides)
 
             # Optimize slide density (merge sparse, split dense)
             slides = self._optimize_slide_density(slides)
