@@ -115,6 +115,30 @@ All 9 priorities implemented and deployed:
 - **Testing**: All smoke tests passed (4/4)
 - **Status**: Deployed and verified on production
 
+#### v133: UI Polish - Remove Subtitles from H2 Slides ✅ COMPLETED
+- **Issue**: All heading slides showing subtitles when not needed
+- **User feedback**: "all slides have a subheading" with screenshot
+- **Solution**: Modified subtitle logic to only add subtitles to H3 slides
+  - H1, H2, H4: No subtitle (cleaner look)
+  - H3 slides: Show H2 as subtitle for hierarchical context
+- **File**: `file_to_slides.py:2149-2155`
+- **Testing**: All smoke tests passed (4/4)
+- **Status**: Deployed and verified on production
+
+#### v134: Authentication Fix - Expired Token Handling ✅ COMPLETED
+- **Issue**: 403 error when clicking "Browse Google Drive" with expired session token
+- **User feedback**: "when i click the browse google drive button, i get the error instead of being redirected to log in"
+- **Browser error**: `docs.google.com/pick...oken=5f6p6kyrqk9k:1 Failed to load resource: the server responded with a status of 403 ()`
+- **Root cause**: Code assumed presence of access token meant validity, but expired tokens caused Google Picker to fail with 403
+- **Solution**: Added token validation before creating Google Picker
+  - `validateAccessToken()`: Makes lightweight Drive API call to verify token validity
+  - If token invalid/expired (401/403), clears it and redirects to OAuth login
+  - `initiateGoogleAuth()`: Refactored helper function for OAuth flow
+- **Files**: `templates/file_to_slides.html:714-787`
+- **Testing**: All smoke tests passed (4/4)
+- **Impact**: Users with expired sessions now properly redirected to re-authenticate instead of seeing 403 errors
+- **Status**: Deployed to production (v134)
+
 ---
 
 ## 📊 Phase 3: Quality & Testing (Future)
