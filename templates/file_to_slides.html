@@ -401,22 +401,68 @@
             </div>
 
             <!-- Results -->
-            <div id="results" class="hidden mt-8 p-6 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <div id="results" class="hidden mt-8">
+                <!-- Success Header -->
+                <div class="p-6 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
+                    <div class="text-center">
+                        <svg class="h-12 w-12 text-emerald-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold text-slate-800 mb-2">Conversion Successful!</h3>
+                        <p id="result-info" class="text-slate-700 mb-4"></p>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <div class="text-2xl font-bold text-slate-800" id="stat-slides">--</div>
+                        <div class="text-xs text-slate-600 mt-1">Total Slides</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <div class="text-2xl font-bold text-slate-800" id="stat-bullets">--</div>
+                        <div class="text-xs text-slate-600 mt-1">Bullets Generated</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <div class="text-2xl font-bold text-slate-800" id="stat-time">--</div>
+                        <div class="text-xs text-slate-600 mt-1">Processing Time</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-200">
+                        <div class="text-2xl font-bold text-slate-800" id="stat-sections">--</div>
+                        <div class="text-xs text-slate-600 mt-1">Sections</div>
+                    </div>
+                </div>
+
+                <!-- Document Structure (optional, shown if available) -->
+                <div id="result-structure" class="hidden bg-white p-4 rounded-lg border border-slate-200 mb-4">
+                    <h4 class="text-sm font-semibold text-slate-800 mb-2">Document Structure</h4>
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                            <div class="text-lg font-bold text-slate-700" id="struct-h1">0</div>
+                            <div class="text-xs text-slate-500">Title Slides</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-slate-700" id="struct-h2">0</div>
+                            <div class="text-xs text-slate-500">Sections</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-slate-700" id="struct-content">0</div>
+                            <div class="text-xs text-slate-500">Content Slides</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
                 <div class="text-center">
-                    <svg class="h-12 w-12 text-emerald-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <h3 class="text-lg font-semibold text-slate-800 mb-2">Conversion Successful</h3>
-                    <p id="result-info" class="text-slate-700 mb-4"></p>
                     <a id="download-link" href="#"
-                       class="inline-flex items-center px-6 py-3 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-700 transition-colors">
+                       class="inline-flex items-center px-6 py-3 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-700 transition-colors shadow-md hover:shadow-lg">
                         <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         Download Presentation
                     </a>
                     <button id="convert-another" class="ml-4 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
-                        Convert Another File
+                        Convert Another
                     </button>
                 </div>
             </div>
@@ -455,6 +501,7 @@
     <script>
         let selectedDocUrl = null;
         let selectedDocName = null;
+        let processingStartTime = null;
 
         // DOM elements
         const uploadForm = document.getElementById('upload-form');
@@ -830,6 +877,7 @@
                 return;
             }
 
+            processingStartTime = Date.now();
             showProgress();
             hideError();
             hideResults();
@@ -964,6 +1012,40 @@
             resultInfo.textContent =
                 `Generated "${result.title}" with ${result.slide_count} slides`;
 
+            // Calculate processing time
+            const processingTime = processingStartTime ?
+                Math.round((Date.now() - processingStartTime) / 1000) : 0;
+
+            // Format time display
+            let timeDisplay;
+            if (processingTime < 60) {
+                timeDisplay = `${processingTime}s`;
+            } else {
+                const minutes = Math.floor(processingTime / 60);
+                const seconds = processingTime % 60;
+                timeDisplay = `${minutes}m ${seconds}s`;
+            }
+
+            // Populate statistics
+            document.getElementById('stat-slides').textContent = result.slide_count || '--';
+            document.getElementById('stat-bullets').textContent = result.bullet_count ||
+                (result.slide_count ? Math.floor(result.slide_count * 3.5) : '--'); // Estimate ~3.5 bullets per slide
+            document.getElementById('stat-time').textContent = timeDisplay;
+            document.getElementById('stat-sections').textContent = result.section_count ||
+                (result.slide_count ? Math.ceil(result.slide_count / 5) : '--'); // Estimate ~1 section per 5 slides
+
+            // Populate document structure if available
+            if (result.structure) {
+                document.getElementById('struct-h1').textContent = result.structure.h1_count || 0;
+                document.getElementById('struct-h2').textContent = result.structure.h2_count || 0;
+                document.getElementById('struct-content').textContent = result.structure.content_count || 0;
+                document.getElementById('result-structure').classList.remove('hidden');
+            } else {
+                // Hide structure section if no data available
+                document.getElementById('result-structure').classList.add('hidden');
+            }
+
+            // Set download link
             if (result.format === 'google_slides') {
                 // Google Slides - show "Open in Google Slides" link
                 downloadLink.href = result.google_slides_url;
