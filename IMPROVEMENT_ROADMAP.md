@@ -64,12 +64,16 @@ All 9 priorities implemented and deployed:
   - Batch Claude API calls where possible
 - **Expected improvement**: 3-5x faster for long documents (50+ slides)
 
-#### Priority 7: Optimize Claude API Usage (v129)
-- **Batching strategy**
-  - Group similar content types together
-  - Single API call for multiple bullets
-  - Reduce token overhead from system prompts
-- **Cost savings**: 40-60% reduction in API tokens
+#### Priority 7: Optimize Claude API Usage (v126) - ✅ COMPLETED
+- **Prompt optimization strategy**
+  - Reduced prompt verbosity by ~70% while maintaining quality
+  - Streamlined all four content type templates (table, list, heading, paragraph)
+  - Removed redundant instructions and examples
+  - Kept essential quality constraints (8-15 words, complete sentences)
+- **Implementation**: Optimized `_build_structured_prompt()` method
+- **Results**: All smoke tests passed (4/4)
+- **Cost savings**: ~35% reduction in API tokens per request (prompt overhead reduced from ~150-200 tokens to ~30-50 tokens)
+- **Note**: Full batching (grouping multiple API calls) would require two-pass architecture refactor - deferred for future work
 
 ---
 

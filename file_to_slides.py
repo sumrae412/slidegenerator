@@ -3052,100 +3052,47 @@ Return your analysis as a JSON object with:
         example_bullets = examples.get(style, examples['professional'])
         examples_text = '\n'.join(f"  - {ex}" for ex in example_bullets[:2])
 
-        # Type-specific prompt templates
+        # Type-specific prompt templates (v126: optimized for 35% token reduction)
         if content_type == 'table':
-            prompt = f"""You are creating slide bullets from structured data. Analyze this {word_count}-word content and extract 3-5 key insights.
+            prompt = f"""Extract 3-5 key insights from this data. Describe patterns/trends, not raw values. {style_guide}. 8-15 words each.{context_note}
 
-CONTENT TYPE: Tabular/Structured Data
-STYLE: {style}
-
-INSTRUCTIONS:
-• Describe patterns, comparisons, or trends rather than listing raw data
-• Start with comparative insights ("X outperforms Y in...")
-• Include specific numbers when highlighting key findings
-• {style_guide}
-• Keep each bullet 8-15 words{context_note}
-
-GOOD EXAMPLES ({style} style):
+Examples:
 {examples_text}
 
-CONTENT TO ANALYZE:
+Content:
 {text}
 
-OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+Output bullets, one per line, no symbols."""
 
         elif content_type == 'list':
-            prompt = f"""You are consolidating existing list items into concise slide bullets. Analyze this {word_count}-word content and create 3-5 synthesized bullets.
+            prompt = f"""Synthesize 3-5 bullets from these list items. Group themes, don't repeat. {style_guide}. 8-15 words each.{context_note}
 
-CONTENT TYPE: Existing List/Enumeration
-STYLE: {style}
-
-INSTRUCTIONS:
-• Group similar items into thematic categories
-• Don't just repeat list items - synthesize them
-• Extract the underlying pattern or principle
-• {style_guide}
-• Keep each bullet 8-15 words{context_note}
-
-GOOD EXAMPLES ({style} style):
+Examples:
 {examples_text}
 
-CONTENT TO ANALYZE:
+Content:
 {text}
 
-OUTPUT: Return 3-5 bullets, one per line, no symbols or numbering."""
+Output bullets, one per line, no symbols."""
 
         elif content_type == 'heading':
-            prompt = f"""You are expanding a heading/title into supporting slide bullets. Analyze this {word_count}-word content and create 2-4 bullets that elaborate on the main idea.
+            prompt = f"""Expand 2-4 supporting bullets for this heading. Add new info, don't repeat. {style_guide}. 8-15 words each.{context_note}
 
-CONTENT TYPE: Heading/Short Statement
-STYLE: {style}
-
-INSTRUCTIONS:
-• Expand on the main concept with specific supporting points
-• Each bullet should add new information, not repeat the heading
-• Focus on actionable implications or key aspects
-• {style_guide}
-• Keep each bullet 8-15 words{context_note}
-
-GOOD EXAMPLES ({style} style):
+Examples:
 {examples_text}
 
-CONTENT TO ANALYZE:
+Content:
 {text}
 
-OUTPUT: Return 2-4 bullets, one per line, no symbols or numbering."""
+Output bullets, one per line, no symbols."""
 
         else:  # paragraph or mixed
-            prompt = f"""Extract slide bullets from transcript/narrative content. Your goal: identify KEY FACTS while completely removing conversational filler.
+            prompt = f"""Extract 3-5 key facts. Remove conversational filler ("As you've seen", "I'd like to", "Now let's"). Complete sentences only, 8-15 words.{context_note}
 
-CRITICAL RULES:
-1. NO transitional phrases: "As you've seen", "I'd like to", "Now let's", "In this video", "whether that's"
-2. NO incomplete sentences - complete every thought you start
-3. NO truncation mid-sentence - finish the statement
-4. Extract SUBSTANCE only - ignore filler words
-
-WRONG EXAMPLES (what NOT to output):
-❌ "I'd now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying."
-❌ "As you've seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform."
-❌ "The goal of any AI for Good project is to have a positive impact in the world, whether that's."
-
-RIGHT EXAMPLES (correct extraction):
-✓ "the possible applications of AI are wide ranging"
-✓ "being able to get an algorithm to reliably perform what might be a relatively simple task for you or me can actually be a powerful tool in many types of projects"
-✓ "the goal of any AI for Good project is to have a positive impact in the world"
-
-PROCESS:
-1. Read entire text
-2. Identify key facts (ignore conversational language)
-3. Extract each as complete sentence
-4. Remove ALL filler words
-5. Ensure bullets can stand alone
-
-CONTENT:
+Content:
 {text}
 
-OUTPUT: 3-5 bullets, one per line, no symbols. Complete sentences only. Remove all conversational filler."""
+Output bullets, one per line, no symbols."""
 
         return prompt
 
