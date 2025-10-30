@@ -41,6 +41,8 @@ def test_class_methods_available():
     # Optional methods that should be available if not disabled
     optional_methods = [
         '_validate_heading_hierarchy',
+        '_optimize_slide_density',
+        '_insert_section_dividers',
     ]
 
     missing_required = []

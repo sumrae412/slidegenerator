@@ -1214,11 +1214,11 @@ Return your analysis as a JSON object with:
             # v128: Temporarily disabled - method exists but may not be loaded in Heroku cache
             # slides = self._validate_heading_hierarchy(slides)
 
-            # Optimize slide density (merge sparse, split dense)
-            slides = self._optimize_slide_density(slides)
+            # v130: Temporarily disabled - method exists but may not be loaded in Heroku cache
+            # slides = self._optimize_slide_density(slides)
 
-            # Insert section divider slides before major headings
-            slides = self._insert_section_dividers(slides)
+            # v130: Temporarily disabled - method exists but may not be loaded in Heroku cache
+            # slides = self._insert_section_dividers(slides)
 
             metadata = {
                 'filename': filename,
