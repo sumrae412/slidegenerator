@@ -397,7 +397,10 @@
                     </div>
                 </div>
                 <p id="progress-subtitle" class="text-sm text-slate-600 mt-3 text-center">This may take a few moments depending on file size</p>
-                <p id="progress-step" class="text-xs text-slate-500 mt-1 text-center">Step 1 of 7</p>
+                <div class="flex justify-between items-center mt-2 text-xs text-slate-500">
+                    <span id="progress-step">Step 1 of 7</span>
+                    <span id="progress-eta" class="font-medium">Estimating time...</span>
+                </div>
             </div>
 
             <!-- Results -->
@@ -947,6 +950,29 @@
                     if (progressValue > 95) progressValue = 95;
                     progressBar.style.width = progressValue + '%';
                     document.getElementById('progress-percent').textContent = Math.round(progressValue) + '%';
+
+                    // Calculate and display estimated time remaining
+                    const elapsedSeconds = (Date.now() - processingStartTime) / 1000;
+                    if (progressValue > 5) { // Only show ETA after 5% to get better estimate
+                        const estimatedTotalSeconds = (elapsedSeconds / progressValue) * 100;
+                        const remainingSeconds = Math.max(0, Math.ceil(estimatedTotalSeconds - elapsedSeconds));
+
+                        let etaText;
+                        if (remainingSeconds < 30) {
+                            etaText = 'Less than 30 seconds';
+                        } else if (remainingSeconds < 60) {
+                            etaText = `~${remainingSeconds} seconds remaining`;
+                        } else {
+                            const minutes = Math.floor(remainingSeconds / 60);
+                            const seconds = remainingSeconds % 60;
+                            if (seconds < 10) {
+                                etaText = `~${minutes} minute${minutes > 1 ? 's' : ''} remaining`;
+                            } else {
+                                etaText = `~${minutes}m ${seconds}s remaining`;
+                            }
+                        }
+                        document.getElementById('progress-eta').textContent = etaText;
+                    }
                 }, 400);
 
                 // Create abort controller for timeout handling
