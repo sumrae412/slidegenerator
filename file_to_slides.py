@@ -2283,13 +2283,19 @@ Return your analysis as a JSON object with:
         text = text.strip()
 
         # ═══════════════════════════════════════════════════════════════════
-        # CACHING LAYER: Check if we've processed this content before
+        # v127: CACHING LAYER with enhanced statistics tracking
         # ═══════════════════════════════════════════════════════════════════
         cache_key = self._generate_cache_key(text, context_heading or "", "")
         cached_bullets = self._get_cached_response(cache_key)
         if cached_bullets is not None:
+            # Track cache performance
+            cache_stats = self.get_cache_stats()
+            hit_rate = (cache_stats['hits'] / max(cache_stats['total_requests'], 1)) * 100
             logger.info(f"💰 CACHE HIT: Returning {len(cached_bullets)} cached bullets (API call avoided)")
+            logger.info(f"📊 Cache stats: {cache_stats['hits']}/{cache_stats['total_requests']} requests ({hit_rate:.1f}% hit rate)")
             return cached_bullets
+        else:
+            logger.info(f"🔄 CACHE MISS: Will generate and cache new bullets")
 
         # Phase 1.1 Enhancement: Handle very short input (5-30 chars) specially
         if len(text) < 30:
@@ -3201,11 +3207,33 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
                 style=style
             )
 
+            # v127: Adaptive temperature based on content type and style
+            # Technical/table content: lower temp for consistency
+            # Educational/creative: higher temp for variety
+            if content_info['type'] == 'table' or style == 'technical':
+                temperature = 0.2  # More deterministic for technical content
+            elif style == 'educational' or style == 'executive':
+                temperature = 0.4  # Slightly more creative for educational/exec content
+            else:
+                temperature = 0.3  # Balanced default
+
+            # v127: Dynamic max_tokens based on content length
+            # Avoid wasted tokens for short content, allow more for long content
+            char_count = len(text)
+            if char_count < 200:
+                max_tokens = 400  # Short content: smaller response
+            elif char_count < 600:
+                max_tokens = 600  # Medium content: moderate response
+            else:
+                max_tokens = 800  # Long content: full response capacity
+
+            logger.info(f"API params: temperature={temperature}, max_tokens={max_tokens}")
+
             # STEP 3: Generate initial bullets
             message = self._call_claude_with_retry(
                 model="claude-3-5-sonnet-20241022",
-                max_tokens=800,  # Increased to prevent truncation of complete sentences
-                temperature=0.3,
+                max_tokens=max_tokens,
+                temperature=temperature,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
