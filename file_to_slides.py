@@ -2290,9 +2290,9 @@ Return your analysis as a JSON object with:
         if cached_bullets is not None:
             # Track cache performance
             cache_stats = self.get_cache_stats()
-            hit_rate = (cache_stats['hits'] / max(cache_stats['total_requests'], 1)) * 100
+            hit_rate = (cache_stats['cache_hits'] / max(cache_stats['total_requests'], 1)) * 100
             logger.info(f"💰 CACHE HIT: Returning {len(cached_bullets)} cached bullets (API call avoided)")
-            logger.info(f"📊 Cache stats: {cache_stats['hits']}/{cache_stats['total_requests']} requests ({hit_rate:.1f}% hit rate)")
+            logger.info(f"📊 Cache stats: {cache_stats['cache_hits']}/{cache_stats['total_requests']} requests ({hit_rate:.1f}% hit rate)")
             return cached_bullets
         else:
             logger.info(f"🔄 CACHE MISS: Will generate and cache new bullets")
