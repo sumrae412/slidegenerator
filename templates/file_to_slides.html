@@ -356,6 +356,19 @@
                     </div>
                 </div>
 
+                <!-- Recent Documents -->
+                <div id="recent-docs-section" class="hidden mb-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-slate-800">Recent Documents</h3>
+                        <button type="button" id="clear-history-btn" class="text-xs text-slate-500 hover:text-slate-700 transition-colors">
+                            Clear history
+                        </button>
+                    </div>
+                    <div id="recent-docs-list" class="space-y-2">
+                        <!-- Recent documents will be inserted here -->
+                    </div>
+                </div>
+
                 <!-- Hidden input for backward compatibility -->
                 <input type="hidden" id="skip-visuals" name="skip_visuals" value="false">
                 <input type="hidden" name="output_format" value="google_slides">
@@ -454,6 +467,128 @@
         const googleDocsUrlInput = document.getElementById('google-docs-url');
         const docInfo = document.getElementById('doc-info');
         const browseDriveBtn = document.getElementById('browse-drive-btn');
+
+        // Document History Management (localStorage)
+        const MAX_HISTORY_ITEMS = 10;
+        const HISTORY_KEY = 'slide_gen_doc_history';
+
+        function getDocumentHistory() {
+            try {
+                const history = localStorage.getItem(HISTORY_KEY);
+                return history ? JSON.parse(history) : [];
+            } catch (e) {
+                console.error('Error loading document history:', e);
+                return [];
+            }
+        }
+
+        function saveToHistory(url, name, scriptColumn) {
+            try {
+                let history = getDocumentHistory();
+
+                // Remove duplicate if exists
+                history = history.filter(item => item.url !== url);
+
+                // Add new item at the beginning
+                history.unshift({
+                    url: url,
+                    name: name || extractDocNameFromUrl(url),
+                    scriptColumn: scriptColumn || 0,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Keep only last MAX_HISTORY_ITEMS
+                history = history.slice(0, MAX_HISTORY_ITEMS);
+
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                renderDocumentHistory();
+            } catch (e) {
+                console.error('Error saving to history:', e);
+            }
+        }
+
+        function clearHistory() {
+            if (confirm('Clear all recent documents?')) {
+                localStorage.removeItem(HISTORY_KEY);
+                renderDocumentHistory();
+            }
+        }
+
+        function loadFromHistory(historyItem) {
+            // Populate form with history item
+            googleDocsUrlInput.value = historyItem.url;
+            selectedDocUrl = historyItem.url;
+
+            // Restore script column
+            if (historyItem.scriptColumn !== undefined) {
+                scriptColumnSelect.value = historyItem.scriptColumn;
+            }
+
+            // Show document info
+            showDocInfo(historyItem.name, historyItem.url);
+            convertBtn.disabled = false;
+
+            // Scroll to form
+            uploadForm.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderDocumentHistory() {
+            const history = getDocumentHistory();
+            const recentDocsSection = document.getElementById('recent-docs-section');
+            const recentDocsList = document.getElementById('recent-docs-list');
+
+            if (history.length === 0) {
+                recentDocsSection.classList.add('hidden');
+                return;
+            }
+
+            recentDocsSection.classList.remove('hidden');
+            recentDocsList.innerHTML = '';
+
+            history.forEach(item => {
+                const docItem = document.createElement('button');
+                docItem.type = 'button';
+                docItem.className = 'w-full text-left p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all';
+
+                const date = new Date(item.timestamp);
+                const relativeTime = getRelativeTime(date);
+
+                docItem.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1 min-w-0 mr-3">
+                            <p class="text-sm font-medium text-slate-800 truncate">${item.name}</p>
+                            <p class="text-xs text-slate-500 mt-0.5">${relativeTime}</p>
+                        </div>
+                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                `;
+
+                docItem.addEventListener('click', () => loadFromHistory(item));
+                recentDocsList.appendChild(docItem);
+            });
+        }
+
+        function getRelativeTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Clear history button handler
+        document.getElementById('clear-history-btn').addEventListener('click', clearHistory);
+
+        // Load history on page load
+        renderDocumentHistory();
 
         // Google Docs URL handling
         googleDocsUrlInput.addEventListener('input', () => {
@@ -787,6 +922,12 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    // Save to document history
+                    saveToHistory(
+                        googleDocsUrl,
+                        selectedDocName ||  'Google Document',
+                        scriptColumnSelect.value
+                    );
                     showResults(result);
                 } else if (result.auth_required) {
                     showError('Google authentication required. Please click "Authorize Now" and try again.');
