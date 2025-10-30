@@ -2147,13 +2147,12 @@ Return your analysis as a JSON object with:
                         numbered_title = base_title
 
                     # Generate subtitle based on hierarchy
+                    # v133: Only H3 slides get subtitles (for deeper hierarchy context)
                     subtitle = None
-                    if heading_level == 2 and current_h1:
-                        # H2 gets H1 as subtitle
-                        subtitle = current_h1
-                    elif heading_level == 3 and current_h2:
-                        # H3 gets H2 as subtitle
+                    if heading_level == 3 and current_h2:
+                        # H3 gets H2 as subtitle for context
                         subtitle = current_h2
+                    # H1, H2, and H4 slides: no subtitle (cleaner look)
 
                     slides.append(SlideContent(
                         title=numbered_title,
