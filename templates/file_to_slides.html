@@ -721,28 +721,70 @@
             if (!accessToken) {
                 // Try fetching config again in case user authenticated in another tab
                 await fetchGoogleConfig();
-
-                if (!accessToken) {
-                    // Automatically initiate OAuth flow instead of showing error
-                    try {
-                        const response = await fetch('/auth/google');
-                        const data = await response.json();
-
-                        if (data.auth_url) {
-                            // Redirect to Google OAuth
-                            window.location.href = data.auth_url;
-                        } else if (data.error) {
-                            showError('Authentication failed: ' + data.error);
-                        }
-                    } catch (error) {
-                        showError('Failed to initiate Google authentication: ' + error.message);
-                    }
-                    return;
-                }
             }
 
+            // If still no access token, initiate OAuth
+            if (!accessToken) {
+                // Automatically initiate OAuth flow
+                await initiateGoogleAuth();
+                return;
+            }
+
+            // Validate token before using it
+            const isValid = await validateAccessToken();
+            if (!isValid) {
+                // Token is invalid/expired - clear it and re-authenticate
+                console.log('Access token is invalid or expired, re-authenticating...');
+                accessToken = null;
+                await initiateGoogleAuth();
+                return;
+            }
+
+            // Token is valid, create picker
             createPicker();
         });
+
+        // Helper function to validate access token
+        async function validateAccessToken() {
+            if (!accessToken) {
+                return false;
+            }
+
+            try {
+                // Make a simple API call to check if token is valid
+                // Using Drive API v3 to check about (lightweight call)
+                const response = await fetch(
+                    'https://www.googleapis.com/drive/v3/about?fields=user',
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    }
+                );
+
+                return response.ok;  // Returns true if 200, false if 401/403
+            } catch (error) {
+                console.error('Token validation failed:', error);
+                return false;
+            }
+        }
+
+        // Helper function to initiate Google OAuth flow
+        async function initiateGoogleAuth() {
+            try {
+                const response = await fetch('/auth/google');
+                const data = await response.json();
+
+                if (data.auth_url) {
+                    // Redirect to Google OAuth
+                    window.location.href = data.auth_url;
+                } else if (data.error) {
+                    showError('Authentication failed: ' + data.error);
+                }
+            } catch (error) {
+                showError('Failed to initiate Google authentication: ' + error.message);
+            }
+        }
 
         function createPicker() {
             // Create a view for My Drive documents (shown first)
