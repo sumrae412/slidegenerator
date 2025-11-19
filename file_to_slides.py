@@ -11226,7 +11226,8 @@ def upload_file():
     script_column = int(script_column_raw)  # Default to column 2
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
-    claude_api_key = request.form.get('claude_key', '').strip()  # Required Claude API key
+    claude_api_key = request.form.get('claude_key', '').strip()  # Claude API key (optional if OpenAI provided)
+    openai_api_key = request.form.get('openai_key', '').strip()  # OpenAI API key (optional if Claude provided)
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     google_docs_url = request.form.get('google_docs_url', '').strip()
 
@@ -11314,7 +11315,11 @@ def upload_file():
         
         # Parse document
         parse_start = time.time()
-        parser = DocumentParser(claude_api_key=claude_api_key if claude_api_key else None)
+        parser = DocumentParser(
+            claude_api_key=claude_api_key if claude_api_key else None,
+            openai_api_key=openai_api_key if openai_api_key else None,
+            preferred_llm='auto'  # Intelligent routing between Claude and OpenAI
+        )
         doc_structure = parser.parse_file(filepath, filename, script_column, skip_visuals)
         logger.info(f"Document parsed in {time.time() - parse_start:.1f}s - {len(doc_structure.slides)} slides")
         

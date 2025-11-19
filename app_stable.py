@@ -15,6 +15,7 @@ import anthropic
 import re
 import datetime
 import time
+from slide_generator_pkg.document_parser import DocumentParser
 
 load_dotenv()
 
@@ -762,6 +763,15 @@ class WorkflowOrchestrator:
         self.project_generator = ProjectGenerator()
         self.progress_tracker = ProgressTracker()
         self.results: List[WorkflowResult] = []
+
+        # Initialize DocumentParser with both API keys for intelligent routing
+        claude_key = os.getenv('ANTHROPIC_API_KEY')
+        openai_key = os.getenv('OPENAI_API_KEY')
+        self.parser = DocumentParser(
+            claude_api_key=claude_key,
+            openai_api_key=openai_key,
+            preferred_llm='auto'
+        )
     
     async def execute_collaborative_workflow(self, prompt: str, project_name: str, max_iterations: int = 2) -> Tuple[List[WorkflowResult], List[ProjectFile]]:
         self.results = []

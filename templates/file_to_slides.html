@@ -237,25 +237,49 @@
                         </p>
                     </div>
 
-                    <!-- Claude API Key -->
-                    <div id="claude-key-section">
-                        <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
-                            Claude API Key <span class="text-xs text-red-600 font-normal">(Required)</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input type="password" id="claude-key" name="claude_key"
-                                   class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
-                                   placeholder="sk-ant-..." required>
-                            <button type="button" id="clear-key-btn" class="hidden px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
-                                Clear
-                            </button>
+                    <!-- API Keys Section -->
+                    <div id="api-keys-section" class="space-y-4">
+                        <!-- Claude API Key -->
+                        <div id="claude-key-section">
+                            <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
+                                Claude API Key <span class="text-xs text-slate-600 font-normal">(Provide Claude or OpenAI)</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" id="claude-key" name="claude_key"
+                                       class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
+                                       placeholder="sk-ant-...">
+                                <button type="button" id="clear-key-btn" class="hidden px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
+                                    Clear
+                                </button>
+                            </div>
+                            <div id="key-validation" class="mt-2 text-xs hidden">
+                                <span id="key-status"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1.5">
+                                Excellent for nuanced content and long documents. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
+                            </p>
                         </div>
-                        <div id="key-validation" class="mt-2 text-xs hidden">
-                            <span id="key-status"></span>
+
+                        <!-- OpenAI API Key -->
+                        <div id="openai-key-section">
+                            <label for="openai-key" class="block text-sm font-semibold text-slate-800 mb-2">
+                                OpenAI API Key <span class="text-xs text-slate-600 font-normal">(Alternative to Claude)</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" id="openai-key" name="openai_key"
+                                       class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
+                                       placeholder="sk-...">
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1.5">
+                                Great for structured data and technical content. <a href="https://platform.openai.com/api-keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
+                            </p>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1.5">
-                            Required for AI-powered slide generation. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
-                        </p>
+
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs text-blue-800">
+                                💡 <strong>Smart Routing:</strong> Provide both keys for automatic selection of the best AI model for each slide (tables → OpenAI, long content → Claude)
+                            </p>
+                        </div>
                     </div>
                 </div>
 

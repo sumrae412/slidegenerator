@@ -11,6 +11,7 @@ import openai
 import anthropic
 import re
 import datetime
+from slide_generator_pkg.document_parser import DocumentParser
 
 load_dotenv()
 
@@ -439,6 +440,15 @@ OPENAI_API_KEY=your_key
         claude = ClaudeAgent()
         chatgpt = ChatGPTAgent()
         project_gen = ProjectGenerator()
+
+        # Initialize DocumentParser with both API keys for intelligent routing
+        claude_key = os.getenv('ANTHROPIC_API_KEY')
+        openai_key = os.getenv('OPENAI_API_KEY')
+        doc_parser = DocumentParser(
+            claude_api_key=claude_key,
+            openai_api_key=openai_key,
+            preferred_llm='auto'
+        )
         
         # Progress tracking
         progress_bar = st.progress(0)

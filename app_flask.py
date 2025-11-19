@@ -15,11 +15,19 @@ import datetime
 import threading
 import time
 
+# Import DocumentParser for document processing
+from slide_generator_pkg.document_parser import DocumentParser
+
 load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Initialize DocumentParser with support for both Claude and OpenAI
+claude_key = os.getenv('ANTHROPIC_API_KEY')
+openai_key = os.getenv('OPENAI_API_KEY')
+document_parser = DocumentParser(claude_api_key=claude_key, openai_api_key=openai_key, preferred_llm='auto')
 
 class WorkflowStage(Enum):
     PLANNING = "planning"

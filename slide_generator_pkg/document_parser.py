@@ -79,6 +79,14 @@ from docx import Document
 # Anthropic Claude for bullet point generation and content analysis
 import anthropic
 
+# OpenAI for enhanced bullet generation and embeddings
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logging.info("OpenAI library not available - Claude-only mode")
+
 # Use relative imports for package structure
 from .data_models import SlideContent, DocumentStructure, SemanticChunk
 from .semantic_analyzer import SemanticAnalyzer
@@ -89,7 +97,15 @@ logger = logging.getLogger(__name__)
 class DocumentParser:
     """Handles parsing of various document formats"""
     
-    def __init__(self, claude_api_key=None):
+    def __init__(self, claude_api_key=None, openai_api_key=None, preferred_llm='auto'):
+        """
+        Initialize DocumentParser with support for multiple LLM providers.
+
+        Args:
+            claude_api_key: Anthropic Claude API key (falls back to ANTHROPIC_API_KEY env var)
+            openai_api_key: OpenAI API key (falls back to OPENAI_API_KEY env var)
+            preferred_llm: 'claude', 'openai', or 'auto' for intelligent routing (default: 'auto')
+        """
         self.heading_patterns = [
             r'^#{1,6}\s+(.+)$',  # Markdown headings
             r'^(.+)\n[=-]{3,}$',  # Underlined headings
@@ -97,8 +113,12 @@ class DocumentParser:
             r'^([A-Z][A-Z\s]{5,})$',  # ALL CAPS headings
         ]
 
-        # Store API key for Claude
+        # Store API keys for Claude and OpenAI
         self.api_key = claude_api_key or os.getenv('ANTHROPIC_API_KEY')
+        self.openai_api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
+        self.preferred_llm = preferred_llm
+
+        # Initialize Claude client
         self.client = None
         if self.api_key:
             try:
@@ -108,20 +128,41 @@ class DocumentParser:
                 logger.error(f"Failed to initialize Claude client: {e}")
                 self.client = None
 
+        # Initialize OpenAI client
+        self.openai_client = None
+        if self.openai_api_key and OPENAI_AVAILABLE:
+            try:
+                self.openai_client = OpenAI(api_key=self.openai_api_key)
+                logger.info("✅ OpenAI API client initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client: {e}")
+                self.openai_client = None
+        elif self.openai_api_key and not OPENAI_AVAILABLE:
+            logger.warning("OpenAI API key provided but library not installed - run: pip install openai")
+
         self.force_basic_mode = False  # Flag to override AI processing for large files
 
         # Initialize semantic analyzer
         self.semantic_analyzer = SemanticAnalyzer()
 
-        # Initialize LRU cache for Claude API responses (saves 40-60% on API costs)
+        # Initialize LRU cache for LLM API responses (saves 40-60% on API costs)
         # OrderedDict with manual LRU eviction (max 1000 entries)
         self._api_cache = OrderedDict()
         self._cache_max_size = 1000
         self._cache_hits = 0
         self._cache_misses = 0
 
-        if not self.api_key:
-            logger.warning("No Claude API key found - bullet generation will use fallback method")
+        # Log available LLM providers
+        available_llms = []
+        if self.client:
+            available_llms.append("Claude")
+        if self.openai_client:
+            available_llms.append("OpenAI")
+
+        if available_llms:
+            logger.info(f"🤖 Available LLM providers: {', '.join(available_llms)} | Preferred: {preferred_llm}")
+        else:
+            logger.warning("No LLM API keys found - bullet generation will use NLP fallback method")
 
     def _generate_cache_key(self, text: str, heading: str = "", context: str = "") -> str:
         """
@@ -231,6 +272,67 @@ class DocumentParser:
                 # Calculate exponential backoff delay
                 delay = base_delay * (2 ** attempt)
                 logger.warning(f"⚠️  API call failed (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.info(f"🔄 Retrying in {delay:.1f}s...")
+                time.sleep(delay)
+
+        # Should never reach here, but just in case
+        raise Exception("Max retries exhausted")
+
+    def _call_openai_with_retry(self, **api_params) -> Any:
+        """
+        Call OpenAI API with exponential backoff retry logic.
+
+        Args:
+            **api_params: Parameters to pass to client.chat.completions.create()
+
+        Returns:
+            API response object
+
+        Raises:
+            Exception: After all retries exhausted or on non-retryable errors
+        """
+        max_retries = 3
+        base_delay = 1.0  # Start with 1 second
+
+        for attempt in range(max_retries):
+            try:
+                response = self.openai_client.chat.completions.create(**api_params)
+
+                # Log success on retry
+                if attempt > 0:
+                    logger.info(f"🔄 OpenAI API call succeeded on retry {attempt + 1}/{max_retries}")
+
+                return response
+
+            except Exception as e:
+                error_str = str(e).lower()
+                is_last_attempt = (attempt == max_retries - 1)
+
+                # Determine if error is retryable
+                retryable_errors = [
+                    'rate limit',
+                    'rate_limit',
+                    'timeout',
+                    'connection',
+                    'network',
+                    'server error',
+                    '429',  # Too Many Requests
+                    '500',  # Internal Server Error
+                    '502',  # Bad Gateway
+                    '503',  # Service Unavailable
+                    '504',  # Gateway Timeout
+                ]
+
+                is_retryable = any(err in error_str for err in retryable_errors)
+
+                if not is_retryable or is_last_attempt:
+                    # Don't retry on client errors (4xx except 429) or if out of retries
+                    logger.error(f"❌ OpenAI API call failed: {e}")
+                    raise
+
+                # Calculate exponential backoff delay
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"⚠️  OpenAI API call failed (attempt {attempt + 1}/{max_retries}): {e}")
                 logger.info(f"🔄 Retrying in {delay:.1f}s...")
                 time.sleep(delay)
 
@@ -1954,24 +2056,54 @@ Return your analysis as a JSON object with:
             else:
                 logger.warning("Table summarization produced no bullets, falling back to text processing")
 
-        # Try LLM first if API key is available
-        if self.api_key and not self.force_basic_mode:
-            logger.info("Using enhanced LLM approach with structured prompts")
+        # Try LLM first if any API key is available
+        if (self.api_key or self.openai_api_key) and not self.force_basic_mode:
+            logger.info("Using enhanced LLM approach with intelligent routing")
+
             # Auto-detect style based on content and context
             style = self._detect_content_style(text, context_heading)
-            llm_bullets = self._create_llm_only_bullets(
-                text,
-                context_heading=context_heading,
-                style=style,
-                enable_refinement=False  # Set to True for extra quality pass (uses more API tokens)
-            )
+
+            # Detect content type for routing decision
+            content_info = self._detect_content_type(text)
+
+            # Select best LLM provider
+            provider = self._select_llm_provider(content_info, style)
+
+            if provider == 'openai':
+                # Use OpenAI with JSON mode (more structured output)
+                logger.info("Routing to OpenAI (JSON mode)")
+                llm_bullets = self._create_openai_bullets_json(
+                    text,
+                    context_heading=context_heading,
+                    style=style,
+                    enable_refinement=False  # Set to True for extra quality pass
+                )
+            elif provider == 'claude':
+                # Use Claude with structured prompts
+                logger.info("Routing to Claude (structured prompts)")
+                llm_bullets = self._create_llm_only_bullets(
+                    text,
+                    context_heading=context_heading,
+                    style=style,
+                    enable_refinement=False  # Set to True for extra quality pass
+                )
+            else:
+                # No LLM available
+                llm_bullets = []
+
             if llm_bullets and len(llm_bullets) >= 1:
-                logger.info(f"✅ LLM SUCCESS: Generated {len(llm_bullets)} LLM bullets")
-                unique_bullets = self._deduplicate_bullets(llm_bullets)
+                logger.info(f"✅ LLM SUCCESS: Generated {len(llm_bullets)} bullets via {provider}")
+
+                # Use embedding-based deduplication if OpenAI is available (better than text-based)
+                if self.openai_api_key:
+                    unique_bullets = self._deduplicate_bullets_with_embeddings(llm_bullets)
+                else:
+                    unique_bullets = self._deduplicate_bullets(llm_bullets)
+
                 self._cache_response(cache_key, unique_bullets[:4])  # Cache LLM bullets
                 return unique_bullets[:4]
             else:
-                logger.warning("LLM approach failed - falling back to lightweight NLP")
+                logger.warning(f"LLM approach failed ({provider}) - falling back to lightweight NLP")
         else:
             logger.info("No API key available - using lightweight NLP approach")
 
@@ -2898,7 +3030,380 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
         except Exception as e:
             logger.error(f"Error in Claude bullet generation: {e}")
             return []
-    
+
+    def _create_openai_bullets_json(self, text: str, context_heading: str = None,
+                                    style: str = 'professional', enable_refinement: bool = False) -> List[str]:
+        """
+        Create bullets using OpenAI with JSON mode for structured output.
+
+        Args:
+            text: Content to summarize
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', or 'executive'
+            enable_refinement: If True, run second pass for quality improvement
+
+        Returns:
+            List of bullet points
+        """
+        if not self.openai_client:
+            return []
+
+        try:
+            # STEP 1: Detect content type for adaptive strategy
+            content_info = self._detect_content_type(text)
+            logger.info(f"OpenAI bullet generation (JSON mode): {content_info['type']} content, {content_info['word_count']} words")
+
+            # STEP 2: Build context-aware prompt
+            context_str = f"This content appears under the heading '{context_heading}'.\n" if context_heading else ""
+
+            # Style-specific instructions
+            style_instructions = {
+                'professional': "Use clear, active voice with concrete business-focused details",
+                'educational': "Focus on learning objectives and concept explanations",
+                'technical': "Use precise terminology and implementation details",
+                'executive': "Emphasize outcomes, metrics, and strategic implications"
+            }
+
+            prompt = f"""Generate 3-5 concise slide bullet points from the following content.
+
+{context_str}
+STYLE: {style} - {style_instructions.get(style, style_instructions['professional'])}
+
+REQUIREMENTS:
+• Each bullet should be 8-15 words
+• Start with action verbs when describing processes
+• Include specific details, examples, or data points
+• Be self-contained and slide-ready
+• Extract only the most important actionable insights
+
+Return ONLY valid JSON in this exact format:
+{{
+    "bullets": [
+        {{"text": "First bullet point", "importance": 0.95}},
+        {{"text": "Second bullet point", "importance": 0.90}}
+    ],
+    "content_type": "{content_info['type']}",
+    "detected_topics": ["topic1", "topic2"]
+}}
+
+CONTENT:
+{text}
+"""
+
+            # STEP 3: Call OpenAI API with JSON mode
+            char_count = len(text)
+            max_tokens = 400 if char_count < 200 else (600 if char_count < 600 else 800)
+
+            response = self._call_openai_with_retry(
+                model="gpt-4o",  # Latest model with best reasoning
+                temperature=0.3,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": "You are an expert at creating concise, impactful slide bullet points. Always respond with valid JSON."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            # STEP 4: Parse JSON response
+            content = response.choices[0].message.content.strip()
+            result = json.loads(content)
+
+            bullets = [item['text'] for item in result.get('bullets', [])]
+            logger.info(f"OpenAI generated {len(bullets)} bullets (JSON mode, style: {style})")
+
+            # STEP 5: Optional refinement pass
+            if enable_refinement and bullets:
+                logger.info("Running refinement pass...")
+                bullets = self._refine_bullets_openai(bullets, text)
+
+            return bullets
+
+        except Exception as e:
+            logger.error(f"Error in OpenAI bullet generation (JSON mode): {e}")
+            return []
+
+    def _create_openai_bullets_functions(self, text: str, context_heading: str = None,
+                                         style: str = 'professional') -> List[str]:
+        """
+        Create bullets using OpenAI function calling for maximum structure.
+
+        Args:
+            text: Content to summarize
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', or 'executive'
+
+        Returns:
+            List of bullet points
+        """
+        if not self.openai_client:
+            return []
+
+        try:
+            content_info = self._detect_content_type(text)
+            logger.info(f"OpenAI bullet generation (function calling): {content_info['type']} content")
+
+            context_str = f"This content appears under the heading '{context_heading}'." if context_heading else ""
+
+            tools = [{
+                "type": "function",
+                "function": {
+                    "name": "extract_slide_bullets",
+                    "description": "Extract key bullet points from document content for slides",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "bullets": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {"type": "string", "description": "Bullet point text (8-15 words)"},
+                                        "category": {"type": "string", "enum": ["key_concept", "benefit", "feature", "example", "statistic", "process_step"]},
+                                        "importance": {"type": "number", "description": "0-1 importance score"}
+                                    },
+                                    "required": ["text", "category", "importance"]
+                                },
+                                "description": "3-5 bullet points extracted from content"
+                            },
+                            "main_theme": {"type": "string", "description": "Overall theme or topic of the content"},
+                            "style_match": {"type": "string", "description": f"Should match '{style}' style"}
+                        },
+                        "required": ["bullets", "main_theme"]
+                    }
+                }
+            }]
+
+            prompt = f"""{context_str}
+
+Extract 3-5 slide-ready bullet points from this content using the '{style}' style.
+Each bullet should be 8-15 words, actionable, and specific to this content.
+
+CONTENT:
+{text}
+"""
+
+            response = self._call_openai_with_retry(
+                model="gpt-4o",
+                temperature=0.3,
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "extract_slide_bullets"}}
+            )
+
+            # Extract function call result
+            tool_call = response.choices[0].message.tool_calls[0]
+            function_args = json.loads(tool_call.function.arguments)
+
+            bullets = [item['text'] for item in function_args.get('bullets', [])]
+            logger.info(f"OpenAI generated {len(bullets)} bullets (function calling, style: {style})")
+
+            return bullets
+
+        except Exception as e:
+            logger.error(f"Error in OpenAI bullet generation (function calling): {e}")
+            return []
+
+    def _refine_bullets_openai(self, bullets: List[str], original_text: str) -> List[str]:
+        """
+        Use OpenAI to refine bullets for parallel structure and conciseness.
+
+        Args:
+            bullets: Initial bullet points
+            original_text: Original source text for fact-checking
+
+        Returns:
+            Refined bullet points
+        """
+        if not self.openai_client or not bullets:
+            return bullets
+
+        try:
+            bullets_text = '\n'.join(f"{i+1}. {b}" for i, b in enumerate(bullets))
+
+            prompt = f"""Refine these bullet points to improve quality while staying factually accurate to the source:
+
+CURRENT BULLETS:
+{bullets_text}
+
+REFINEMENT CHECKLIST:
+✓ Each bullet 8-15 words (shorten if needed)
+✓ Parallel grammatical structure
+✓ Active voice preferred
+✓ Specific and concrete
+✓ Factually accurate to source
+✓ No redundancy
+
+SOURCE TEXT (for fact-checking):
+{original_text}
+
+Return ONLY the refined bullets as a JSON array of strings."""
+
+            response = self._call_openai_with_retry(
+                model="gpt-4o",
+                temperature=0.1,  # Lower temperature for refinement
+                max_tokens=400,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": "You refine bullet points while maintaining factual accuracy. Respond with JSON only."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            content = response.choices[0].message.content.strip()
+            result = json.loads(content)
+            refined_bullets = result.get('bullets', bullets)
+
+            if len(refined_bullets) >= len(bullets) - 1:
+                logger.info(f"OpenAI refinement: {len(bullets)} → {len(refined_bullets)} bullets")
+                return refined_bullets
+            else:
+                logger.warning("Refinement removed too many bullets, keeping original")
+                return bullets
+
+        except Exception as e:
+            logger.error(f"OpenAI bullet refinement failed: {e}, keeping original bullets")
+            return bullets
+
+    def _deduplicate_bullets_with_embeddings(self, bullets: List[str], similarity_threshold: float = 0.85) -> List[str]:
+        """
+        Remove semantically similar bullets using OpenAI embeddings.
+
+        Args:
+            bullets: List of bullet points
+            similarity_threshold: Cosine similarity threshold (0-1) for considering bullets as duplicates
+
+        Returns:
+            Deduplicated list of bullets
+        """
+        if not self.openai_client or len(bullets) <= 1:
+            return bullets
+
+        try:
+            import numpy as np
+
+            logger.info(f"Deduplicating {len(bullets)} bullets using embeddings (threshold: {similarity_threshold})")
+
+            # Get embeddings for all bullets
+            embeddings = []
+            for bullet in bullets:
+                response = self.openai_client.embeddings.create(
+                    model="text-embedding-3-small",  # Cost-effective and fast
+                    input=bullet
+                )
+                embeddings.append(response.data[0].embedding)
+
+            embeddings = np.array(embeddings)
+
+            # Calculate cosine similarities
+            def cosine_similarity(a, b):
+                return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+            # Greedy selection: keep bullets that aren't too similar to already selected ones
+            unique_bullets = [bullets[0]]  # Always keep first bullet
+            unique_embeddings = [embeddings[0]]
+
+            for i, (bullet, emb) in enumerate(zip(bullets[1:], embeddings[1:]), start=1):
+                # Check similarity to all already selected bullets
+                max_similarity = max(
+                    cosine_similarity(emb, prev_emb)
+                    for prev_emb in unique_embeddings
+                )
+
+                if max_similarity < similarity_threshold:
+                    unique_bullets.append(bullet)
+                    unique_embeddings.append(emb)
+                else:
+                    logger.debug(f"Removed similar bullet (similarity: {max_similarity:.2f}): {bullet}")
+
+            logger.info(f"Deduplication complete: {len(bullets)} → {len(unique_bullets)} bullets")
+            return unique_bullets
+
+        except Exception as e:
+            logger.error(f"Embedding-based deduplication failed: {e}, returning original bullets")
+            return bullets
+
+    def _select_llm_provider(self, content_info: Dict[str, Any], style: str) -> str:
+        """
+        Intelligently select LLM provider based on content type and style.
+
+        Args:
+            content_info: Content type information from _detect_content_type()
+            style: Requested style ('professional', 'educational', 'technical', 'executive')
+
+        Returns:
+            'claude', 'openai', or None if no provider available
+        """
+        # Check what's available
+        has_claude = self.client is not None
+        has_openai = self.openai_client is not None
+
+        if not has_claude and not has_openai:
+            return None
+        elif has_claude and not has_openai:
+            return 'claude'
+        elif has_openai and not has_claude:
+            return 'openai'
+
+        # Both available - use intelligent routing
+        if self.preferred_llm == 'claude':
+            return 'claude'
+        elif self.preferred_llm == 'openai':
+            return 'openai'
+        elif self.preferred_llm == 'auto':
+            # AUTO MODE: Route based on content type and style
+
+            content_type = content_info.get('type', 'paragraph')
+            complexity = content_info.get('complexity', 'moderate')
+            word_count = content_info.get('word_count', 0)
+
+            # OpenAI excels at:
+            # - Structured data (tables)
+            # - Short, precise content
+            # - Technical/educational content with clear structure
+            openai_score = 0
+            claude_score = 0
+
+            # Content type preferences
+            if content_type == 'table':
+                openai_score += 3  # OpenAI better with structured data
+            elif content_type == 'heading':
+                openai_score += 2  # OpenAI better at expanding concepts
+            elif content_type == 'paragraph' and word_count > 500:
+                claude_score += 3  # Claude better with long-form content
+            elif content_type == 'list':
+                openai_score += 1  # OpenAI good at synthesizing lists
+
+            # Style preferences
+            if style == 'technical':
+                openai_score += 2  # OpenAI precise with technical terms
+            elif style == 'executive':
+                openai_score += 1  # OpenAI good with metrics/outcomes
+            elif style == 'professional':
+                claude_score += 1  # Claude nuanced with professional tone
+            elif style == 'educational':
+                claude_score += 1  # Claude better at explanatory content
+
+            # Complexity preferences
+            if complexity == 'complex':
+                claude_score += 2  # Claude better with nuanced content
+            elif complexity == 'simple':
+                openai_score += 1  # OpenAI faster for simple content
+
+            # Word count preferences
+            if word_count < 100:
+                openai_score += 1  # OpenAI faster for short content
+            elif word_count > 400:
+                claude_score += 2  # Claude better with longer context
+
+            selected = 'openai' if openai_score > claude_score else 'claude'
+            logger.info(f"🤖 Auto-routing: {selected.upper()} (scores: Claude={claude_score}, OpenAI={openai_score})")
+            return selected
+        else:
+            # Default to Claude if preference is unclear
+            return 'claude'
+
     def _textrank_ranking(self, sentences: List[str], damping: float = 0.85):
         """
         Rank sentences using TextRank algorithm (graph-based PageRank).
