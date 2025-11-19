@@ -1,0 +1,31 @@
+================================================================================
+🚀 PARALLEL IMPLEMENTATION PROMPT FOR CLAUDE CODE WEB
+================================================================================
+
+Copy and paste this prompt into Claude Code Web:
+
+--------------------------------------------------------------------------------
+
+Implement the top 5 improvements for the slide generator app using 5 parallel agents:
+
+1. Agent 1 (feature/speaker-notes): Add speaker notes support - preserve full script text in PowerPoint/Google Slides speaker notes
+2. Agent 2 (feature/pdf-input): Add PDF input support with pdfplumber and PyPDF2
+3. Agent 3 (feature/enhanced-tables): Enhance table handling - merged cells, headers, auto-detection
+4. Agent 4 (feature/topic-separation): Complete topic separation Phase 2b - semantic clustering and smart splitting
+5. Agent 5 (feature/gdocs-headings): Google Docs heading preservation using API instead of .txt export
+
+Follow the coordination strategy in PARALLEL_IMPLEMENTATION_PROMPT.md:
+- Each agent creates their own feature branch from main
+- Merge order: Agent 5 → 2 → 3 → 4 → 1
+- Run ./scripts/quick_ci.sh after each merge
+- All agents work concurrently, merge sequentially
+
+See PARALLEL_IMPLEMENTATION_PROMPT.md for full implementation details, file paths, code snippets, and acceptance criteria.
+
+--------------------------------------------------------------------------------
+
+📄 DETAILED INSTRUCTIONS: See PARALLEL_IMPLEMENTATION_PROMPT.md (1000+ lines)
+⏱️  ESTIMATED TIME: 11-14 hours parallel (vs 30-40 hours sequential)
+✅ ACCEPTANCE: All tests pass, 5 features integrated seamlessly
+
+================================================================================
