@@ -13,6 +13,8 @@ import random
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 from math import cos, sin
+from pathlib import Path
+import io
 
 # Presentation generation
 from pptx import Presentation
@@ -40,7 +42,53 @@ class SlideGenerator:
     def __init__(self, openai_client=None):
         """Initialize with optional OpenAI client for AI image generation"""
         self.client = openai_client
-    
+
+    def _insert_ai_image(self, slide, image_path: str, left: float = 5.2, top: float = 1.5,
+                        width: float = 4.3, height: Optional[float] = None) -> bool:
+        """
+        Insert AI-generated image into a slide.
+
+        Args:
+            slide: PowerPoint slide object
+            image_path: Path to the image file (local or URL)
+            left: Left position in inches
+            top: Top position in inches
+            width: Width in inches
+            height: Optional height in inches (maintains aspect ratio if None)
+
+        Returns:
+            True if image was successfully inserted, False otherwise
+        """
+        try:
+            # Handle remote URLs
+            if image_path.startswith('http://') or image_path.startswith('https://'):
+                logger.info(f"Downloading image from URL: {image_path[:100]}...")
+                response = requests.get(image_path, timeout=30)
+                response.raise_for_status()
+                image_stream = io.BytesIO(response.content)
+            else:
+                # Local file path
+                image_path_obj = Path(image_path)
+                if not image_path_obj.exists():
+                    logger.warning(f"Image file not found: {image_path}")
+                    return False
+                image_stream = str(image_path_obj)
+
+            # Insert image into slide
+            if height:
+                slide.shapes.add_picture(image_stream, Inches(left), Inches(top),
+                                        width=Inches(width), height=Inches(height))
+            else:
+                slide.shapes.add_picture(image_stream, Inches(left), Inches(top),
+                                        width=Inches(width))
+
+            logger.info(f"✅ Successfully inserted AI image into slide")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to insert AI image: {e}")
+            return False
+
     def create_powerpoint(self, doc_structure: DocumentStructure, skip_visuals: bool = False) -> str:
         """Generate PowerPoint presentation with learner-focused content and optional visual prompts"""
         prs = Presentation()
@@ -249,70 +297,103 @@ class SlideGenerator:
                         p.space_after = Pt(8)
                         p.space_before = Pt(4)
                 
-                # Right side - Visual prompt as text (only in regular mode, skip in fast mode)
-                visual_prompt_text = None
-                if not skip_visuals:
+                # Right side - AI-generated image or visual prompt text
+                # Priority: 1) AI image, 2) Visual prompt text, 3) Nothing (fast mode)
+
+                # Check if AI-generated image is available
+                visual_image_path = section.get('visual_image_path') or section.get('visual_image_url')
+
+                if visual_image_path:
+                    # Insert AI-generated image
+                    logger.info(f"Inserting AI-generated image for slide {current_slide_number}: {visual_image_path[:100]}")
+                    image_inserted = self._insert_ai_image(
+                        slide=slide,
+                        image_path=visual_image_path,
+                        left=5.2,
+                        top=0.5,
+                        width=4.3
+                    )
+
+                    if image_inserted and section.get('visual_prompt'):
+                        # Add visual prompt as small caption below image
+                        try:
+                            caption_textbox = slide.shapes.add_textbox(
+                                left=Inches(5.2),
+                                top=Inches(5.5),
+                                width=Inches(4.3),
+                                height=Inches(1.0)
+                            )
+                            caption_frame = caption_textbox.text_frame
+                            caption_frame.word_wrap = True
+                            caption_p = caption_frame.paragraphs[0]
+                            caption_p.text = f"🎨 {section['visual_prompt'][:150]}..."
+                            caption_p.font.size = Pt(8)
+                            caption_p.font.italic = True
+                            caption_p.font.color.rgb = RGBColor(120, 120, 120)
+                        except Exception as e:
+                            logger.warning(f"Failed to add image caption: {e}")
+
+                elif not skip_visuals:
+                    # No AI image - generate visual prompt text instead
                     logger.info(f"Generating visual prompt text for slide {current_slide_number}: '{section['title']}' with {len(section.get('content', []))} bullet points")
                     visual_prompt_text = self._generate_drawing_prompt(section.get('content', []), section['title'], current_slide_number)
                     logger.info(f"Generated visual prompt text for slide {current_slide_number}")
+
+                    # Add visual prompt as copyable text on the right side
+                    if visual_prompt_text:
+                        try:
+                            # Add the visual prompt as copyable text box on the right side, aligned with slide top
+                            prompt_textbox = slide.shapes.add_textbox(
+                                left=Inches(5.2),
+                                top=Inches(0.5),
+                                width=Inches(4.3),
+                                height=Inches(6)
+                            )
+                            prompt_frame = prompt_textbox.text_frame
+                            prompt_frame.clear()
+                            prompt_frame.margin_left = Inches(0.2)
+                            prompt_frame.margin_right = Inches(0.2)
+                            prompt_frame.margin_top = Inches(0.2)
+                            prompt_frame.margin_bottom = Inches(0.2)
+                            prompt_frame.word_wrap = True
+
+                            # Add header
+                            header_p = prompt_frame.paragraphs[0]
+                            header_p.text = "🎨 Visual Prompt"
+                            header_p.font.size = Pt(14)
+                            header_p.font.name = 'Arial'
+                            header_p.font.bold = True
+                            header_p.font.color.rgb = RGBColor(50, 100, 200)
+                            header_p.alignment = PP_ALIGN.LEFT
+
+                            # Add separator line
+                            sep_p = prompt_frame.add_paragraph()
+                            sep_p.text = "─" * 40
+                            sep_p.font.size = Pt(8)
+                            sep_p.font.color.rgb = RGBColor(180, 180, 180)
+
+                            # Add the full visual prompt text
+                            prompt_p = prompt_frame.add_paragraph()
+                            prompt_p.text = visual_prompt_text
+                            prompt_p.font.size = Pt(9)
+                            prompt_p.font.name = 'Arial'
+                            prompt_p.font.color.rgb = RGBColor(60, 60, 60)
+                            prompt_p.alignment = PP_ALIGN.LEFT
+
+                            # Add copy instruction
+                            instruction_p = prompt_frame.add_paragraph()
+                            instruction_p.text = "\n💡 Copy this text to use with AI image generators (DALL-E, Midjourney, Stable Diffusion)"
+                            instruction_p.font.size = Pt(8)
+                            instruction_p.font.name = 'Arial'
+                            instruction_p.font.italic = True
+                            instruction_p.font.color.rgb = RGBColor(120, 120, 120)
+                            instruction_p.alignment = PP_ALIGN.LEFT
+
+                            logger.info(f"Successfully added copyable visual prompt text for slide: {section['title']}")
+                        except Exception as e:
+                            logger.error(f"Could not add visual prompt text for '{section['title']}': {e}")
                 else:
-                    logger.info(f"Skipping visual prompt generation for slide {current_slide_number} (fast mode)")
-                
-                # Add visual prompt as copyable text on the right side
-                if visual_prompt_text:
-                    try:
-                        # Add the visual prompt as copyable text box on the right side, aligned with slide top
-                        prompt_textbox = slide.shapes.add_textbox(
-                            left=Inches(5.2), 
-                            top=Inches(0.5), 
-                            width=Inches(4.3), 
-                            height=Inches(6)
-                        )
-                        prompt_frame = prompt_textbox.text_frame
-                        prompt_frame.clear()
-                        prompt_frame.margin_left = Inches(0.2)
-                        prompt_frame.margin_right = Inches(0.2)
-                        prompt_frame.margin_top = Inches(0.2)
-                        prompt_frame.margin_bottom = Inches(0.2)
-                        prompt_frame.word_wrap = True
-                        
-                        # Add header
-                        header_p = prompt_frame.paragraphs[0]
-                        header_p.text = "🎨 Visual Prompt"
-                        header_p.font.size = Pt(14)
-                        header_p.font.name = 'Arial'
-                        header_p.font.bold = True
-                        header_p.font.color.rgb = RGBColor(50, 100, 200)
-                        header_p.alignment = PP_ALIGN.LEFT
-                        
-                        # Add separator line
-                        sep_p = prompt_frame.add_paragraph()
-                        sep_p.text = "─" * 40
-                        sep_p.font.size = Pt(8)
-                        sep_p.font.color.rgb = RGBColor(180, 180, 180)
-                        
-                        # Add the full visual prompt text
-                        prompt_p = prompt_frame.add_paragraph()
-                        prompt_p.text = visual_prompt_text
-                        prompt_p.font.size = Pt(9)
-                        prompt_p.font.name = 'Arial'
-                        prompt_p.font.color.rgb = RGBColor(60, 60, 60)
-                        prompt_p.alignment = PP_ALIGN.LEFT
-                        
-                        # Add copy instruction
-                        instruction_p = prompt_frame.add_paragraph()
-                        instruction_p.text = "\n💡 Copy this text to use with AI image generators (DALL-E, Midjourney, Stable Diffusion)"
-                        instruction_p.font.size = Pt(8)
-                        instruction_p.font.name = 'Arial'
-                        instruction_p.font.italic = True
-                        instruction_p.font.color.rgb = RGBColor(120, 120, 120)
-                        instruction_p.alignment = PP_ALIGN.LEFT
-                        
-                        logger.info(f"Successfully added copyable visual prompt text for slide: {section['title']}")
-                    except Exception as e:
-                        logger.error(f"Could not add visual prompt text for '{section['title']}': {e}")
-                else:
-                    logger.info(f"No visual content generated for slide: {section['title']} (fast mode)")
+                    logger.info(f"Skipping visual generation for slide {current_slide_number} (fast mode)")
                             
             else:
                 # Other content slides
@@ -449,7 +530,14 @@ class SlideGenerator:
                     'type': 'script',
                     'title': title,
                     'content': content,
-                    'level': 4
+                    'level': 4,
+                    'subheader': getattr(slide, 'subheader', None),
+                    'visual_cues': getattr(slide, 'visual_cues', None),
+                    # AI visual generation fields
+                    'visual_prompt': getattr(slide, 'visual_prompt', None),
+                    'visual_image_url': getattr(slide, 'visual_image_url', None),
+                    'visual_image_path': getattr(slide, 'visual_image_path', None),
+                    'visual_type': getattr(slide, 'visual_type', None)
                 })
                 
             else:

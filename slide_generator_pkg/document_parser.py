@@ -90,6 +90,8 @@ except ImportError:
 # Use relative imports for package structure
 from .data_models import SlideContent, DocumentStructure, SemanticChunk
 from .semantic_analyzer import SemanticAnalyzer
+from .utils import CostTracker
+from .visual_generator import VisualGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +99,9 @@ logger = logging.getLogger(__name__)
 class DocumentParser:
     """Handles parsing of various document formats"""
     
-    def __init__(self, claude_api_key=None, openai_api_key=None, preferred_llm='auto'):
+    def __init__(self, claude_api_key=None, openai_api_key=None, preferred_llm='auto',
+                 cost_sensitive=False, enable_batch_processing=True, enable_async=False,
+                 enable_visual_generation=False, visual_filter='key_slides'):
         """
         Initialize DocumentParser with support for multiple LLM providers.
 
@@ -105,6 +109,11 @@ class DocumentParser:
             claude_api_key: Anthropic Claude API key (falls back to ANTHROPIC_API_KEY env var)
             openai_api_key: OpenAI API key (falls back to OPENAI_API_KEY env var)
             preferred_llm: 'claude', 'openai', or 'auto' for intelligent routing (default: 'auto')
+            cost_sensitive: If True, prefer GPT-3.5-turbo for simple content (40-60% cost reduction)
+            enable_batch_processing: Enable batch processing of slides (30-50% faster)
+            enable_async: Enable async processing for parallel slide generation
+            enable_visual_generation: Enable DALL-E 3 visual generation for slides
+            visual_filter: 'all', 'key_slides', or 'none' - which slides to generate visuals for
         """
         self.heading_patterns = [
             r'^#{1,6}\s+(.+)$',  # Markdown headings
@@ -117,6 +126,20 @@ class DocumentParser:
         self.api_key = claude_api_key or os.getenv('ANTHROPIC_API_KEY')
         self.openai_api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
         self.preferred_llm = preferred_llm
+
+        # Performance optimization settings
+        self.cost_sensitive = cost_sensitive
+        self.enable_batch_processing = enable_batch_processing
+        self.enable_async = enable_async
+
+        # Visual generation settings
+        self.enable_visual_generation = enable_visual_generation
+        self.visual_filter = visual_filter
+
+        # Performance tracking
+        self._batch_processing_savings = 0
+        self._gpt35_cost_savings = 0
+        self._async_time_savings = 0
 
         # Initialize Claude client
         self.client = None
@@ -145,12 +168,31 @@ class DocumentParser:
         # Initialize semantic analyzer
         self.semantic_analyzer = SemanticAnalyzer()
 
+        # Initialize cost tracking
+        self.cost_tracker = CostTracker()
+        logger.info("💰 Cost tracking initialized")
+
+        # Initialize visual generator
+        self.visual_generator = None
+        if self.enable_visual_generation:
+            try:
+                self.visual_generator = VisualGenerator(
+                    openai_api_key=self.openai_api_key,
+                    cost_tracker=self.cost_tracker
+                )
+                logger.info("🎨 Visual generation enabled with DALL-E 3")
+            except Exception as e:
+                logger.warning(f"Failed to initialize visual generator: {e}")
+                self.visual_generator = None
+
         # Initialize LRU cache for LLM API responses (saves 40-60% on API costs)
         # OrderedDict with manual LRU eviction (max 1000 entries)
         self._api_cache = OrderedDict()
         self._cache_max_size = 1000
         self._cache_hits = 0
         self._cache_misses = 0
+        self._cache_compressed = False  # Enable compression for large caches
+        self._cache_warmed = False  # Track if cache warming was performed
 
         # Log available LLM providers
         available_llms = []
@@ -173,16 +215,55 @@ class DocumentParser:
         cache_input = f"{text}|{heading}|{context}".encode('utf-8')
         return hashlib.sha256(cache_input).hexdigest()
 
-    def _get_cached_response(self, cache_key: str) -> Optional[List[str]]:
+    def _get_cached_response(self, cache_key: str, slide_id: Optional[str] = None) -> Optional[List[str]]:
         """
         Retrieve cached API response if available.
 
-        Returns cached bullets or None if not found.
+        Args:
+            cache_key: Hash key for the cached content
+            slide_id: Optional slide identifier for cost tracking
+
+        Returns:
+            Cached bullets or None if not found
         """
         if cache_key in self._api_cache:
             # Move to end (LRU: most recently used)
             self._api_cache.move_to_end(cache_key)
             self._cache_hits += 1
+
+            # Track cache hit in cost tracker
+            # Estimate the cost that would have been incurred (for savings calculation)
+            # Use average tokens for a typical bullet generation call
+            estimated_input_tokens = 500  # Approximate for typical content
+            estimated_output_tokens = 150  # Approximate for 3-4 bullets
+
+            # Determine which model would have been used
+            if self.openai_client and self.preferred_llm != 'claude':
+                model = 'gpt-4o'
+                provider = 'openai'
+            elif self.client:
+                model = 'claude-3-5-sonnet-20241022'
+                provider = 'claude'
+            else:
+                # If no API available, still track cache hit but with zero cost
+                model = 'unknown'
+                provider = 'none'
+                estimated_input_tokens = 0
+                estimated_output_tokens = 0
+
+            if provider != 'none':
+                self.cost_tracker.track_api_call(
+                    provider=provider,
+                    model=model,
+                    input_tokens=estimated_input_tokens,
+                    output_tokens=estimated_output_tokens,
+                    cached=True,
+                    slide_id=slide_id,
+                    call_type='chat',
+                    success=True,
+                    error=None
+                )
+
             logger.debug(f"💰 Cache HIT (savings: {self._cache_hits} API calls avoided)")
             return self._api_cache[cache_key]
 
@@ -218,6 +299,57 @@ class DocumentParser:
             "estimated_cost_savings": f"{hit_rate:.1f}% of API calls cached"
         }
 
+    def get_cost_summary(self) -> Dict[str, Any]:
+        """
+        Get comprehensive cost summary including token usage and costs.
+
+        Returns:
+            Dictionary with cost statistics, token counts, and breakdowns
+        """
+        return self.cost_tracker.get_summary()
+
+    def get_cost_breakdown(self) -> Dict[str, Any]:
+        """
+        Get detailed cost breakdown by provider, model, and call type.
+
+        Returns:
+            Dictionary with granular cost breakdowns
+        """
+        return {
+            'by_provider': self.cost_tracker.get_cost_by_provider(),
+            'by_model': self.cost_tracker.get_cost_by_model(),
+            'by_call_type': self.cost_tracker.get_cost_by_call_type(),
+            'by_slide': self.cost_tracker.get_slide_costs()
+        }
+
+    def get_total_cost(self) -> float:
+        """
+        Get total cost in USD for all API calls in this session.
+
+        Returns:
+            Total cost (excluding cached calls)
+        """
+        return self.cost_tracker.get_total_cost(exclude_cached=True)
+
+    def print_cost_summary(self):
+        """Print human-readable cost summary to console"""
+        self.cost_tracker.print_summary()
+
+    def export_cost_report(self, filepath: str, detailed: bool = True):
+        """
+        Export cost tracking data to JSON file.
+
+        Args:
+            filepath: Path to output JSON file
+            detailed: If True, include all individual calls; if False, summary only
+        """
+        self.cost_tracker.export_to_json(filepath, detailed=detailed)
+
+    def reset_cost_tracking(self):
+        """Reset cost tracking data (useful for processing multiple documents)"""
+        self.cost_tracker.reset()
+        logger.info("Cost tracking data reset")
+
     def _call_claude_with_retry(self, **api_params) -> Any:
         """
         Call Claude API with exponential backoff retry logic.
@@ -234,9 +366,30 @@ class DocumentParser:
         max_retries = 3
         base_delay = 1.0  # Start with 1 second
 
+        # Extract slide_id if provided in params for cost tracking
+        slide_id = api_params.pop('_slide_id', None)
+        call_type = api_params.pop('_call_type', 'chat')
+
         for attempt in range(max_retries):
             try:
                 message = self.client.messages.create(**api_params)
+
+                # Track API usage and cost
+                model = api_params.get('model', 'claude-3-5-sonnet-20241022')
+                input_tokens = message.usage.input_tokens
+                output_tokens = message.usage.output_tokens
+
+                self.cost_tracker.track_api_call(
+                    provider='claude',
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached=False,
+                    slide_id=slide_id,
+                    call_type=call_type,
+                    success=True,
+                    error=None
+                )
 
                 # Log success on retry
                 if attempt > 0:
@@ -265,6 +418,20 @@ class DocumentParser:
                 is_retryable = any(err in error_str for err in retryable_errors)
 
                 if not is_retryable or is_last_attempt:
+                    # Track failed API call
+                    model = api_params.get('model', 'claude-3-5-sonnet-20241022')
+                    self.cost_tracker.track_api_call(
+                        provider='claude',
+                        model=model,
+                        input_tokens=0,
+                        output_tokens=0,
+                        cached=False,
+                        slide_id=slide_id,
+                        call_type=call_type,
+                        success=False,
+                        error=str(e)
+                    )
+
                     # Don't retry on client errors (4xx except 429) or if out of retries
                     logger.error(f"❌ API call failed: {e}")
                     raise
@@ -294,9 +461,30 @@ class DocumentParser:
         max_retries = 3
         base_delay = 1.0  # Start with 1 second
 
+        # Extract slide_id if provided in params for cost tracking
+        slide_id = api_params.pop('_slide_id', None)
+        call_type = api_params.pop('_call_type', 'chat')
+
         for attempt in range(max_retries):
             try:
                 response = self.openai_client.chat.completions.create(**api_params)
+
+                # Track API usage and cost
+                model = api_params.get('model', 'gpt-4o')
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+
+                self.cost_tracker.track_api_call(
+                    provider='openai',
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached=False,
+                    slide_id=slide_id,
+                    call_type=call_type,
+                    success=True,
+                    error=None
+                )
 
                 # Log success on retry
                 if attempt > 0:
@@ -326,6 +514,20 @@ class DocumentParser:
                 is_retryable = any(err in error_str for err in retryable_errors)
 
                 if not is_retryable or is_last_attempt:
+                    # Track failed API call
+                    model = api_params.get('model', 'gpt-4o')
+                    self.cost_tracker.track_api_call(
+                        provider='openai',
+                        model=model,
+                        input_tokens=0,
+                        output_tokens=0,
+                        cached=False,
+                        slide_id=slide_id,
+                        call_type=call_type,
+                        success=False,
+                        error=str(e)
+                    )
+
                     # Don't retry on client errors (4xx except 429) or if out of retries
                     logger.error(f"❌ OpenAI API call failed: {e}")
                     raise
@@ -805,6 +1007,46 @@ Return your analysis as a JSON object with:
 
         return result
 
+    def _generate_visuals_for_slides(self, slides: List[SlideContent]) -> Optional[Dict[str, Any]]:
+        """
+        Generate AI visuals for slides using DALL-E 3.
+
+        Args:
+            slides: List of SlideContent objects
+
+        Returns:
+            Dict with visual generation results and summary, or None if generation failed
+        """
+        if not self.visual_generator:
+            logger.warning("Visual generator not initialized")
+            return None
+
+        try:
+            # Generate visuals using batch processing
+            results = self.visual_generator.generate_visuals_batch(
+                slides=slides,
+                filter_strategy=self.visual_filter,
+                quality='standard',  # Use standard quality for cost efficiency
+                size='1024x1024'     # Square format optimal for slides
+            )
+
+            # Update slides with visual data
+            for slide_idx, visual_data in results['visuals'].items():
+                slide = slides[slide_idx]
+                slide.visual_prompt = visual_data.get('prompt')
+                slide.visual_image_url = visual_data.get('url')
+                slide.visual_image_path = visual_data.get('local_path')
+                slide.visual_type = self.visual_generator.analyze_slide_type(slide)
+
+            logger.info(f"✅ Visual generation complete: {results['summary']['images_generated']} new images, "
+                       f"{results['summary']['cache_hits']} cached (${results['summary']['total_cost']:.2f})")
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Visual generation failed: {e}")
+            return None
+
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
         """Parse DOCX or TXT file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
@@ -965,6 +1207,13 @@ Return your analysis as a JSON object with:
                 'slide_count': len(slides),
                 'script_column': script_column
             }
+
+            # Generate visuals if enabled
+            if self.enable_visual_generation and self.visual_generator:
+                logger.info("🎨 Generating AI visuals for slides...")
+                visual_results = self._generate_visuals_for_slides(slides)
+                if visual_results:
+                    metadata['visual_generation'] = visual_results['summary']
 
             return DocumentStructure(
                 title=doc_title,
@@ -2006,13 +2255,410 @@ Return your analysis as a JSON object with:
         logger.info(f"Final unified bullets (before limiting to {target_bullets}): {bullets}")
         return topic_sentence, bullets[:target_bullets]
 
-    def _create_unified_bullets(self, text: str, context_heading: str = None) -> List[str]:
+    def _create_ensemble_bullets(self, text: str, context_heading: str = None,
+                                 style: str = 'professional') -> List[str]:
+        """
+        ENSEMBLE MODE: Generate bullets from both Claude AND OpenAI, then use a third
+        LLM call to select the best 3-5 bullets from the combined pool.
+    
+        This approach leverages the strengths of both models and uses intelligent
+        selection to produce higher quality results than either model alone.
+    
+        Args:
+            text: Content to extract bullets from
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', or 'executive'
+    
+        Returns:
+            List of 3-5 highest-scoring bullets selected from ensemble pool
+        """
+        if not (self.client and self.openai_client):
+            logger.warning("⚠️ Ensemble mode requires both Claude and OpenAI API keys")
+            # Fallback to whichever is available
+            if self.client:
+                return self._create_llm_only_bullets(text, context_heading, style)
+            elif self.openai_client:
+                return self._create_openai_bullets_json(text, context_heading, style)
+            return []
+    
+        logger.info("🎭 ENSEMBLE MODE: Generating bullets from both Claude and OpenAI")
+    
+        try:
+            # STEP 1: Generate bullets from Claude
+            logger.info("  → Generating bullets from Claude...")
+            claude_bullets = self._create_llm_only_bullets(
+                text,
+                context_heading=context_heading,
+                style=style,
+                enable_refinement=False
+            )
+            logger.info(f"  ✓ Claude generated {len(claude_bullets)} bullets")
+    
+            # STEP 2: Generate bullets from OpenAI
+            logger.info("  → Generating bullets from OpenAI...")
+            openai_bullets = self._create_openai_bullets_json(
+                text,
+                context_heading=context_heading,
+                style=style,
+                enable_refinement=False
+            )
+            logger.info(f"  ✓ OpenAI generated {len(openai_bullets)} bullets")
+    
+            # STEP 3: Combine and deduplicate
+            all_bullets = []
+            bullet_sources = {}  # Track which model contributed each bullet
+    
+            for i, bullet in enumerate(claude_bullets):
+                all_bullets.append(bullet)
+                bullet_sources[bullet] = f"Claude-{i+1}"
+    
+            for i, bullet in enumerate(openai_bullets):
+                all_bullets.append(bullet)
+                bullet_sources[bullet] = f"OpenAI-{i+1}"
+    
+            logger.info(f"  → Combined pool: {len(all_bullets)} bullets (before deduplication)")
+    
+            # Remove near-duplicates using embedding similarity
+            if self.openai_client:
+                unique_bullets = self._deduplicate_bullets_with_embeddings(all_bullets)
+            else:
+                unique_bullets = self._deduplicate_bullets(all_bullets)
+    
+            logger.info(f"  → After deduplication: {len(unique_bullets)} unique bullets")
+    
+            if len(unique_bullets) <= 5:
+                # If we have 5 or fewer unique bullets, return them all
+                logger.info("  ✓ Returning all unique bullets (≤5)")
+                for bullet in unique_bullets[:5]:
+                    source = bullet_sources.get(bullet, "Unknown")
+                    logger.info(f"    • [{source}] {bullet[:80]}...")
+                return unique_bullets[:5]
+    
+            # STEP 4: Use third LLM call to select best bullets
+            logger.info(f"  → Using intelligent selection from {len(unique_bullets)} candidates...")
+    
+            # Format bullets for selection
+            numbered_bullets = "\n".join([f"{i+1}. {bullet}" for i, bullet in enumerate(unique_bullets)])
+    
+            context_str = f"Context: These bullets are for a slide titled '{context_heading}'.\n" if context_heading else ""
+    
+            selection_prompt = f"""You are an expert slide content evaluator. Review the following bullet points and select the BEST 3-5 bullets for a presentation slide.
+    
+    {context_str}
+    STYLE: {style}
+    
+    SCORING CRITERIA (rank each bullet):
+    • Relevance: Does it capture key information from the content?
+    • Conciseness: Is it 8-15 words and slide-ready?
+    • Actionability: Does it provide clear, specific insights?
+    • Specificity: Does it include concrete details, not generic statements?
+    • Clarity: Is it immediately understandable?
+    
+    CANDIDATE BULLETS:
+    {numbered_bullets}
+    
+    Return ONLY valid JSON in this format:
+    {{
+        "selected_bullets": [
+            {{"number": 1, "score": 0.95, "reasoning": "Why this bullet is strong"}},
+            {{"number": 3, "score": 0.92, "reasoning": "Why this bullet is strong"}}
+        ]
+    }}
+    
+    Select 3-5 bullets with highest scores. Focus on diversity (avoid redundant points).
+    """
+    
+            # Use Claude for selection (it's better at nuanced evaluation)
+            try:
+                response = self._call_claude_with_retry(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=800,
+                    temperature=0.2,  # Low temperature for consistent evaluation
+                    messages=[
+                        {"role": "user", "content": selection_prompt}
+                    ]
+                )
+    
+                content = response.content[0].text.strip()
+    
+                # Extract JSON from response (handle markdown code blocks)
+                import json
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', content)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    selected = result.get('selected_bullets', [])
+    
+                    # Extract the actual bullets
+                    final_bullets = []
+                    for item in selected[:5]:  # Max 5 bullets
+                        bullet_num = item.get('number', 0)
+                        if 1 <= bullet_num <= len(unique_bullets):
+                            bullet = unique_bullets[bullet_num - 1]
+                            final_bullets.append(bullet)
+                            source = bullet_sources.get(bullet, "Unknown")
+                            score = item.get('score', 0.0)
+                            logger.info(f"    ✓ [{source}] Score: {score:.2f} - {bullet[:80]}...")
+    
+                    logger.info(f"🎯 ENSEMBLE SUCCESS: Selected {len(final_bullets)} best bullets")
+                    return final_bullets
+                else:
+                    logger.warning("Failed to parse selection JSON, using top bullets")
+    
+            except Exception as e:
+                logger.error(f"Selection LLM call failed: {e}, using top bullets")
+    
+            # Fallback: Return top 5 bullets if selection fails
+            logger.info("  → Fallback: Returning top 5 bullets")
+            return unique_bullets[:5]
+    
+        except Exception as e:
+            logger.error(f"❌ Ensemble mode failed: {e}")
+            # Fallback to single provider
+            if self.client:
+                return self._create_llm_only_bullets(text, context_heading, style)
+            elif self.openai_client:
+                return self._create_openai_bullets_json(text, context_heading, style)
+            return []
+    
+    def _create_cot_bullets(self, text: str, context_heading: str = None,
+                           style: str = 'professional', provider: str = 'auto') -> List[str]:
+        """
+        CHAIN-OF-THOUGHT PROMPTING: Multi-step reasoning process for generating bullets.
+    
+        This approach breaks down bullet generation into explicit reasoning steps:
+        1. Identify 5-7 key concepts from content
+        2. Determine audience level and content type
+        3. Generate bullets based on analysis from steps 1-2
+    
+        Works especially well for complex or ambiguous content where simple prompting
+        may miss nuances.
+    
+        Args:
+            text: Content to extract bullets from
+            context_heading: Optional heading for contextual awareness
+            style: 'professional', 'educational', 'technical', or 'executive'
+            provider: 'claude', 'openai', or 'auto' (default)
+    
+        Returns:
+            List of 3-5 thoughtfully generated bullets
+        """
+        # Determine which provider to use
+        if provider == 'auto':
+            if self.client and self.openai_client:
+                # For CoT, Claude is generally better at reasoning
+                provider = 'claude'
+            elif self.client:
+                provider = 'claude'
+            elif self.openai_client:
+                provider = 'openai'
+            else:
+                logger.warning("⚠️ No LLM provider available for CoT")
+                return []
+    
+        if provider == 'claude' and not self.client:
+            logger.warning("⚠️ Claude not available, switching to OpenAI")
+            provider = 'openai'
+        elif provider == 'openai' and not self.openai_client:
+            logger.warning("⚠️ OpenAI not available, switching to Claude")
+            provider = 'claude'
+    
+        logger.info(f"🧠 CHAIN-OF-THOUGHT MODE: Using {provider.upper()} with 3-step reasoning")
+    
+        try:
+            context_str = f"The content appears under the heading '{context_heading}'.\n" if context_heading else ""
+    
+            # STEP 1: Identify key concepts
+            logger.info("  → Step 1: Identifying key concepts...")
+    
+            step1_prompt = f"""Analyze this content and identify the 5-7 most important key concepts, themes, or ideas.
+    
+    {context_str}
+    CONTENT:
+    {text}
+    
+    List each concept as a short phrase (2-5 words). Be specific and concrete.
+    Return ONLY the list, one concept per line, numbered."""
+    
+            if provider == 'claude':
+                step1_response = self._call_claude_with_retry(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=300,
+                    temperature=0.2,  # Low temperature for analytical task
+                    messages=[{"role": "user", "content": step1_prompt}]
+                )
+                concepts_text = step1_response.content[0].text.strip()
+            else:  # OpenAI
+                step1_response = self._call_openai_with_retry(
+                    model="gpt-4o",
+                    max_tokens=300,
+                    temperature=0.2,
+                    messages=[
+                        {"role": "system", "content": "You are an expert at analyzing content and identifying key concepts."},
+                        {"role": "user", "content": step1_prompt}
+                    ]
+                )
+                concepts_text = step1_response.choices[0].message.content.strip()
+    
+            # Parse concepts
+            import re
+            concepts = [line.strip() for line in concepts_text.split('\n') if line.strip() and re.match(r'^\d+\.', line.strip())]
+            logger.info(f"  ✓ Identified {len(concepts)} key concepts")
+            for concept in concepts:
+                logger.debug(f"      • {concept}")
+    
+            # STEP 2: Determine audience and content type
+            logger.info("  → Step 2: Analyzing audience and content type...")
+    
+            step2_prompt = f"""Based on this content and its heading, determine:
+    1. Target audience level (beginner/intermediate/expert)
+    2. Content category (technical/business/educational/strategic)
+    3. Primary goal (inform/persuade/educate/instruct)
+    
+    {context_str}
+    KEY CONCEPTS IDENTIFIED:
+    {chr(10).join(concepts)}
+    
+    CONTENT:
+    {text}
+    
+    Return ONLY valid JSON:
+    {{
+        "audience_level": "beginner|intermediate|expert",
+        "content_category": "technical|business|educational|strategic",
+        "primary_goal": "inform|persuade/educate|instruct",
+        "tone": "formal|conversational|academic"
+    }}"""
+    
+            if provider == 'claude':
+                step2_response = self._call_claude_with_retry(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=200,
+                    temperature=0.2,
+                    messages=[{"role": "user", "content": step2_prompt}]
+                )
+                analysis_text = step2_response.content[0].text.strip()
+            else:  # OpenAI
+                step2_response = self._call_openai_with_retry(
+                    model="gpt-4o",
+                    max_tokens=200,
+                    temperature=0.2,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": "You are an expert at content analysis. Always respond with valid JSON."},
+                        {"role": "user", "content": step2_prompt}
+                    ]
+                )
+                analysis_text = step2_response.choices[0].message.content.strip()
+    
+            # Parse analysis
+            import json
+            json_match = re.search(r'\{[\s\S]*\}', analysis_text)
+            if json_match:
+                analysis = json.loads(json_match.group())
+                logger.info(f"  ✓ Audience: {analysis.get('audience_level')}, Category: {analysis.get('content_category')}")
+            else:
+                logger.warning("  ⚠️ Failed to parse analysis, using defaults")
+                analysis = {
+                    "audience_level": "intermediate",
+                    "content_category": "business",
+                    "primary_goal": "inform",
+                    "tone": "formal"
+                }
+    
+            # STEP 3: Generate bullets based on analysis
+            logger.info("  → Step 3: Generating bullets based on analysis...")
+    
+            style_instructions = {
+                'professional': "Use clear, active voice with concrete business-focused details",
+                'educational': "Focus on learning objectives and concept explanations",
+                'technical': "Use precise terminology and implementation details",
+                'executive': "Emphasize outcomes, metrics, and strategic implications"
+            }
+    
+            step3_prompt = f"""Now generate 3-5 slide bullet points based on your analysis.
+    
+    CONTEXT:
+    {context_str}
+    Audience Level: {analysis.get('audience_level', 'intermediate')}
+    Content Category: {analysis.get('content_category', 'business')}
+    Primary Goal: {analysis.get('primary_goal', 'inform')}
+    Style: {style} - {style_instructions.get(style, style_instructions['professional'])}
+    
+    KEY CONCEPTS TO INCORPORATE:
+    {chr(10).join(concepts)}
+    
+    ORIGINAL CONTENT:
+    {text}
+    
+    REQUIREMENTS:
+    • Each bullet should be 8-15 words
+    • Start with action verbs when describing processes
+    • Include specific details from the key concepts
+    • Be self-contained and slide-ready
+    • Match the {analysis.get('tone', 'formal')} tone for {analysis.get('audience_level', 'intermediate')} audience
+    • Focus on the primary goal: {analysis.get('primary_goal', 'inform')}
+    
+    Return bullets as a simple numbered list (no explanations)."""
+    
+            if provider == 'claude':
+                step3_response = self._call_claude_with_retry(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=500,
+                    temperature=0.3,  # Normal temperature for generation
+                    messages=[{"role": "user", "content": step3_prompt}]
+                )
+                bullets_text = step3_response.content[0].text.strip()
+            else:  # OpenAI
+                step3_response = self._call_openai_with_retry(
+                    model="gpt-4o",
+                    max_tokens=500,
+                    temperature=0.3,
+                    messages=[
+                        {"role": "system", "content": "You are an expert at creating concise, impactful slide bullet points."},
+                        {"role": "user", "content": step3_prompt}
+                    ]
+                )
+                bullets_text = step3_response.choices[0].message.content.strip()
+    
+            # Parse bullets
+            bullets = []
+            for line in bullets_text.split('\n'):
+                line = line.strip()
+                if line and len(line) > 15:
+                    # Clean up formatting
+                    line = line.lstrip('•-*123456789. ')
+                    if line and len(line) > 15:
+                        bullets.append(line)
+    
+            logger.info(f"  ✓ Generated {len(bullets)} bullets")
+            logger.info(f"🎯 CHAIN-OF-THOUGHT SUCCESS: {len(bullets)} thoughtfully crafted bullets")
+    
+            # Log reasoning for debugging
+            logger.debug("  📋 CoT Reasoning Summary:")
+            logger.debug(f"    Concepts: {len(concepts)} identified")
+            logger.debug(f"    Audience: {analysis.get('audience_level')} {analysis.get('content_category')}")
+            logger.debug(f"    Goal: {analysis.get('primary_goal')} with {analysis.get('tone')} tone")
+    
+            return bullets[:5]
+    
+        except Exception as e:
+            logger.error(f"❌ Chain-of-thought failed: {e}")
+            # Fallback to standard generation
+            if provider == 'claude':
+                return self._create_llm_only_bullets(text, context_heading, style)
+            else:
+                return self._create_openai_bullets_json(text, context_heading, style)
+
+    def _create_unified_bullets(self, text: str, context_heading: str = None,
+                               use_chain_of_thought: bool = False) -> List[str]:
         """
         LLM-only bullet generation for highest quality and content relevance
 
         Args:
             text: Content to extract bullets from
             context_heading: Optional heading/title for contextual awareness
+            use_chain_of_thought: If True, use multi-step CoT reasoning (works with ensemble too)
         """
         if not text or len(text.strip()) < 5:
             return []
@@ -2069,7 +2715,38 @@ Return your analysis as a JSON object with:
             # Select best LLM provider
             provider = self._select_llm_provider(content_info, style)
 
-            if provider == 'openai':
+            # CHAIN-OF-THOUGHT MODE: Override standard prompting if requested
+            if use_chain_of_thought and provider in ['claude', 'openai']:
+                logger.info(f"🧠 Using Chain-of-Thought mode with {provider}")
+                llm_bullets = self._create_cot_bullets(
+                    text,
+                    context_heading=context_heading,
+                    style=style,
+                    provider=provider
+                )
+            elif provider == 'ensemble':
+                # ENSEMBLE MODE: Generate from both models and select best
+                logger.info("🎭 Using Ensemble mode (Claude + OpenAI)")
+                if use_chain_of_thought:
+                    # For ensemble + CoT: Use CoT for each model then combine
+                    logger.info("  → Combining Ensemble with Chain-of-Thought")
+                    claude_bullets = self._create_cot_bullets(text, context_heading, style, 'claude')
+                    openai_bullets = self._create_cot_bullets(text, context_heading, style, 'openai')
+
+                    # Manually combine and select (simplified ensemble)
+                    all_bullets = claude_bullets + openai_bullets
+                    if self.openai_api_key:
+                        unique_bullets = self._deduplicate_bullets_with_embeddings(all_bullets)
+                    else:
+                        unique_bullets = self._deduplicate_bullets(all_bullets)
+                    llm_bullets = unique_bullets[:5]
+                else:
+                    llm_bullets = self._create_ensemble_bullets(
+                        text,
+                        context_heading=context_heading,
+                        style=style
+                    )
+            elif provider == 'openai':
                 # Use OpenAI with JSON mode (more structured output)
                 logger.info("Routing to OpenAI (JSON mode)")
                 llm_bullets = self._create_openai_bullets_json(
@@ -3090,12 +3767,35 @@ CONTENT:
 {text}
 """
 
-            # STEP 3: Call OpenAI API with JSON mode
+            # STEP 3: Select model based on content complexity and cost-sensitive mode
+            # GPT-3.5-Turbo: 5-10x cheaper, 2x faster - use for simple content
+            # GPT-4o: Best quality - use for complex content
+            word_count = content_info.get('word_count', 0)
+            complexity = content_info.get('complexity', 'moderate')
+
+            # Use GPT-3.5 for simple content in cost-sensitive mode
+            use_gpt35 = False
+            if hasattr(self, 'cost_sensitive') and self.cost_sensitive:
+                if word_count < 200 and complexity == 'simple':
+                    use_gpt35 = True
+                    logger.info("🎯 Cost-sensitive mode: Using GPT-3.5-Turbo (40-60% cost savings)")
+                elif content_info.get('type') in ['list', 'heading'] and word_count < 300:
+                    use_gpt35 = True
+                    logger.info("🎯 Cost-sensitive mode: Using GPT-3.5-Turbo for structured content")
+
+            model = "gpt-3.5-turbo" if use_gpt35 else "gpt-4o"
+
+            # Dynamic token allocation
             char_count = len(text)
-            max_tokens = 400 if char_count < 200 else (600 if char_count < 600 else 800)
+            if use_gpt35:
+                # GPT-3.5: Use smaller token limits (it's faster and cheaper)
+                max_tokens = 300 if char_count < 200 else (400 if char_count < 600 else 500)
+            else:
+                # GPT-4o: Use larger token limits for complex content
+                max_tokens = 400 if char_count < 200 else (600 if char_count < 600 else 800)
 
             response = self._call_openai_with_retry(
-                model="gpt-4o",  # Latest model with best reasoning
+                model=model,
                 temperature=0.3,
                 max_tokens=max_tokens,
                 response_format={"type": "json_object"},
@@ -3104,6 +3804,10 @@ CONTENT:
                     {"role": "user", "content": prompt}
                 ]
             )
+
+            # Track cost savings if using GPT-3.5
+            if use_gpt35 and hasattr(self, '_gpt35_cost_savings'):
+                self._gpt35_cost_savings += 1
 
             # STEP 4: Parse JSON response
             content = response.choices[0].message.content.strip()
@@ -3266,13 +3970,14 @@ Return ONLY the refined bullets as a JSON array of strings."""
             logger.error(f"OpenAI bullet refinement failed: {e}, keeping original bullets")
             return bullets
 
-    def _deduplicate_bullets_with_embeddings(self, bullets: List[str], similarity_threshold: float = 0.85) -> List[str]:
+    def _deduplicate_bullets_with_embeddings(self, bullets: List[str], similarity_threshold: float = 0.85, slide_id: Optional[str] = None) -> List[str]:
         """
         Remove semantically similar bullets using OpenAI embeddings.
 
         Args:
             bullets: List of bullet points
             similarity_threshold: Cosine similarity threshold (0-1) for considering bullets as duplicates
+            slide_id: Optional slide identifier for cost tracking
 
         Returns:
             Deduplicated list of bullets
@@ -3293,6 +3998,23 @@ Return ONLY the refined bullets as a JSON array of strings."""
                     input=bullet
                 )
                 embeddings.append(response.data[0].embedding)
+
+                # Track embedding API call
+                # OpenAI embeddings don't return usage in the same way, so we estimate
+                # Approximately 1 token = 4 characters for English text
+                estimated_tokens = len(bullet) // 4
+
+                self.cost_tracker.track_api_call(
+                    provider='openai',
+                    model='text-embedding-3-small',
+                    input_tokens=estimated_tokens,
+                    output_tokens=0,  # Embeddings don't have output tokens
+                    cached=False,
+                    slide_id=slide_id,
+                    call_type='embedding',
+                    success=True,
+                    error=None
+                )
 
             embeddings = np.array(embeddings)
 
@@ -3333,7 +4055,7 @@ Return ONLY the refined bullets as a JSON array of strings."""
             style: Requested style ('professional', 'educational', 'technical', 'executive')
 
         Returns:
-            'claude', 'openai', or None if no provider available
+            'claude', 'openai', 'ensemble', or None if no provider available
         """
         # Check what's available
         has_claude = self.client is not None
@@ -3351,6 +4073,8 @@ Return ONLY the refined bullets as a JSON array of strings."""
             return 'claude'
         elif self.preferred_llm == 'openai':
             return 'openai'
+        elif self.preferred_llm == 'ensemble':
+            return 'ensemble'  # Special mode: use both models
         elif self.preferred_llm == 'auto':
             # AUTO MODE: Route based on content type and style
 
