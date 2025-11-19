@@ -11509,6 +11509,62 @@ def csp_report():
         logger.error(f"Error processing CSP report: {e}")
         return jsonify({'status': 'error'}), 500
 
+@app.route('/api/analyze-document', methods=['POST'])
+def analyze_document():
+    """Analyze uploaded document structure and suggest best parsing mode"""
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    # Use secure_filename to prevent directory traversal attacks
+    filename = secure_filename(file.filename)
+    file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+    if file_ext not in ALLOWED_EXTENSIONS:
+        return jsonify({
+            'error': f'Unsupported file format: {file_ext}',
+            'supported': list(ALLOWED_EXTENSIONS)
+        }), 400
+
+    # Save temporarily
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    try:
+        # Ensure upload folder exists
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+        # Save uploaded file
+        file.save(filepath)
+
+        logger.info(f"Analyzing document structure: {filename}")
+
+        # Instantiate modular DocumentParser and analyze
+        parser = ModularDocumentParser()
+        analysis = parser.analyze_document_structure(filepath, file_ext)
+
+        logger.info(f"Analysis complete: {analysis['primary_type']} document, suggested mode: {analysis['suggested_mode']}")
+
+        return jsonify(analysis)
+
+    except Exception as e:
+        logger.error(f"Document analysis failed: {str(e)}")
+        return jsonify({
+            'error': 'Analysis failed',
+            'details': str(e)
+        }), 500
+
+    finally:
+        # Clean up temp file
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except:
+                pass
+
 def build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key):
     """
     Build processing statistics object from parser and document structure.

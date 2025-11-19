@@ -1,7 +1,7 @@
 """
 Document Parser Module
 
-Handles parsing of various document formats (TXT, DOCX) and converts them to slide structures.
+Handles parsing of various document formats (TXT, DOCX, PDF) and converts them to slide structures.
 Includes bullet point generation using Claude API, lightweight NLP fallback, and semantic analysis.
 """
 
@@ -92,6 +92,14 @@ from .data_models import SlideContent, DocumentStructure, SemanticChunk
 from .semantic_analyzer import SemanticAnalyzer
 from .utils import CostTracker
 from .visual_generator import VisualGenerator
+
+# PDF parsing support
+try:
+    from .pdf_parser import PDFParser
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
+    logging.warning("PDF parser not available - install pdfplumber or PyPDF2 for PDF support")
 
 logger = logging.getLogger(__name__)
 
@@ -602,6 +610,235 @@ Return your analysis as a JSON object with:
             logger.error(f"Error in content structure analysis: {e}")
             return {"analysis": "Analysis failed", "suggestions": []}
 
+    def analyze_document_structure(self, file_path: str, file_ext: str) -> dict:
+        """
+        Analyze document to detect tables and suggest best parsing mode.
+
+        Args:
+            file_path: Path to the document file
+            file_ext: File extension ('docx', 'txt', 'pdf')
+
+        Returns:
+            dict: {
+                'tables': int,              # Number of tables found
+                'paragraphs': int,          # Number of text paragraphs
+                'table_cells': int,         # Total cells in tables
+                'primary_type': str,        # 'table' or 'text'
+                'suggested_mode': int,      # 0 for paragraph, 2+ for column
+                'confidence': str           # 'high' or 'low'
+            }
+        """
+        try:
+            file_ext = file_ext.lower()
+
+            if file_ext == 'docx':
+                return self._analyze_docx_structure(file_path)
+            elif file_ext == 'txt':
+                return self._analyze_txt_structure(file_path)
+            elif file_ext == 'pdf':
+                return self._analyze_pdf_structure(file_path)
+            else:
+                logger.warning(f"Unsupported file format for analysis: {file_ext}")
+                return {
+                    'tables': 0,
+                    'paragraphs': 0,
+                    'table_cells': 0,
+                    'primary_type': 'unknown',
+                    'suggested_mode': 0,
+                    'confidence': 'low'
+                }
+
+        except Exception as e:
+            logger.error(f"Error analyzing document structure: {e}")
+            return {
+                'tables': 0,
+                'paragraphs': 0,
+                'table_cells': 0,
+                'primary_type': 'unknown',
+                'suggested_mode': 0,
+                'confidence': 'low'
+            }
+
+    def _analyze_docx_structure(self, file_path: str) -> dict:
+        """Analyze DOCX file structure for table/paragraph detection"""
+        try:
+            doc = Document(file_path)
+
+            # Count tables
+            table_count = len(doc.tables)
+
+            # Count table cells
+            table_cells = 0
+            for table in doc.tables:
+                for row in table.rows:
+                    table_cells += len(row.cells)
+
+            # Count paragraphs with content (exclude empty)
+            paragraph_count = 0
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    paragraph_count += 1
+
+            # Decision logic
+            primary_type = 'text'
+            suggested_mode = 0
+
+            if table_cells > paragraph_count * 2:
+                primary_type = 'table'
+                suggested_mode = 2  # Column mode
+
+            # Calculate confidence
+            difference = abs(table_cells - paragraph_count)
+            confidence = 'high' if difference > 10 else 'low'
+
+            logger.info(f"DOCX Analysis: {table_count} tables, {table_cells} cells, {paragraph_count} paragraphs → {primary_type} (confidence: {confidence})")
+
+            return {
+                'tables': table_count,
+                'paragraphs': paragraph_count,
+                'table_cells': table_cells,
+                'primary_type': primary_type,
+                'suggested_mode': suggested_mode,
+                'confidence': confidence
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing DOCX structure: {e}")
+            return {
+                'tables': 0,
+                'paragraphs': 0,
+                'table_cells': 0,
+                'primary_type': 'unknown',
+                'suggested_mode': 0,
+                'confidence': 'low'
+            }
+
+    def _analyze_txt_structure(self, file_path: str) -> dict:
+        """Analyze TXT file structure for tab-delimited content detection"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            # Count lines with tabs vs without
+            lines_with_tabs = 0
+            lines_without_tabs = 0
+            total_lines = 0
+
+            for line in lines:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+
+                total_lines += 1
+                if '\t' in line:
+                    lines_with_tabs += 1
+                else:
+                    lines_without_tabs += 1
+
+            # Calculate if table-dominant
+            if total_lines > 0:
+                tab_percentage = (lines_with_tabs / total_lines) * 100
+            else:
+                tab_percentage = 0
+
+            # Decision logic: if > 50% of lines have tabs, suggest column mode
+            primary_type = 'text'
+            suggested_mode = 0
+
+            if tab_percentage > 50:
+                primary_type = 'table'
+                suggested_mode = 2  # Column mode
+
+            # Confidence based on how clear the pattern is
+            if tab_percentage > 80 or tab_percentage < 20:
+                confidence = 'high'
+            else:
+                confidence = 'low'
+
+            logger.info(f"TXT Analysis: {lines_with_tabs}/{total_lines} lines with tabs ({tab_percentage:.1f}%) → {primary_type} (confidence: {confidence})")
+
+            return {
+                'tables': 1 if lines_with_tabs > 0 else 0,
+                'paragraphs': lines_without_tabs,
+                'table_cells': lines_with_tabs,
+                'primary_type': primary_type,
+                'suggested_mode': suggested_mode,
+                'confidence': confidence
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing TXT structure: {e}")
+            return {
+                'tables': 0,
+                'paragraphs': 0,
+                'table_cells': 0,
+                'primary_type': 'unknown',
+                'suggested_mode': 0,
+                'confidence': 'low'
+            }
+
+    def _analyze_pdf_structure(self, file_path: str) -> dict:
+        """Analyze PDF file structure using PDFParser"""
+        try:
+            # Import PDFParser locally to avoid circular imports
+            from .pdf_parser import PDFParser
+
+            pdf_parser = PDFParser()
+
+            # Parse PDF and get metadata
+            text_content, metadata = pdf_parser.parse_pdf(file_path)
+
+            # Count tables from metadata
+            table_count = metadata.get('table_count', 0)
+
+            # Count paragraphs (rough estimate from text lines)
+            lines = text_content.split('\n')
+            paragraph_count = 0
+            for line in lines:
+                stripped = line.strip()
+                # Count non-empty lines that don't look like table markers or page markers
+                if stripped and not stripped.startswith('#'):
+                    paragraph_count += 1
+
+            # Estimate table cells (rough approximation)
+            # For PDFs, we'll use a heuristic: table_count * average_cells_per_table
+            # Average table might have ~10-20 cells
+            table_cells = table_count * 15 if table_count > 0 else 0
+
+            # Decision logic
+            primary_type = 'text'
+            suggested_mode = 0
+
+            if table_cells > paragraph_count * 2:
+                primary_type = 'table'
+                suggested_mode = 2
+
+            # Calculate confidence
+            difference = abs(table_cells - paragraph_count)
+            confidence = 'high' if difference > 10 else 'low'
+
+            logger.info(f"PDF Analysis: {table_count} tables, ~{table_cells} cells, {paragraph_count} paragraphs → {primary_type} (confidence: {confidence})")
+
+            return {
+                'tables': table_count,
+                'paragraphs': paragraph_count,
+                'table_cells': table_cells,
+                'primary_type': primary_type,
+                'suggested_mode': suggested_mode,
+                'confidence': confidence
+            }
+
+        except Exception as e:
+            logger.error(f"Error analyzing PDF structure: {e}")
+            return {
+                'tables': 0,
+                'paragraphs': 0,
+                'table_cells': 0,
+                'primary_type': 'unknown',
+                'suggested_mode': 0,
+                'confidence': 'low'
+            }
+
     def _is_conversational_heading(self, text: str) -> bool:
         """Check if a heading is conversational/instructional content and shouldn't be a title slide"""
         text_lower = text.lower()
@@ -843,6 +1080,90 @@ Return your analysis as a JSON object with:
                 cues.append(match)
         return cues
 
+    def _parse_pdf(self, file_path: str, script_column: int = 2) -> str:
+        """
+        Parse PDF file using PDFParser and convert to text format.
+
+        The PDF is first parsed to extract text and tables, then converted to a
+        tab-delimited format that's compatible with the existing TXT parser pipeline.
+        This ensures consistent table detection and column selection behavior.
+
+        Args:
+            file_path: Path to PDF file
+            script_column: Column to extract (0=all, 1=column 1, 2=column 2, etc.)
+
+        Returns:
+            Processed text content ready for slide generation
+
+        Raises:
+            ValueError: If PDF parsing libraries are not available
+            FileNotFoundError: If PDF file doesn't exist
+        """
+        import tempfile
+
+        # Check if PDF parsing is available
+        if not PDF_AVAILABLE:
+            raise ValueError(
+                "PDF parsing is not available. Please install required libraries:\n"
+                "  pip install pdfplumber\n"
+                "  or\n"
+                "  pip install PyPDF2"
+            )
+
+        logger.info(f"Starting PDF parsing: {file_path}")
+
+        # Create PDF parser instance
+        pdf_parser = PDFParser()
+
+        # Detect if PDF is scanned (image-based)
+        is_scanned = pdf_parser.detect_scanned_pdf(file_path)
+        if is_scanned:
+            logger.warning("⚠️ Scanned PDF detected - text extraction may be poor. Consider using OCR for better results.")
+
+        # Create a temporary file for the extracted text
+        temp_file = None
+        try:
+            # Parse PDF to get text content and metadata
+            text_content, metadata = pdf_parser.parse_pdf(file_path)
+
+            # Log parsing results
+            page_count = metadata.get('page_count', 0)
+            table_count = metadata.get('table_count', 0)
+            backend = metadata.get('backend_used', 'unknown')
+
+            logger.info(f"PDF parsed successfully: {page_count} pages, {table_count} tables detected")
+            logger.info(f"PDF backend used: {backend}")
+            logger.info(f"Extracted text length: {len(text_content)} characters")
+
+            # Write extracted text to temporary file
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.txt', delete=False) as tf:
+                temp_file = tf.name
+                tf.write(text_content)
+                logger.debug(f"Wrote extracted PDF text to temp file: {temp_file}")
+
+            # Use existing TXT parser to process the extracted text
+            # This reuses all the table detection, column filtering, and heading logic
+            processed_content = self._parse_txt(temp_file, script_column)
+
+            logger.info(f"PDF processing complete: {len(processed_content.split())} words extracted")
+
+            return processed_content
+
+        except Exception as e:
+            logger.error(f"PDF parsing failed: {e}")
+            if "corrupted" in str(e).lower() or "invalid" in str(e).lower():
+                raise ValueError(f"PDF file appears to be corrupted or invalid: {e}")
+            raise
+
+        finally:
+            # Clean up temporary file
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                    logger.debug(f"Cleaned up temp file: {temp_file}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temp file {temp_file}: {cleanup_error}")
+
     def _parse_txt(self, file_path: str, script_column: int = 0) -> str:
         """Parse TXT file (Google Docs export) with heading detection, table handling, and column filtering"""
         import re
@@ -1048,7 +1369,7 @@ Return your analysis as a JSON object with:
             return None
 
     def parse_file(self, file_path: str, filename: str, script_column: int = 2, fast_mode: bool = False) -> DocumentStructure:
-        """Parse DOCX or TXT file and convert to slide structure"""
+        """Parse DOCX, TXT, or PDF file and convert to slide structure"""
         file_ext = filename.lower().split('.')[-1]
 
         try:
@@ -1058,8 +1379,12 @@ Return your analysis as a JSON object with:
                 # Google Docs fetched as plain text - parse it properly with column filtering
                 content = self._parse_txt(file_path, script_column)
                 logger.info(f"TXT parsing complete: {len(content.split())} words extracted")
+            elif file_ext == 'pdf':
+                # PDF files are parsed and converted to text format
+                content = self._parse_pdf(file_path, script_column)
+                logger.info(f"PDF parsing complete: {len(content.split())} words extracted")
             else:
-                raise ValueError(f"Only DOCX and TXT files are supported. Got: {file_ext}")
+                raise ValueError(f"Only DOCX, TXT, and PDF files are supported. Got: {file_ext}")
             
             if script_column == 0:
                 logger.info(f"Document parsing complete: {len(content.split())} words extracted from paragraphs")
@@ -1224,8 +1549,116 @@ Return your analysis as a JSON object with:
         except Exception as e:
             logger.error(f"Error parsing DOCX file {filename}: {str(e)}")
             raise
-    
-    
+
+    def _is_merged_cell(self, cell) -> bool:
+        """Check if cell is part of a merged cell (horizontal or vertical merge)"""
+        try:
+            tc_element = cell._element
+            tc_pr = tc_element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcPr')
+
+            if tc_pr is None:
+                return False
+
+            # Check for horizontal merge (gridSpan)
+            grid_span = tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}gridSpan')
+            if grid_span is not None:
+                logger.debug(f"Cell has gridSpan: {grid_span.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val')}")
+                return True
+
+            # Check for vertical merge (vMerge)
+            v_merge = tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vMerge')
+            if v_merge is not None:
+                logger.debug(f"Cell has vMerge attribute")
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Error checking if cell is merged: {e}")
+            return False
+
+    def _get_merged_cell_origin(self, cell, table, row_idx, cell_idx):
+        """
+        Get the original cell that this merged from.
+        Returns None if this cell is the origin cell.
+        Returns the origin cell object if this is a duplicate merged cell.
+        """
+        try:
+            tc_element = cell._element
+            tc_pr = tc_element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcPr')
+
+            if tc_pr is None:
+                return None
+
+            # Check for vertical merge continuation (vMerge without val="restart")
+            v_merge = tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vMerge')
+            if v_merge is not None:
+                val = v_merge.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val')
+                # If vMerge has no val attribute or val != "restart", it's a continuation cell
+                if val != "restart" and val is not None:
+                    # This is a continuation of a vertical merge - find the origin row
+                    for prev_row_idx in range(row_idx - 1, -1, -1):
+                        try:
+                            origin_cell = table.rows[prev_row_idx].cells[cell_idx]
+                            origin_tc_pr = origin_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcPr')
+                            if origin_tc_pr is not None:
+                                origin_v_merge = origin_tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vMerge')
+                                if origin_v_merge is not None:
+                                    origin_val = origin_v_merge.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val')
+                                    if origin_val == "restart":
+                                        logger.debug(f"Cell [{row_idx}][{cell_idx}] is vertically merged from [{prev_row_idx}][{cell_idx}]")
+                                        return origin_cell
+                        except (IndexError, AttributeError):
+                            continue
+                elif val is None:
+                    # vMerge with no val attribute means continuation
+                    for prev_row_idx in range(row_idx - 1, -1, -1):
+                        try:
+                            origin_cell = table.rows[prev_row_idx].cells[cell_idx]
+                            origin_tc_pr = origin_cell._element.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tcPr')
+                            if origin_tc_pr is not None:
+                                origin_v_merge = origin_tc_pr.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}vMerge')
+                                if origin_v_merge is not None:
+                                    origin_val = origin_v_merge.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val')
+                                    if origin_val == "restart":
+                                        logger.debug(f"Cell [{row_idx}][{cell_idx}] is vertically merged (no val) from [{prev_row_idx}][{cell_idx}]")
+                                        return origin_cell
+                                else:
+                                    # Found a cell without vMerge, so the previous cell with vMerge=restart should be the origin
+                                    break
+                        except (IndexError, AttributeError):
+                            continue
+
+            # Alternative approach: Check if this exact cell element has been seen before
+            # This works for both horizontal and vertical merges
+            # Check previous cells in same row (horizontal merge)
+            if cell_idx > 0:
+                for prev_idx in range(cell_idx):
+                    prev_cell = table.rows[row_idx].cells[prev_idx]
+                    # Check if it's the exact same cell XML element (horizontally merged cells reference the same element)
+                    if prev_cell._element is cell._element:
+                        logger.debug(f"Cell [{row_idx}][{cell_idx}] is horizontally merged duplicate of [{row_idx}][{prev_idx}]")
+                        return prev_cell
+
+            # Check previous rows in same column (vertical merge)
+            if row_idx > 0:
+                for prev_row in range(row_idx):
+                    try:
+                        prev_cell = table.rows[prev_row].cells[cell_idx]
+                        # Check if it's the exact same cell XML element (vertically merged cells reference the same element)
+                        if prev_cell._element is cell._element:
+                            logger.debug(f"Cell [{row_idx}][{cell_idx}] is vertically merged duplicate of [{prev_row}][{cell_idx}]")
+                            return prev_cell
+                    except IndexError:
+                        continue
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error getting merged cell origin: {e}")
+            return None
+
+
     def _parse_docx(self, file_path: str, script_column: int = 2) -> str:
         """Parse DOCX file with script column filtering or paragraph-based extraction"""
         doc = Document(file_path)
@@ -1279,7 +1712,14 @@ Return your analysis as a JSON object with:
                             # Extract all text from tables for comprehensive content
                             for row_idx, row in enumerate(table.rows):
                                 row_texts = []
-                                for cell in row.cells:
+                                for cell_idx, cell in enumerate(row.cells):
+                                    # Check if this cell is a duplicate from a merged cell
+                                    origin = self._get_merged_cell_origin(cell, table, row_idx, cell_idx)
+                                    if origin is not None:
+                                        # This is a duplicate merged cell, skip it
+                                        logger.debug(f"Skipping duplicate merged cell at [{row_idx}][{cell_idx}]")
+                                        continue
+
                                     cell_text = cell.text.strip()
                                     if cell_text:
                                         cleaned_text = self._clean_script_text(cell_text)
@@ -1348,14 +1788,23 @@ Return your analysis as a JSON object with:
                         for row_idx, row in enumerate(table.rows):
                             # Only extract from the specified script column
                             if len(row.cells) >= script_column:
-                                target_cell = row.cells[script_column - 1]  # Convert to 0-based index
+                                cell_idx = script_column - 1  # Convert to 0-based index
+                                target_cell = row.cells[cell_idx]
+
+                                # Check if this cell is a duplicate from a merged cell
+                                origin = self._get_merged_cell_origin(target_cell, table, row_idx, cell_idx)
+                                if origin is not None:
+                                    # This is a duplicate merged cell, skip it
+                                    logger.debug(f"Skipping duplicate merged cell at [{row_idx}][{cell_idx}] in script column")
+                                    continue
+
                                 cell_text = target_cell.text.strip()
-                                
+
                                 if cell_text:
                                     # Clean up [CLICK] and other stage directions
                                     cleaned_text = self._clean_script_text(cell_text)
                                     if cleaned_text:  # Only add if there's content after cleaning
-                                        logger.info(f"  Script cell [{row_idx}][{script_column-1}]: '{cleaned_text[:50]}...'")
+                                        logger.info(f"  Script cell [{row_idx}][{cell_idx}]: '{cleaned_text[:50]}...'")
                                         content.append(cleaned_text)
                             else:
                                 logger.warning(f"  Row {row_idx} has only {len(row.cells)} columns, cannot access column {script_column}")
@@ -1528,7 +1977,284 @@ Return your analysis as a JSON object with:
         
         logger.info(f"      Final cells: {expanded_cells}")
         return expanded_cells
-    
+
+    def _is_header_row(self, row) -> bool:
+        """
+        Detect if a row is a header row.
+
+        Checks for:
+        - Bold formatting in first cell
+        - All uppercase text
+        - Short text (≤3 words)
+
+        Args:
+            row: A docx table row object
+
+        Returns:
+            bool: True if the row appears to be a header row
+        """
+        if not row or not row.cells:
+            return False
+
+        # Get the first cell for analysis
+        first_cell = row.cells[0]
+        first_cell_text = first_cell.text.strip()
+
+        # Skip empty cells
+        if not first_cell_text:
+            return False
+
+        # Check 1: Bold detection - check paragraph runs in first cell
+        is_bold = False
+        for paragraph in first_cell.paragraphs:
+            for run in paragraph.runs:
+                if run.bold:
+                    is_bold = True
+                    break
+            if is_bold:
+                break
+
+        # Check 2: All-caps detection (only for short text)
+        word_count = len(first_cell_text.split())
+        is_uppercase = False
+        if word_count <= 3 and first_cell_text.isupper():
+            is_uppercase = True
+
+        # Check 3: Short text indicator (≤3 words)
+        is_short = word_count <= 3
+
+        # Return True if likely a header row
+        # A row is considered a header if it's bold OR (uppercase AND short)
+        is_header = is_bold or (is_uppercase and is_short)
+
+        logger.debug(f"Header detection for '{first_cell_text[:30]}...': "
+                    f"bold={is_bold}, uppercase={is_uppercase}, short={is_short}, "
+                    f"result={is_header}")
+
+        return is_header
+
+    def _extract_table_with_headers(self, table) -> dict:
+        """
+        Extract table with header detection.
+
+        Separates header rows from data rows using heuristic detection.
+
+        Args:
+            table: A docx table object
+
+        Returns:
+            dict: Dictionary with 'headers' and 'data' keys
+                - 'headers': List of header row cell texts (empty if no headers detected)
+                - 'data': List of data row cell texts
+        """
+        if not table or not table.rows:
+            return {'headers': [], 'data': []}
+
+        headers = []
+        data = []
+
+        # Process each row
+        for row_idx, row in enumerate(table.rows):
+            # Check if this is a header row
+            if self._is_header_row(row):
+                # Extract header cell texts
+                header_cells = [cell.text.strip() for cell in row.cells]
+                headers.append(header_cells)
+                logger.info(f"Detected header row at index {row_idx}: {header_cells}")
+            else:
+                # Extract data cell texts
+                data_cells = [cell.text.strip() for cell in row.cells]
+                data.append(data_cells)
+
+        # If no headers detected, return empty list for headers
+        if not headers:
+            logger.info("No header rows detected in table")
+        else:
+            logger.info(f"Extracted {len(headers)} header row(s) and {len(data)} data row(s)")
+
+        return {
+            'headers': headers,
+            'data': data
+        }
+
+    def _extract_content_blocks_from_docx(self, doc) -> List[dict]:
+        """
+        Extract ordered list of content blocks from DOCX document.
+
+        Processes document elements in order, identifying tables and paragraphs
+        to maintain the original document structure.
+
+        Args:
+            doc: A python-docx Document object
+
+        Returns:
+            List[dict]: Ordered list of content blocks, where each block is either:
+                - {'type': 'paragraph', 'text': str}
+                - {'type': 'table', 'data': [[str]], 'headers': [[str]]}
+        """
+        logger.info("Extracting content blocks from DOCX in document order")
+        content_blocks = []
+
+        # Track which paragraphs and tables we've processed to avoid duplicates
+        processed_paragraphs = set()
+        processed_tables = set()
+
+        # Process all elements in document order
+        for element in doc.element.body:
+            if element.tag.endswith('p'):  # Paragraph
+                for paragraph in doc.paragraphs:
+                    if paragraph._element == element and id(paragraph) not in processed_paragraphs:
+                        text = paragraph.text.strip()
+                        if text:
+                            # Check if paragraph is a heading
+                            if paragraph.style.name.startswith('Heading'):
+                                level = paragraph.style.name.replace('Heading ', '')
+                                try:
+                                    level_num = int(level)
+                                    # Store headings with markdown prefix
+                                    content_blocks.append({
+                                        'type': 'heading',
+                                        'level': level_num,
+                                        'text': text
+                                    })
+                                    logger.debug(f"Found heading level {level_num}: {text[:50]}...")
+                                except ValueError:
+                                    # Treat as heading level 1 if can't parse level
+                                    content_blocks.append({
+                                        'type': 'heading',
+                                        'level': 1,
+                                        'text': text
+                                    })
+                            else:
+                                # Regular paragraph
+                                content_blocks.append({
+                                    'type': 'paragraph',
+                                    'text': text
+                                })
+                                logger.debug(f"Found paragraph: {text[:50]}...")
+
+                        processed_paragraphs.add(id(paragraph))
+                        break
+
+            elif element.tag.endswith('tbl'):  # Table
+                for table in doc.tables:
+                    if table._element == element and id(table) not in processed_tables:
+                        logger.info(f"Found table with {len(table.rows)} rows")
+
+                        # Extract table using existing method
+                        table_data = self._extract_table_with_headers(table)
+
+                        content_blocks.append({
+                            'type': 'table',
+                            'data': table_data['data'],
+                            'headers': table_data['headers']
+                        })
+
+                        processed_tables.add(id(table))
+                        break
+
+        logger.info(f"Extracted {len(content_blocks)} content blocks from document")
+        return content_blocks
+
+    def _merge_table_and_text_context(self, content_blocks: List[dict]) -> List[dict]:
+        """
+        Merge tables with surrounding text context for better bullet generation.
+
+        Analyzes the document structure to identify paragraphs that provide
+        context for tables (intro/explanation) and creates merged blocks.
+
+        Args:
+            content_blocks: Ordered list of content blocks from document
+
+        Returns:
+            List[dict]: Processed blocks with merged table contexts:
+                - {'type': 'table_with_context', 'intro': str|None,
+                   'table': dict, 'explanation': str|None}
+                - {'type': 'paragraph', 'text': str} (standalone paragraphs)
+                - {'type': 'heading', 'level': int, 'text': str}
+        """
+        logger.info("Merging tables with surrounding text context")
+
+        # First pass: identify which paragraph indices will be merged with tables
+        used_paragraph_indices = set()
+
+        for i, block in enumerate(content_blocks):
+            if block['type'] == 'table':
+                # Check for paragraph BEFORE table
+                if i > 0:
+                    prev_block = content_blocks[i - 1]
+                    if prev_block['type'] == 'paragraph' and len(prev_block['text']) > 20:
+                        used_paragraph_indices.add(i - 1)
+
+                # Check for paragraph AFTER table
+                if i < len(content_blocks) - 1:
+                    next_block = content_blocks[i + 1]
+                    if next_block['type'] == 'paragraph' and len(next_block['text']) > 20:
+                        used_paragraph_indices.add(i + 1)
+
+        logger.info(f"Identified {len(used_paragraph_indices)} paragraphs to merge with tables")
+
+        # Second pass: build merged blocks
+        merged_blocks = []
+
+        for i, block in enumerate(content_blocks):
+            if block['type'] == 'table':
+                # Look for context before and after the table
+                intro = None
+                explanation = None
+
+                # Check for paragraph BEFORE table (within 1 block)
+                if i > 0 and (i - 1) in used_paragraph_indices:
+                    prev_block = content_blocks[i - 1]
+                    if prev_block['type'] == 'paragraph':
+                        intro = prev_block['text']
+                        logger.debug(f"Found table intro: {intro[:50]}...")
+
+                # Check for paragraph AFTER table (within 1 block)
+                if i < len(content_blocks) - 1 and (i + 1) in used_paragraph_indices:
+                    next_block = content_blocks[i + 1]
+                    if next_block['type'] == 'paragraph':
+                        explanation = next_block['text']
+                        logger.debug(f"Found table explanation: {explanation[:50]}...")
+
+                # Create merged block
+                merged_block = {
+                    'type': 'table_with_context',
+                    'intro': intro,
+                    'table': {
+                        'data': block['data'],
+                        'headers': block['headers']
+                    },
+                    'explanation': explanation
+                }
+                merged_blocks.append(merged_block)
+
+                if intro or explanation:
+                    logger.info(f"Merged table with context (intro={intro is not None}, "
+                              f"explanation={explanation is not None})")
+                else:
+                    logger.debug("Table has no surrounding context")
+
+            elif block['type'] == 'paragraph':
+                # Only add standalone paragraphs that weren't merged with tables
+                if i not in used_paragraph_indices:
+                    merged_blocks.append(block)
+                    logger.debug(f"Keeping standalone paragraph: {block['text'][:50]}...")
+                else:
+                    logger.debug(f"Skipping merged paragraph at index {i}")
+
+            elif block['type'] == 'heading':
+                # Always keep headings
+                merged_blocks.append(block)
+                logger.debug(f"Keeping heading: {block['text'][:50]}...")
+            else:
+                # Keep any other block types as-is
+                merged_blocks.append(block)
+
+        logger.info(f"Merged {len(content_blocks)} blocks into {len(merged_blocks)} blocks "
+                   f"({len(used_paragraph_indices)} paragraphs merged with tables)")
+        return merged_blocks
+
     def _extract_title(self, content: str, filename: str) -> str:
         """Extract document title from content or filename"""
         # If content is empty or None, fallback to filename

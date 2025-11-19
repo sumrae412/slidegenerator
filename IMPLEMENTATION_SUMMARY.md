@@ -1,71 +1,84 @@
-# Performance Optimizations Implementation Summary
+# Content Merging Implementation Summary
 
-## Executive Summary
+## Overview
 
-Successfully implemented comprehensive performance optimizations for the slide generator, achieving all target metrics:
+Successfully implemented intelligent content merging functionality in `slide_generator_pkg/document_parser.py` to handle mixed table/text documents. This enhancement enables context-aware bullet generation by combining tables with their surrounding explanatory paragraphs.
 
-- ✅ **30-50% faster processing** for large documents (via batch processing)
-- ✅ **40-60% cost reduction** in cost-sensitive mode (via GPT-3.5-Turbo)
-- ✅ **Quality maintained** within 3% of baseline levels
-- ✅ **2-3x parallelization** speedup (via async processing)
+## Implementation Details
 
----
+### Location
+**File:** `/home/user/slidegenerator/slide_generator_pkg/document_parser.py`
+**Lines:** 2068-2244 (inserted after `_extract_table_with_headers` method)
 
-## What Was Implemented
+### New Methods Added
 
-### 1. GPT-3.5-Turbo Support ✅ INTEGRATED
+#### 1. `_extract_content_blocks_from_docx(self, doc) -> List[dict]`
+**Lines:** 2068-2145
 
-**Status:** Fully integrated into `document_parser.py`
+**Purpose:** Extract ordered list of content blocks from DOCX document while maintaining document structure.
 
-**Location:** `/home/user/slidegenerator/slide_generator_pkg/document_parser.py` (lines 3702-3742)
+**Features:**
+- Processes document elements in order (paragraphs and tables)
+- Identifies and categorizes headings by level (H1-H6)
+- Uses existing `_extract_table_with_headers()` method for table data
+- Tracks processed elements to avoid duplicates
+- Returns structured blocks with type identification
 
-**What it does:**
-- Automatically uses GPT-3.5-Turbo for simple content (<200 words, low complexity)
-- 5-10x cheaper than GPT-4o
-- 2x faster processing
-- Enabled via `cost_sensitive=True` parameter
-
-**Usage:**
+**Return Format:**
 ```python
-parser = DocumentParser(
-    openai_api_key=your_key,
-    cost_sensitive=True  # Enable GPT-3.5 for simple content
-)
+[
+    {'type': 'heading', 'level': 1, 'text': 'Document Title'},
+    {'type': 'paragraph', 'text': 'Paragraph content...'},
+    {'type': 'table', 'data': [[...]], 'headers': [[...]]}
+]
 ```
 
-**Results:**
-- Tested and working
-- 60% cost savings on simple content
-- Quality maintained at 97-100%
+#### 2. `_merge_table_and_text_context(self, content_blocks: List[dict]) -> List[dict]`
+**Lines:** 2147-2244
 
----
+**Purpose:** Merge tables with surrounding text context for enhanced bullet generation.
+
+**Algorithm:**
+1. **First Pass:** Identify paragraph indices adjacent to tables (>20 chars)
+2. **Second Pass:** Build merged blocks, combining tables with their context
+
+**Features:**
+- Detects intro paragraphs (directly before table)
+- Detects explanation paragraphs (directly after table)
+- Prevents duplicate merging (one paragraph per table max)
+- Preserves standalone paragraphs and all headings
+- Minimum paragraph length: 20 characters
+
+## Smart Merging Rules
+
+1. **Adjacency Rule:** Only paragraphs within 1 block of a table are merged
+2. **Length Rule:** Paragraphs must be >20 characters to qualify as context
+3. **Uniqueness Rule:** Each paragraph can only be merged with one table
+4. **Preservation Rule:** Headings always preserved; standalone paragraphs kept
+5. **Two-Pass Rule:** Pre-identify merge candidates before building output
+
+## Testing
+
+### Test Results
+```
+✓ Content block extraction (10 blocks → 8 blocks after merging)
+✓ Table-text merging (2 paragraphs merged, 2 standalone)
+✓ Context detection (1 table with both intro+explanation, 1 standalone)
+✓ All verification checks passed
+```
 
 ## Files Created
 
-1. ✅ `/home/user/slidegenerator/performance_optimizations.py` - All optimization methods
-2. ✅ `/home/user/slidegenerator/PERFORMANCE_OPTIMIZATIONS.md` - Complete documentation
-3. ✅ `/home/user/slidegenerator/demo_performance_optimizations.py` - Usage examples
-4. ✅ `/home/user/slidegenerator/benchmark_performance.py` - Performance testing
-5. ✅ `/home/user/slidegenerator/IMPLEMENTATION_SUMMARY.md` - This summary
+1. **slide_generator_pkg/document_parser.py** - Implementation (177 lines added)
+2. **test_content_merging.py** - Test suite (260 lines)
+3. **example_content_merging.py** - Practical demonstration (229 lines)
+4. **CONTENT_MERGING_USAGE.md** - Usage documentation
+5. **IMPLEMENTATION_SUMMARY.md** - This file
 
----
+## Status
 
-## Performance Targets Achievement
-
-| Target | Actual | Status |
-|--------|--------|--------|
-| **30-50% faster for large docs** | 40% (batch) | ✅ ACHIEVED |
-| **40-60% cost reduction** | 60-80% (cost-sensitive) | ✅ EXCEEDED |
-| **Quality within 3%** | 97-100% (within 3%) | ✅ MAINTAINED |
-
----
-
-## Immediate Use
-
-```python
-# This works NOW - GPT-3.5 support is fully integrated
-parser = DocumentParser(cost_sensitive=True)
-# Automatically uses GPT-3.5 for simple content, saving 60% on costs
-```
-
-See PERFORMANCE_OPTIMIZATIONS.md for complete documentation.
+- ✅ Implementation complete
+- ✅ Tests passing (100% success rate)
+- ✅ Documentation complete
+- ✅ Examples working
+- ✅ Ready for integration
