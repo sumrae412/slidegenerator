@@ -11577,8 +11577,28 @@ def upload_file():
     script_column = int(script_column_raw)  # Default to column 2
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
-    claude_api_key = request.form.get('claude_key', '').strip()  # Claude API key (optional if OpenAI provided)
-    openai_api_key = request.form.get('openai_key', '').strip()  # OpenAI API key (optional if Claude provided)
+
+    # Get encrypted keys from form data (new security feature)
+    encrypted_claude_key = request.form.get('encrypted_claude_key', '').strip()
+    encrypted_openai_key = request.form.get('encrypted_openai_key', '').strip()
+
+    # Decrypt keys if provided (with fallback to plaintext for backward compatibility)
+    if encrypted_claude_key:
+        claude_api_key = decrypt_api_key(encrypted_claude_key)
+        if claude_api_key:
+            log_api_key_usage('claude', 'use', True)
+    else:
+        # Fallback to plaintext key (for backward compatibility during transition)
+        claude_api_key = request.form.get('claude_key', '').strip()
+
+    if encrypted_openai_key:
+        openai_api_key = decrypt_api_key(encrypted_openai_key)
+        if openai_api_key:
+            log_api_key_usage('openai', 'use', True)
+    else:
+        # Fallback to plaintext key (for backward compatibility during transition)
+        openai_api_key = request.form.get('openai_key', '').strip()
+
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     google_docs_url = request.form.get('google_docs_url', '').strip()
     model_preference = request.form.get('model_preference', 'auto')  # 'auto', 'claude', 'openai', or 'ensemble'
