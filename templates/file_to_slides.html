@@ -1324,16 +1324,18 @@
                 formData.append('visual_quality', visualQuality ? visualQuality.value : 'standard');
             }
 
-            // Add Claude API key if provided
+            // Add Claude API key if provided (encrypted)
             const claudeKey = document.getElementById('claude-key').value.trim();
             if (claudeKey) {
-                formData.append('claude_key', claudeKey);
+                const encryptedClaude = await KeyManager.encryptKey(claudeKey);
+                formData.append('encrypted_claude_key', encryptedClaude);
             }
 
-            // Add OpenAI API key if provided
+            // Add OpenAI API key if provided (encrypted)
             const openaiKey = document.getElementById('openai-key').value.trim();
             if (openaiKey) {
-                formData.append('openai_key', openaiKey);
+                const encryptedOpenai = await KeyManager.encryptKey(openaiKey);
+                formData.append('encrypted_openai_key', encryptedOpenai);
             }
 
             // Add model preference

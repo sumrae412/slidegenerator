@@ -294,25 +294,71 @@ def decrypt_api_key(encrypted_key: str) -> str:
         return None
 
     try:
+        import hashlib
+        from Crypto.Cipher import AES
+
         # Get session encryption key
         session_key = flask.session.get('encryption_key')
         if not session_key:
             logger.warning("No session encryption key found")
             return None
 
-        # Client uses CryptoJS AES encryption
-        # CryptoJS format: base64-encoded encrypted data
-        # We can decrypt on server using the same key
+        # Decode the base64-encoded encrypted data
+        encrypted_data = base64.b64decode(encrypted_key)
 
-        # Note: For production, implement proper AES decryption
-        # matching CryptoJS format. For now, return the encrypted key
-        # as placeholder - this will be updated by Agent 4 during integration
+        # CryptoJS format: Salted__<salt><ciphertext>
+        # Check for "Salted__" prefix (8 bytes: 0x53616c7465645f5f)
+        if encrypted_data[:8] != b'Salted__':
+            logger.error("Invalid CryptoJS format - missing 'Salted__' prefix")
+            return None
 
-        # TODO: Implement CryptoJS-compatible AES decryption
-        return encrypted_key
+        # Extract salt (bytes 8-16)
+        salt = encrypted_data[8:16]
+
+        # Extract ciphertext (bytes 16 onwards)
+        ciphertext = encrypted_data[16:]
+
+        # Derive key and IV using EVP_BytesToKey (matches CryptoJS behavior)
+        # This mimics OpenSSL's EVP_BytesToKey function
+        def evp_bytes_to_key(password, salt, key_len=32, iv_len=16):
+            """
+            Derive key and IV from password and salt.
+            Matches OpenSSL EVP_BytesToKey used by CryptoJS.
+            """
+            m = []
+            i = 0
+            while len(b''.join(m)) < (key_len + iv_len):
+                md = hashlib.md5()
+                data = password.encode('utf-8') if isinstance(password, str) else password
+                if i > 0:
+                    md.update(m[i - 1])
+                md.update(data)
+                md.update(salt)
+                m.append(md.digest())
+                i += 1
+            ms = b''.join(m)
+            return ms[:key_len], ms[key_len:key_len + iv_len]
+
+        # Derive key and IV
+        key, iv = evp_bytes_to_key(session_key, salt)
+
+        # Decrypt using AES-256-CBC
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        decrypted = cipher.decrypt(ciphertext)
+
+        # Remove PKCS7 padding
+        padding_length = decrypted[-1]
+        if isinstance(padding_length, str):
+            padding_length = ord(padding_length)
+        decrypted = decrypted[:-padding_length]
+
+        # Convert bytes to string
+        return decrypted.decode('utf-8')
 
     except Exception as e:
         logger.error(f"Failed to decrypt API key: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 def log_api_key_usage(key_type: str, action: str, success: bool):

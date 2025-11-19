@@ -20,6 +20,7 @@ nltk==3.8.1
 textstat==0.7.3
 # Additional enhancements
 cryptography==41.0.7
+pycryptodome>=3.19.0
 # Google Slides API
 google-api-python-client==2.108.0
 google-auth-httplib2==0.2.0
