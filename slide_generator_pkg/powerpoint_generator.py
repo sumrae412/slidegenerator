@@ -394,7 +394,17 @@ class SlideGenerator:
                             logger.error(f"Could not add visual prompt text for '{section['title']}': {e}")
                 else:
                     logger.info(f"Skipping visual generation for slide {current_slide_number} (fast mode)")
-                            
+
+                # Add speaker notes if available
+                if section.get('speaker_notes'):
+                    try:
+                        notes_slide = slide.notes_slide
+                        notes_text_frame = notes_slide.notes_text_frame
+                        notes_text_frame.text = section['speaker_notes']
+                        logger.info(f"Added speaker notes to slide {current_slide_number} ({len(section['speaker_notes'])} chars)")
+                    except Exception as e:
+                        logger.warning(f"Failed to add speaker notes to slide {current_slide_number}: {e}")
+
             else:
                 # Other content slides
                 content_slide_layout = prs.slide_layouts[1]
@@ -418,14 +428,24 @@ class SlideGenerator:
                     if content_shape:
                         text_frame = content_shape.text_frame
                         text_frame.clear()
-                        
+
                         for i, content_item in enumerate(section['content'][:6]):
                             p = text_frame.add_paragraph()
                             p.text = content_item
                             p.level = 0
                             p.font.size = Pt(20)
                             p.space_after = Pt(8)
-        
+
+                # Add speaker notes if available
+                if section.get('speaker_notes'):
+                    try:
+                        notes_slide = slide.notes_slide
+                        notes_text_frame = notes_slide.notes_text_frame
+                        notes_text_frame.text = section['speaker_notes']
+                        logger.info(f"Added speaker notes to slide {current_slide_number} ({len(section['speaker_notes'])} chars)")
+                    except Exception as e:
+                        logger.warning(f"Failed to add speaker notes to slide {current_slide_number}: {e}")
+
         # Add a summary slide at the end
         summary_slide_layout = prs.slide_layouts[1]
         slide = prs.slides.add_slide(summary_slide_layout)

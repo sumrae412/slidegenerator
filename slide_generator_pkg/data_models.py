@@ -17,6 +17,7 @@ class SlideContent:
     heading_level: Optional[int] = None  # Original heading level from DOCX (1-6)
     subheader: Optional[str] = None  # Bold subheader above bullets (extracted topic sentence)
     visual_cues: Optional[List[str]] = None  # Visual/stage direction cues extracted from content
+    speaker_notes: Optional[str] = None  # Full script text for presenter (brackets removed)
     # Visual generation fields
     visual_prompt: Optional[str] = None  # AI-generated DALL-E prompt for this slide
     visual_image_url: Optional[str] = None  # Generated image URL (remote or local path)

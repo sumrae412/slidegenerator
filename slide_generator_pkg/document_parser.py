@@ -2716,7 +2716,15 @@ Return your analysis as a JSON object with:
 
                 # Before processing new heading, flush any buffered content
                 if content_buffer:
+                    # Preserve original script for speaker notes (before removing brackets)
+                    original_script = '\n\n'.join(content_buffer)
+                    # Remove brackets for clean speaker notes
+                    cleaned_script = re.sub(r'\[.*?\]', '', original_script, flags=re.DOTALL).strip()
+                    logger.debug(f"Speaker notes: original={len(original_script)} chars, cleaned={len(cleaned_script)} chars")
+
+                    # Also remove brackets for bullet generation
                     combined_text = ' '.join(content_buffer)
+                    combined_text = re.sub(r'\[.*?\]', '', combined_text, flags=re.DOTALL).strip()
 
                     # Generate bullets first (use temp heading for context)
                     temp_context = pending_h4_title if pending_h4_title else "Content"
@@ -2735,7 +2743,8 @@ Return your analysis as a JSON object with:
                         slide_type='script',
                         heading_level=slide_heading_level,
                         subheader=topic_sentence,
-                        visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
+                        visual_cues=slide_visual_cues.copy() if slide_visual_cues else None,
+                        speaker_notes=cleaned_script if cleaned_script else None
                     ))
                     logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from {len(content_buffer)} paragraphs")
                     if slide_visual_cues:
@@ -2837,6 +2846,9 @@ Return your analysis as a JSON object with:
                 # BETTER CONTENT GROUPING: Create slide per substantial paragraph
                 # If this is a substantial paragraph (>150 chars), create slide immediately
                 if len(line) > 150:
+                    # Preserve original text for speaker notes (before removing brackets)
+                    cleaned_notes = re.sub(r'\[.*?\]', '', line, flags=re.DOTALL).strip()
+
                     # Generate bullets first (use temp heading for context)
                     temp_context = pending_h4_title if pending_h4_title else "Content"
                     heading_ancestry = build_heading_ancestry()
@@ -2854,7 +2866,8 @@ Return your analysis as a JSON object with:
                             slide_type='script',
                             heading_level=4 if pending_h4_title else None,
                             subheader=topic_sentence,
-                            visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
+                            visual_cues=slide_visual_cues.copy() if slide_visual_cues else None,
+                            speaker_notes=cleaned_notes if cleaned_notes else None
                         ))
                         logger.info(f"Created content slide {script_slide_counter}: '{slide_title}' with {len(bullet_points)} bullets from paragraph")
                         if slide_visual_cues:
@@ -2868,7 +2881,14 @@ Return your analysis as a JSON object with:
 
         # Flush any remaining buffered content at end of document
         if content_buffer:
+            # Preserve original script for speaker notes (before removing brackets)
+            original_script = '\n\n'.join(content_buffer)
+            # Remove brackets for clean speaker notes
+            cleaned_script = re.sub(r'\[.*?\]', '', original_script, flags=re.DOTALL).strip()
+
+            # Also remove brackets for bullet generation
             combined_text = ' '.join(content_buffer)
+            combined_text = re.sub(r'\[.*?\]', '', combined_text, flags=re.DOTALL).strip()
 
             # Generate bullets first (use temp heading for context)
             temp_context = pending_h4_title if pending_h4_title else "Content"
@@ -2887,7 +2907,8 @@ Return your analysis as a JSON object with:
                 slide_type='script',
                 heading_level=slide_heading_level,
                 subheader=topic_sentence,
-                visual_cues=slide_visual_cues.copy() if slide_visual_cues else None
+                visual_cues=slide_visual_cues.copy() if slide_visual_cues else None,
+                speaker_notes=cleaned_script if cleaned_script else None
             ))
             if slide_visual_cues:
                 logger.info(f"  Visual cues attached to final slide: {slide_visual_cues}")
