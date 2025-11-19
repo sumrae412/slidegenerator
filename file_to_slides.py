@@ -11382,6 +11382,71 @@ def google_config():
         logger.error(f"Error getting Google config: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/encryption-key', methods=['GET'])
+def get_encryption_key():
+    """
+    Return session-specific encryption key for client-side encryption.
+    This key is used to encrypt API keys before storing in localStorage.
+    The key is session-specific and expires when the session ends.
+    """
+    try:
+        encryption_key = get_or_create_session_encryption_key()
+
+        return jsonify({
+            'status': 'success',
+            'key': encryption_key
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting encryption key: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get encryption key'
+        }), 500
+
+@app.route('/api/validate-key', methods=['POST'])
+def validate_api_key_endpoint():
+    """
+    Validate API key without storing it.
+    Returns validation status only.
+    Supports both Claude and OpenAI keys.
+    """
+    try:
+        data = request.json
+        key_type = data.get('key_type')  # 'claude' or 'openai'
+        encrypted_key = data.get('encrypted_key')
+
+        # Decrypt key
+        api_key = decrypt_api_key(encrypted_key)
+
+        if not api_key:
+            return jsonify({
+                'valid': False,
+                'error': 'Invalid key format'
+            })
+
+        # Validate based on type
+        if key_type == 'claude':
+            # Use existing validation function if available
+            # Otherwise check format
+            valid = api_key.startswith('sk-ant-') and len(api_key) > 20
+        elif key_type == 'openai':
+            valid = api_key.startswith('sk-') and len(api_key) > 20
+        else:
+            valid = False
+
+        return jsonify({
+            'valid': valid,
+            'key_type': key_type
+        })
+
+    except Exception as e:
+        logger.error(f"Key validation error: {e}")
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/csp-report', methods=['POST'])
 def csp_report():
     """
