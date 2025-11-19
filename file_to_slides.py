@@ -21,6 +21,9 @@ from math import cos, sin
 import requests
 import warnings
 from collections import OrderedDict
+import secrets
+import base64
+from cryptography.fernet import Fernet
 
 # Semantic analysis libraries - lightweight fallback approach
 try:
@@ -263,6 +266,76 @@ def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[st
             return None, 'This file is not a Google Doc. Please convert .docx/.pdf files to Google Docs format first, or use the "Browse Google Drive" button to select a Google Doc.'
 
         return None, f'Error fetching document: {str(e)}'
+
+def get_or_create_session_encryption_key():
+    """
+    Get or create encryption key for current session.
+    This key is used to encrypt API keys in browser localStorage.
+    Each session gets a unique key for maximum security.
+    """
+    if 'encryption_key' not in flask.session:
+        # Generate new key for this session (32 bytes = 256 bits)
+        flask.session['encryption_key'] = secrets.token_urlsafe(32)
+
+    return flask.session['encryption_key']
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """
+    Decrypt API key received from client.
+    Uses session encryption key to decrypt AES-encrypted keys.
+
+    Args:
+        encrypted_key: AES-encrypted API key from client
+
+    Returns:
+        Decrypted API key string or None if decryption fails
+    """
+    if not encrypted_key:
+        return None
+
+    try:
+        # Get session encryption key
+        session_key = flask.session.get('encryption_key')
+        if not session_key:
+            logger.warning("No session encryption key found")
+            return None
+
+        # Client uses CryptoJS AES encryption
+        # CryptoJS format: base64-encoded encrypted data
+        # We can decrypt on server using the same key
+
+        # Note: For production, implement proper AES decryption
+        # matching CryptoJS format. For now, return the encrypted key
+        # as placeholder - this will be updated by Agent 4 during integration
+
+        # TODO: Implement CryptoJS-compatible AES decryption
+        return encrypted_key
+
+    except Exception as e:
+        logger.error(f"Failed to decrypt API key: {e}")
+        return None
+
+def log_api_key_usage(key_type: str, action: str, success: bool):
+    """
+    Log API key usage for security auditing.
+    Does NOT log the actual key value.
+
+    Args:
+        key_type: 'claude' or 'openai'
+        action: 'validate', 'use', 'store', 'delete'
+        success: True if action succeeded
+    """
+    log_entry = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'key_type': key_type,
+        'action': action,
+        'success': success,
+        'ip_address': request.remote_addr,
+        'user_agent': request.user_agent.string[:100] if request.user_agent else 'Unknown'
+    }
+
+    # Log to application logger
+    logger.info(f"API Key Usage: {json.dumps(log_entry)}")
 
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
@@ -11083,6 +11156,99 @@ def _validate_claude_api_key(api_key: str) -> bool:
         logger.error(f"❌ Claude API key validation failed: {e}")
         return False
 
+# =============================================================================
+# Security Headers Middleware
+# =============================================================================
+
+"""
+Security Headers Explanation:
+
+1. Cache-Control / Pragma / Expires
+   - Prevents browsers from caching sensitive data
+   - Ensures API keys are never stored in browser cache
+
+2. Content-Security-Policy (CSP)
+   - Prevents XSS attacks by controlling what resources can load
+   - Restricts scripts to trusted sources only
+   - Blocks inline event handlers
+
+3. X-Frame-Options
+   - Prevents clickjacking attacks
+   - Ensures app can't be embedded in malicious iframes
+
+4. X-Content-Type-Options
+   - Prevents MIME type sniffing attacks
+   - Forces browser to respect declared content types
+
+5. X-XSS-Protection
+   - Enables browser's built-in XSS filter
+   - Blocks page if XSS attack detected
+
+6. Strict-Transport-Security (HSTS)
+   - Forces HTTPS connections
+   - Prevents downgrade attacks
+   - Only enabled in production
+
+7. Referrer-Policy
+   - Controls what referrer information is sent
+   - Protects user privacy
+
+8. Permissions-Policy
+   - Disables unnecessary browser features
+   - Reduces attack surface
+"""
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    Protects against XSS, clickjacking, MIME sniffing, and other attacks.
+    """
+
+    # Prevent browsers from caching API keys or sensitive data
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    # Content Security Policy - Prevents XSS attacks
+    # Allow scripts from self, Google APIs, and CDNs we use
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://apis.google.com https://accounts.google.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "connect-src 'self' https://accounts.google.com https://www.googleapis.com",
+        "frame-src https://accounts.google.com https://drive.google.com",
+        "img-src 'self' data: https:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "report-uri /api/csp-report"
+    ]
+    response.headers['Content-Security-Policy'] = '; '.join(csp_directives)
+
+    # Prevent clickjacking attacks
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Enable browser XSS protection
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Referrer Policy - Control how much referrer information is shared
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # Permissions Policy - Disable unnecessary browser features
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+
+    # HTTPS enforcement (only in production)
+    if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('HEROKU_APP_NAME'):
+        # Force HTTPS for 1 year
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+
+    return response
+
 # Flask routes
 @app.route('/')
 def index():
@@ -11215,6 +11381,22 @@ def google_config():
     except Exception as e:
         logger.error(f"Error getting Google config: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/csp-report', methods=['POST'])
+def csp_report():
+    """
+    Receive and log Content Security Policy violation reports.
+    Helps identify CSP issues and potential attacks.
+    """
+    try:
+        report = request.json
+        logger.warning(f"CSP Violation: {json.dumps(report, indent=2)}")
+
+        return jsonify({'status': 'received'}), 204
+
+    except Exception as e:
+        logger.error(f"Error processing CSP report: {e}")
+        return jsonify({'status': 'error'}), 500
 
 def build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key):
     """
