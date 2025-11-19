@@ -1922,14 +1922,30 @@ Return your analysis as a JSON object with:
         slides = []
         script_slide_counter = 1
 
-        # Track document hierarchy for smart subtitles
+        # Track document hierarchy for smart subtitles and context-aware bullets
         current_h1 = None
         current_h2 = None
+        current_h3 = None
+        current_h4 = None
 
         # Track section numbers for hierarchical numbering
         h1_num = 0
         h2_num = 0
         h3_num = 0
+
+        # Helper function to build heading ancestry
+        def build_heading_ancestry():
+            """Build list of current heading hierarchy"""
+            ancestry = []
+            if current_h1:
+                ancestry.append(current_h1)
+            if current_h2:
+                ancestry.append(current_h2)
+            if current_h3:
+                ancestry.append(current_h3)
+            if current_h4:
+                ancestry.append(current_h4)
+            return ancestry
 
         logger.info(f"Converting script content to slides, processing {len(lines)} lines ({len(non_heading_lines)} content blocks)")
         
@@ -1978,7 +1994,8 @@ Return your analysis as a JSON object with:
 
                     # Generate bullets first (use temp heading for context)
                     temp_context = pending_h4_title if pending_h4_title else "Content"
-                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context)
+                    heading_ancestry = build_heading_ancestry()
+                    topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context, heading_ancestry=heading_ancestry)
 
                     # Then create title that summarizes the bullets
                     slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, combined_text)
@@ -2056,8 +2073,17 @@ Return your analysis as a JSON object with:
                     if heading_level == 1:
                         current_h1 = heading_text
                         current_h2 = None  # Reset H2 when we encounter a new H1
+                        current_h3 = None  # Reset H3 and H4 too
+                        current_h4 = None
                     elif heading_level == 2:
                         current_h2 = heading_text
+                        current_h3 = None  # Reset H3 and H4
+                        current_h4 = None
+                    elif heading_level == 3:
+                        current_h3 = heading_text
+                        current_h4 = None  # Reset H4
+                    elif heading_level == 4:
+                        current_h4 = heading_text
 
                     # Clear any pending H4 title since we found a higher-level heading
                     pending_h4_title = None
@@ -2087,7 +2113,8 @@ Return your analysis as a JSON object with:
                 if len(line) > 150:
                     # Generate bullets first (use temp heading for context)
                     temp_context = pending_h4_title if pending_h4_title else "Content"
-                    topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=temp_context)
+                    heading_ancestry = build_heading_ancestry()
+                    topic_sentence, bullet_points = self._create_bullet_points(line, fast_mode, context_heading=temp_context, heading_ancestry=heading_ancestry)
 
                     # Then create title that summarizes the bullets
                     slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, line)
@@ -2119,7 +2146,8 @@ Return your analysis as a JSON object with:
 
             # Generate bullets first (use temp heading for context)
             temp_context = pending_h4_title if pending_h4_title else "Content"
-            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context)
+            heading_ancestry = build_heading_ancestry()
+            topic_sentence, bullet_points = self._create_bullet_points(combined_text, fast_mode, context_heading=temp_context, heading_ancestry=heading_ancestry)
 
             # Then create title that summarizes the bullets
             slide_title = pending_h4_title if pending_h4_title else self._create_title_from_bullets(bullet_points, combined_text)
@@ -2197,7 +2225,7 @@ Return your analysis as a JSON object with:
 
         return None
 
-    def _create_bullet_points(self, text: str, fast_mode: bool = False, context_heading: str = None) -> Tuple[Optional[str], List[str]]:
+    def _create_bullet_points(self, text: str, fast_mode: bool = False, context_heading: str = None, heading_ancestry: List[str] = None) -> Tuple[Optional[str], List[str]]:
         """
         Convert content into high-quality bullet points using unified approach.
 
@@ -2205,6 +2233,7 @@ Return your analysis as a JSON object with:
             text: Content to extract bullets from
             fast_mode: Skip advanced NLP/LLM processing
             context_heading: Optional heading/title for contextual awareness
+            heading_ancestry: Full heading hierarchy (e.g., ["Intro", "Background", "Problem"])
 
         Returns:
             (topic_sentence, bullets) where topic_sentence becomes a bold subheader
@@ -2247,7 +2276,7 @@ Return your analysis as a JSON object with:
             logger.info(f"Medium content ({text_length} chars) - targeting 3-4 bullets")
 
         # Use unified bullet generation that combines best approaches
-        bullets = self._create_unified_bullets(content_for_analysis, context_heading=context_heading)
+        bullets = self._create_unified_bullets(content_for_analysis, context_heading=context_heading, heading_ancestry=heading_ancestry)
 
         # APPLY 15-WORD COMPRESSION to ALL bullets before returning (top-level enforcement)
         bullets = [self._compress_bullet_for_slides(b) for b in bullets]
@@ -2651,7 +2680,7 @@ Return your analysis as a JSON object with:
                 return self._create_openai_bullets_json(text, context_heading, style)
 
     def _create_unified_bullets(self, text: str, context_heading: str = None,
-                               use_chain_of_thought: bool = False) -> List[str]:
+                               use_chain_of_thought: bool = False, heading_ancestry: List[str] = None) -> List[str]:
         """
         LLM-only bullet generation for highest quality and content relevance
 
@@ -2659,6 +2688,7 @@ Return your analysis as a JSON object with:
             text: Content to extract bullets from
             context_heading: Optional heading/title for contextual awareness
             use_chain_of_thought: If True, use multi-step CoT reasoning (works with ensemble too)
+            heading_ancestry: Full heading hierarchy for context-aware bullets
         """
         if not text or len(text.strip()) < 5:
             return []
@@ -2762,7 +2792,8 @@ Return your analysis as a JSON object with:
                     text,
                     context_heading=context_heading,
                     style=style,
-                    enable_refinement=False  # Set to True for extra quality pass
+                    enable_refinement=False,  # Set to True for extra quality pass
+                    heading_ancestry=heading_ancestry
                 )
             else:
                 # No LLM available
@@ -3446,7 +3477,7 @@ Return your analysis as a JSON object with:
         return False
 
     def _build_structured_prompt(self, text: str, content_info: dict,
-                                 context_heading: str = None, style: str = 'professional') -> str:
+                                 context_heading: str = None, style: str = 'professional', heading_ancestry: List[str] = None) -> str:
         """
         Build adaptive prompt based on content type and context.
 
@@ -3455,6 +3486,7 @@ Return your analysis as a JSON object with:
             content_info: Output from _detect_content_type()
             context_heading: Optional heading for contextual awareness
             style: 'professional', 'educational', 'technical', 'executive'
+            heading_ancestry: Full heading hierarchy for context-aware bullets
 
         Returns:
             Structured prompt string optimized for content type
@@ -3472,8 +3504,14 @@ Return your analysis as a JSON object with:
         }
         style_guide = style_guides.get(style, style_guides['professional'])
 
-        # Context enhancement
-        context_note = f"\n\nCONTEXT: This content appears under the heading '{context_heading}'. Ensure bullets are relevant to this topic." if context_heading else ""
+        # Context enhancement with hierarchy
+        context_note = ""
+        if heading_ancestry and len(heading_ancestry) > 1:
+            # Show hierarchy: "Introduction > Background > Problem Statement"
+            hierarchy = " > ".join(heading_ancestry)
+            context_note = f"\n\nDOCUMENT HIERARCHY: {hierarchy}\nCURRENT SECTION: {heading_ancestry[-1]}\nConsider the broader document context when creating bullets."
+        elif context_heading:
+            context_note = f"\n\nCONTEXT: This content appears under the heading '{context_heading}'. Ensure bullets are relevant to this topic."
 
         # Few-shot examples based on style
         examples = {
@@ -3620,7 +3658,7 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             return bullets
 
     def _create_llm_only_bullets(self, text: str, context_heading: str = None,
-                                style: str = 'professional', enable_refinement: bool = False) -> List[str]:
+                                style: str = 'professional', enable_refinement: bool = False, heading_ancestry: List[str] = None) -> List[str]:
         """
         Create bullets using Claude with structured, adaptive prompts.
 
@@ -3631,6 +3669,7 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
             context_heading: Optional heading for contextual awareness
             style: 'professional', 'educational', 'technical', or 'executive'
             enable_refinement: If True, run second pass for quality improvement
+            heading_ancestry: Full heading hierarchy for context-aware bullets
 
         Returns:
             List of bullet points
@@ -3648,7 +3687,8 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
                 text,
                 content_info,
                 context_heading=context_heading,
-                style=style
+                style=style,
+                heading_ancestry=heading_ancestry
             )
 
             # v127: Adaptive temperature based on content type and style
@@ -3707,6 +3747,198 @@ OUTPUT: Return the refined bullets, one per line, no numbering."""
         except Exception as e:
             logger.error(f"Error in Claude bullet generation: {e}")
             return []
+
+    def _check_bullet_diversity(self, bullets: List[str]) -> float:
+        """
+        Score bullet diversity (0.0-1.0).
+        Low score indicates repetitive structure.
+
+        Returns:
+            Float between 0.0 and 1.0, where higher means more diverse
+        """
+        if not bullets or len(bullets) < 2:
+            return 1.0
+
+        diversity_score = 0.0
+
+        # 1. Starting word diversity (40% weight)
+        start_words = []
+        for bullet in bullets:
+            words = bullet.split()
+            if words:
+                start_words.append(words[0].lower())
+
+        if start_words:
+            unique_starts = len(set(start_words))
+            start_diversity = unique_starts / len(start_words)
+            diversity_score += start_diversity * 0.4
+
+        # 2. Length variance (30% weight)
+        lengths = [len(b.split()) for b in bullets]
+        if lengths and len(lengths) > 1:
+            avg_len = sum(lengths) / len(lengths)
+            variance = sum((l - avg_len) ** 2 for l in lengths) / len(lengths)
+            # Normalize: variance of 10 = perfect (1.0), 0 = poor (0.0)
+            length_diversity = min(variance / 10.0, 1.0)
+            diversity_score += length_diversity * 0.3
+
+        # 3. Structural diversity (30% weight)
+        # Check if bullets follow different patterns
+        patterns = []
+        for bullet in bullets:
+            words = bullet.split()
+            if words:
+                # Simple heuristic: first word POS
+                first_word = words[0].lower()
+                if first_word in ['use', 'create', 'build', 'implement', 'provide', 'enable', 'ensure']:
+                    patterns.append('verb')
+                elif first_word in ['the', 'a', 'an']:
+                    patterns.append('article')
+                else:
+                    patterns.append('other')
+
+        if patterns:
+            unique_patterns = len(set(patterns))
+            pattern_diversity = unique_patterns / len(patterns)
+            diversity_score += pattern_diversity * 0.3
+
+        logger.info(f"Bullet diversity score: {diversity_score:.2f}")
+        return diversity_score
+
+    def _validate_and_improve_bullets(
+        self,
+        bullets: List[str],
+        source_text: str,
+        heading: str,
+        parent_headings: List[str] = None
+    ) -> Tuple[List[str], dict]:
+        """
+        Validate bullet quality and improve if needed using LLM.
+
+        Returns:
+            (improved_bullets, metrics_dict)
+        """
+        if not self.client and not self.openai_client:
+            # No LLM available, return as-is
+            return bullets, {
+                'relevance_score': 0.0,
+                'completeness_score': 0.0,
+                'missing_concepts': [],
+                'improvements_made': 0
+            }
+
+        # Build context
+        context = " > ".join(parent_headings) if parent_headings else ""
+
+        # Create validation prompt
+        bullets_text = "\n".join(f"• {b}" for b in bullets)
+
+        prompt = f"""Review these slide bullets for quality and relevance.
+
+SLIDE TITLE: {heading}
+{f'CONTEXT: {context}' if context else ''}
+
+SOURCE TEXT:
+{source_text[:1000]}
+
+CURRENT BULLETS:
+{bullets_text}
+
+EVALUATE:
+1. Relevance (0.0-1.0): Do bullets capture main points from source?
+2. Completeness (0.0-1.0): Are key concepts missing?
+3. Missing concepts: List important points not covered
+
+If relevance or completeness < 0.8, provide improved bullets.
+
+FORMAT:
+Relevance: [0.0-1.0]
+Completeness: [0.0-1.0]
+Missing: [concept1, concept2, ...]
+Improved Bullets:
+• [bullet 1]
+• [bullet 2]
+..."""
+
+        try:
+            # Call LLM
+            if self.client:
+                response = self.client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=1000,
+                    temperature=0.3,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                response_text = response.content[0].text
+            elif self.openai_client:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1000,
+                    temperature=0.3
+                )
+                response_text = response.choices[0].message.content
+            else:
+                response_text = ""
+
+            # Parse response
+            relevance = 0.5
+            completeness = 0.5
+            missing = []
+            improved_bullets = bullets  # Default to original
+
+            for line in response_text.split('\n'):
+                line = line.strip()
+                if line.lower().startswith('relevance:'):
+                    try:
+                        relevance = float(line.split(':')[1].strip())
+                    except:
+                        pass
+                elif line.lower().startswith('completeness:'):
+                    try:
+                        completeness = float(line.split(':')[1].strip())
+                    except:
+                        pass
+                elif line.lower().startswith('missing:'):
+                    missing_str = line.split(':', 1)[1].strip()
+                    missing = [m.strip() for m in missing_str.strip('[]').split(',')]
+
+            # Extract improved bullets if provided
+            if 'Improved Bullets:' in response_text or 'improved bullets:' in response_text.lower():
+                improved_section = response_text.split('Improved Bullets:')[1] if 'Improved Bullets:' in response_text else response_text.split('improved bullets:')[1]
+                temp_improved = []
+                for line in improved_section.split('\n'):
+                    line = line.strip()
+                    if line.startswith('•') or line.startswith('-') or line.startswith('*'):
+                        bullet = line.lstrip('•-*').strip()
+                        if bullet and len(bullet.split()) >= 4:
+                            temp_improved.append(bullet)
+
+                # Only use improved bullets if we got valid ones
+                if temp_improved:
+                    improved_bullets = temp_improved
+
+            improvements_made = 1 if improved_bullets != bullets else 0
+
+            metrics = {
+                'relevance_score': relevance,
+                'completeness_score': completeness,
+                'missing_concepts': missing,
+                'improvements_made': improvements_made
+            }
+
+            logger.info(f"Bullet validation: relevance={relevance:.2f}, completeness={completeness:.2f}, improved={improvements_made}")
+
+            return improved_bullets, metrics
+
+        except Exception as e:
+            logger.error(f"Bullet validation failed: {e}")
+            return bullets, {
+                'relevance_score': 0.5,
+                'completeness_score': 0.5,
+                'missing_concepts': [],
+                'improvements_made': 0
+            }
 
     def _create_openai_bullets_json(self, text: str, context_heading: str = None,
                                     style: str = 'professional', enable_refinement: bool = False) -> List[str]:
