@@ -95,6 +95,28 @@ fi
 
 echo ""
 
+# Step 4b: Run feature-specific tests
+echo "Step 4b: Running feature-specific tests..."
+if [ -f "tests/test_bullet_quality.py" ]; then
+    print_info "Running bullet quality tests..."
+    python3 -m pytest tests/test_bullet_quality.py -v 2>/dev/null
+    BULLET_QUALITY_STATUS=$?
+    print_status $BULLET_QUALITY_STATUS "Bullet quality tests"
+else
+    print_warning "Bullet quality tests not found (skipping)"
+fi
+
+if [ -f "tests/test_topic_separation.py" ]; then
+    print_info "Running topic separation tests..."
+    python3 -m pytest tests/test_topic_separation.py -v 2>/dev/null
+    TOPIC_SEP_STATUS=$?
+    print_status $TOPIC_SEP_STATUS "Topic separation tests"
+else
+    print_warning "Topic separation tests not found (skipping)"
+fi
+
+echo ""
+
 # Step 5: Check for common security issues
 echo "Step 5: Security checks..."
 
