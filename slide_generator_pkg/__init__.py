@@ -31,12 +31,14 @@ from .document_parser import DocumentParser
 from .powerpoint_generator import SlideGenerator
 from .google_slides_generator import GoogleSlidesGenerator
 from .semantic_analyzer import SemanticAnalyzer
+from .visual_generator import VisualGenerator
 
 # Import utilities
 from .utils import (
     get_google_client_config,
     extract_google_doc_id,
-    fetch_google_doc_content
+    fetch_google_doc_content,
+    CostTracker
 )
 
 # Public API
@@ -51,9 +53,11 @@ __all__ = [
     'SlideGenerator',
     'GoogleSlidesGenerator',
     'SemanticAnalyzer',
+    'VisualGenerator',
 
     # Utilities
     'get_google_client_config',
     'extract_google_doc_id',
-    'fetch_google_doc_content'
+    'fetch_google_doc_content',
+    'CostTracker'
 ]

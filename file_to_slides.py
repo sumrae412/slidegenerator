@@ -11216,6 +11216,110 @@ def google_config():
         logger.error(f"Error getting Google config: {e}")
         return jsonify({'error': str(e)}), 500
 
+def build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key):
+    """
+    Build processing statistics object from parser and document structure.
+
+    Args:
+        parser: DocumentParser instance
+        doc_structure: DocumentStructure instance
+        cache_stats: Cache statistics dictionary
+        claude_api_key: Claude API key (if provided)
+        openai_api_key: OpenAI API key (if provided)
+
+    Returns:
+        Dictionary with processing statistics
+    """
+    # Count model usage per slide (if available from parser)
+    model_usage = {
+        'claude': 0,
+        'openai': 0,
+        'nlp_fallback': 0
+    }
+
+    # Check if parser has model tracking
+    if hasattr(parser, '_model_usage_stats'):
+        model_usage = parser._model_usage_stats
+    else:
+        # Estimate based on API keys provided
+        total_slides = len(doc_structure.slides)
+        if claude_api_key and openai_api_key:
+            # Both keys provided - assume auto routing
+            model_usage['claude'] = int(total_slides * 0.6)  # Estimate 60% Claude
+            model_usage['openai'] = total_slides - model_usage['claude']
+        elif claude_api_key:
+            model_usage['claude'] = total_slides
+        elif openai_api_key:
+            model_usage['openai'] = total_slides
+        else:
+            model_usage['nlp_fallback'] = total_slides
+
+    # Token usage (if available from parser)
+    tokens = {
+        'input_tokens': 0,
+        'output_tokens': 0,
+        'total_tokens': 0
+    }
+
+    if hasattr(parser, '_total_input_tokens'):
+        tokens['input_tokens'] = parser._total_input_tokens
+    if hasattr(parser, '_total_output_tokens'):
+        tokens['output_tokens'] = parser._total_output_tokens
+    tokens['total_tokens'] = tokens['input_tokens'] + tokens['output_tokens']
+
+    # Estimate if not tracked
+    if tokens['total_tokens'] == 0:
+        # Rough estimate: ~500 tokens per slide
+        tokens['input_tokens'] = len(doc_structure.slides) * 300
+        tokens['output_tokens'] = len(doc_structure.slides) * 200
+        tokens['total_tokens'] = tokens['input_tokens'] + tokens['output_tokens']
+
+    # Calculate costs (approximate pricing)
+    CLAUDE_INPUT_COST = 0.003 / 1000  # $3 per 1M input tokens
+    CLAUDE_OUTPUT_COST = 0.015 / 1000  # $15 per 1M output tokens
+    OPENAI_INPUT_COST = 0.0025 / 1000  # $2.50 per 1M input tokens (GPT-4o)
+    OPENAI_OUTPUT_COST = 0.01 / 1000  # $10 per 1M output tokens
+
+    # Estimate cost per model (simplified)
+    claude_slides = model_usage['claude']
+    openai_slides = model_usage['openai']
+    total_slides_with_ai = claude_slides + openai_slides
+
+    claude_cost = 0
+    openai_cost = 0
+
+    if total_slides_with_ai > 0:
+        # Distribute tokens proportionally
+        claude_input = int(tokens['input_tokens'] * (claude_slides / total_slides_with_ai)) if total_slides_with_ai > 0 else 0
+        claude_output = int(tokens['output_tokens'] * (claude_slides / total_slides_with_ai)) if total_slides_with_ai > 0 else 0
+        openai_input = tokens['input_tokens'] - claude_input
+        openai_output = tokens['output_tokens'] - claude_output
+
+        claude_cost = (claude_input * CLAUDE_INPUT_COST) + (claude_output * CLAUDE_OUTPUT_COST)
+        openai_cost = (openai_input * OPENAI_INPUT_COST) + (openai_output * OPENAI_OUTPUT_COST)
+
+    total_cost = claude_cost + openai_cost
+
+    # Calculate cache savings
+    cache_hit_rate = cache_stats.get('hit_rate_percent', 0)
+    cache_savings = total_cost * (cache_hit_rate / 100) if cache_hit_rate > 0 else 0
+
+    return {
+        'model_usage': model_usage,
+        'tokens': tokens,
+        'costs': {
+            'claude': claude_cost,
+            'openai': openai_cost,
+            'total': total_cost,
+            'cache_savings': cache_savings
+        },
+        'cache': {
+            'cache_hits': cache_stats.get('cache_hits', 0),
+            'cache_misses': cache_stats.get('cache_misses', 0),
+            'hit_rate_percent': cache_hit_rate
+        }
+    }
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload and conversion"""
@@ -11230,9 +11334,13 @@ def upload_file():
     openai_api_key = request.form.get('openai_key', '').strip()  # OpenAI API key (optional if Claude provided)
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     google_docs_url = request.form.get('google_docs_url', '').strip()
+    model_preference = request.form.get('model_preference', 'auto')  # 'auto', 'claude', 'openai', or 'ensemble'
+    enable_refinement = request.form.get('enable_refinement', 'false').lower() == 'true'
 
     logger.info(f"📊 Processing mode: {'No table (paragraph mode)' if script_column == 0 else f'Table column {script_column}'}")
     logger.info(f"📊 Output format: {output_format}")
+    logger.info(f"📊 Model preference: {model_preference}")
+    logger.info(f"📊 Enable refinement: {enable_refinement}")
 
     # REQUIRE Claude API key
     if not claude_api_key:
@@ -11318,9 +11426,9 @@ def upload_file():
         parser = DocumentParser(
             claude_api_key=claude_api_key if claude_api_key else None,
             openai_api_key=openai_api_key if openai_api_key else None,
-            preferred_llm='auto'  # Intelligent routing between Claude and OpenAI
+            preferred_llm=model_preference  # Use user's model preference
         )
-        doc_structure = parser.parse_file(filepath, filename, script_column, skip_visuals)
+        doc_structure = parser.parse_file(filepath, filename, script_column, skip_visuals, enable_refinement=enable_refinement)
         logger.info(f"Document parsed in {time.time() - parse_start:.1f}s - {len(doc_structure.slides)} slides")
         
         # Check if we have too many slides (could cause timeout)
@@ -11372,13 +11480,18 @@ def upload_file():
                 total_time = time.time() - start_time
                 logger.info(f"Total conversion completed in {total_time:.1f}s")
 
+                # Collect processing stats
+                cache_stats = parser.get_cache_stats() if hasattr(parser, 'get_cache_stats') else {}
+                processing_stats = build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key)
+
                 return jsonify({
                     'success': True,
                     'presentation_id': result['presentation_id'],
                     'google_slides_url': result['url'],
                     'slide_count': result['slide_count'],
                     'title': doc_structure.title,
-                    'format': 'google_slides'
+                    'format': 'google_slides',
+                    'processing_stats': processing_stats
                 })
 
             except Exception as e:
@@ -11398,13 +11511,18 @@ def upload_file():
             total_time = time.time() - start_time
             logger.info(f"Total conversion completed in {total_time:.1f}s")
 
+            # Collect processing stats
+            cache_stats = parser.get_cache_stats() if hasattr(parser, 'get_cache_stats') else {}
+            processing_stats = build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key)
+
             return jsonify({
                 'success': True,
                 'filename': os.path.basename(output_path),
                 'download_url': f'/download/{os.path.basename(output_path)}',
                 'slide_count': len(doc_structure.slides),
                 'title': doc_structure.title,
-                'format': 'pptx'
+                'format': 'pptx',
+                'processing_stats': processing_stats
             })
         
     except Exception as e:

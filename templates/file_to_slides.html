@@ -283,6 +283,138 @@
                     </div>
                 </div>
 
+                <!-- Model Preference & Quality Settings -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <!-- Model Preference Dropdown -->
+                    <div>
+                        <label for="model-preference" class="block text-sm font-semibold text-slate-800 mb-2">
+                            Model Preference
+                            <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about model preferences">
+                                <span>?</span>
+                            </button>
+                        </label>
+                        <select id="model-preference" name="model_preference" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
+                            <option value="auto" selected>Auto (Smart Routing)</option>
+                            <option value="claude">Claude Only</option>
+                            <option value="openai">OpenAI Only</option>
+                            <option value="ensemble">Ensemble Mode</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1.5" id="model-preference-description">
+                            Automatically selects the best AI model for each slide based on content type
+                        </p>
+                    </div>
+
+                    <!-- Quality Refinement Checkbox -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-800 mb-2">
+                            Quality Settings
+                            <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about quality refinement">
+                                <span>?</span>
+                            </button>
+                        </label>
+                        <div class="flex items-start">
+                            <input type="checkbox" id="enable-refinement" name="enable_refinement" class="mt-1 mr-3 h-4 w-4 text-slate-700 border-slate-300 rounded focus:ring-slate-500">
+                            <div>
+                                <label for="enable-refinement" class="text-sm font-medium text-slate-700 cursor-pointer">Enable Quality Refinement</label>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    <span class="font-medium text-amber-700">+50% token cost</span> · Runs a second pass to improve bullet quality and relevance
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p class="text-xs text-amber-800">
+                                💰 <strong>Cost Impact:</strong> Refinement doubles processing for higher quality. Typically adds $0.10-0.30 per document.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Visual Generation Settings -->
+                <div class="card p-6 mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg">
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center">
+                                <span class="text-2xl mr-3">🎨</span>
+                                <div>
+                                    <h3 class="text-lg font-semibold text-slate-800">AI Visual Generation</h3>
+                                    <p class="text-sm text-slate-600">Generate professional images for slides using DALL-E 3</p>
+                                </div>
+                            </div>
+                            <span class="px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full">NEW</span>
+                        </div>
+                    </div>
+
+                    <!-- Enable Visual Generation Checkbox -->
+                    <div class="flex items-start mb-4">
+                        <input type="checkbox" id="enable-visual-generation" name="enable_visual_generation" class="mt-1 mr-3 h-4 w-4 text-purple-700 border-slate-300 rounded focus:ring-purple-500">
+                        <div>
+                            <label for="enable-visual-generation" class="text-sm font-medium text-slate-700 cursor-pointer">Enable AI Visual Generation</label>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Automatically generate contextual images for your slides using DALL-E 3
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Visual Filter Strategy (shown when enabled) -->
+                    <div id="visual-filter-section" class="hidden ml-7 mt-3 space-y-3">
+                        <div>
+                            <label for="visual-filter" class="block text-sm font-semibold text-slate-800 mb-2">
+                                Which slides should get visuals?
+                            </label>
+                            <select id="visual-filter" name="visual_filter" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
+                                <option value="key_slides" selected>Key Slides Only (Title & Section Headers)</option>
+                                <option value="all">All Slides</option>
+                                <option value="none">None (Disable)</option>
+                            </select>
+                            <p class="text-xs text-slate-500 mt-1.5" id="visual-filter-description">
+                                Recommended: Key slides only for cost efficiency
+                            </p>
+                        </div>
+
+                        <!-- Cost Estimation -->
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p class="text-xs text-amber-800 mb-2">
+                                💰 <strong>DALL-E 3 Pricing:</strong>
+                            </p>
+                            <ul class="text-xs text-amber-700 space-y-1 ml-4">
+                                <li>• Standard Quality: $0.04 per image (1024x1024)</li>
+                                <li>• HD Quality: $0.08 per image (1024x1024)</li>
+                                <li id="estimated-cost" class="font-semibold text-amber-900 mt-2">• Estimated cost: $0.00 (0 images)</li>
+                            </ul>
+                        </div>
+
+                        <!-- OpenAI API Key Requirement -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs text-blue-800">
+                                <span class="font-semibold">⚠️ Requires OpenAI API Key:</span> Visual generation uses DALL-E 3. Make sure you've provided an OpenAI API key above.
+                            </p>
+                        </div>
+
+                        <!-- Visual Quality Selection -->
+                        <div>
+                            <label for="visual-quality" class="block text-sm font-semibold text-slate-800 mb-2">
+                                Image Quality
+                            </label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
+                                    <input type="radio" name="visual_quality" value="standard" checked class="mr-3">
+                                    <div>
+                                        <div class="font-medium text-sm text-slate-800">Standard</div>
+                                        <div class="text-xs text-slate-500">$0.04/image</div>
+                                    </div>
+                                </label>
+                                <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
+                                    <input type="radio" name="visual_quality" value="hd" class="mr-3">
+                                    <div>
+                                        <div class="font-medium text-sm text-slate-800">HD</div>
+                                        <div class="text-xs text-slate-500">$0.08/image</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Document Structure Guide -->
                 <div class="card p-6 mb-6 bg-white border-2 border-slate-200 rounded-lg">
                     <button type="button" id="guide-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
@@ -457,6 +589,116 @@
                     <div class="bg-white p-4 rounded-lg border border-slate-200">
                         <div class="text-2xl font-bold text-slate-800" id="stat-sections">--</div>
                         <div class="text-xs text-slate-600 mt-1">Sections</div>
+                    </div>
+                </div>
+
+                <!-- Processing Stats (Detailed) -->
+                <div id="processing-stats" class="hidden bg-white p-6 rounded-lg border border-slate-200 mb-4">
+                    <h4 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Processing Statistics
+                    </h4>
+
+                    <!-- Model Usage Breakdown -->
+                    <div class="mb-6">
+                        <h5 class="text-sm font-semibold text-slate-700 mb-3">Model Usage by Slide</h5>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-medium text-purple-700">Claude</span>
+                                    <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-2xl font-bold text-purple-900" id="stat-claude-slides">0</div>
+                                <div class="text-xs text-purple-600 mt-1">slides</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-medium text-green-700">OpenAI</span>
+                                    <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-2xl font-bold text-green-900" id="stat-openai-slides">0</div>
+                                <div class="text-xs text-green-600 mt-1">slides</div>
+                            </div>
+                            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-medium text-blue-700">NLP Fallback</span>
+                                    <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-2xl font-bold text-blue-900" id="stat-nlp-slides">0</div>
+                                <div class="text-xs text-blue-600 mt-1">slides</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token & Cost Stats -->
+                    <div class="mb-6">
+                        <h5 class="text-sm font-semibold text-slate-700 mb-3">Token Usage & Costs</h5>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <div class="text-xs text-slate-600 mb-1">Input Tokens</div>
+                                <div class="text-lg font-bold text-slate-800" id="stat-input-tokens">0</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <div class="text-xs text-slate-600 mb-1">Output Tokens</div>
+                                <div class="text-lg font-bold text-slate-800" id="stat-output-tokens">0</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                <div class="text-xs text-slate-600 mb-1">Total Tokens</div>
+                                <div class="text-lg font-bold text-slate-800" id="stat-total-tokens">0</div>
+                            </div>
+                            <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                                <div class="text-xs text-emerald-700 mb-1">Estimated Cost</div>
+                                <div class="text-lg font-bold text-emerald-800" id="stat-estimated-cost">$0.00</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cache Performance -->
+                    <div class="mb-6">
+                        <h5 class="text-sm font-semibold text-slate-700 mb-3">Cache Performance</h5>
+                        <div class="bg-gradient-to-r from-amber-50 to-yellow-50 p-4 rounded-lg border border-amber-200">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <div class="text-xs text-amber-700 mb-1">Cache Hit Rate</div>
+                                    <div class="text-2xl font-bold text-amber-900" id="stat-cache-hit-rate">0%</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-amber-700 mb-1">Cache Hits</div>
+                                    <div class="text-lg font-bold text-amber-900" id="stat-cache-hits">0</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-amber-700 mb-1">Cache Misses</div>
+                                    <div class="text-lg font-bold text-amber-900" id="stat-cache-misses">0</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-amber-700 mb-1">Cost Savings</div>
+                                    <div class="text-lg font-bold text-amber-900" id="stat-cache-savings">$0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cost Breakdown by Model -->
+                    <div>
+                        <h5 class="text-sm font-semibold text-slate-700 mb-3">Cost Breakdown</h5>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                <span class="text-sm text-purple-700 font-medium">Claude Cost</span>
+                                <span class="text-sm font-bold text-purple-900" id="stat-claude-cost">$0.00</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                                <span class="text-sm text-green-700 font-medium">OpenAI Cost</span>
+                                <span class="text-sm font-bold text-green-900" id="stat-openai-cost">$0.00</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -956,11 +1198,34 @@
             formData.append('script_column', document.getElementById('script-column').value);
             formData.append('output_format', 'google_slides'); // Always Google Slides
 
+            // Visual generation parameters
+            const enableVisualGen = document.getElementById('enable-visual-generation').checked;
+            formData.append('enable_visual_generation', enableVisualGen);
+            if (enableVisualGen) {
+                formData.append('visual_filter', document.getElementById('visual-filter').value);
+                const visualQuality = document.querySelector('input[name="visual_quality"]:checked');
+                formData.append('visual_quality', visualQuality ? visualQuality.value : 'standard');
+            }
+
             // Add Claude API key if provided
             const claudeKey = document.getElementById('claude-key').value.trim();
             if (claudeKey) {
                 formData.append('claude_key', claudeKey);
             }
+
+            // Add OpenAI API key if provided
+            const openaiKey = document.getElementById('openai-key').value.trim();
+            if (openaiKey) {
+                formData.append('openai_key', openaiKey);
+            }
+
+            // Add model preference
+            const modelPreference = document.getElementById('model-preference').value;
+            formData.append('model_preference', modelPreference);
+
+            // Add enable refinement checkbox
+            const enableRefinement = document.getElementById('enable-refinement').checked;
+            formData.append('enable_refinement', enableRefinement ? 'true' : 'false');
 
             // Always use regular mode (no skip_visuals)
             // The hidden input already sets skip_visuals to false
@@ -1137,6 +1402,11 @@
                 document.getElementById('result-structure').classList.add('hidden');
             }
 
+            // Populate processing stats if available
+            if (result.processing_stats) {
+                populateProcessingStats(result.processing_stats);
+            }
+
             // Set download link
             if (result.format === 'google_slides') {
                 // Google Slides - show "Open in Google Slides" link
@@ -1212,6 +1482,18 @@
             hideError();
         });
 
+        // Visual generation toggle
+        const visualGenerationCheckbox = document.getElementById('enable-visual-generation');
+        const visualFilterSection = document.getElementById('visual-filter-section');
+
+        visualGenerationCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                visualFilterSection.classList.remove('hidden');
+            } else {
+                visualFilterSection.classList.add('hidden');
+            }
+        });
+
         // Collapsible guide toggle
         const guideToggle = document.getElementById('guide-toggle');
         const guideContent = document.getElementById('guide-content');
@@ -1221,6 +1503,58 @@
             guideContent.classList.toggle('open');
             toggleIcon.classList.toggle('open');
         });
+
+        // Model Preference Dropdown Handler
+        const modelPreferenceSelect = document.getElementById('model-preference');
+        const modelPreferenceDescription = document.getElementById('model-preference-description');
+
+        const modelDescriptions = {
+            'auto': 'Automatically selects the best AI model for each slide based on content type',
+            'claude': 'Uses Claude (Anthropic) for all slides - best for long-form content and nuanced writing',
+            'openai': 'Uses OpenAI GPT-4 for all slides - best for structured data and technical content',
+            'ensemble': 'Combines both models and selects the best output - highest quality but 2x cost'
+        };
+
+        modelPreferenceSelect.addEventListener('change', (e) => {
+            const selectedValue = e.target.value;
+            modelPreferenceDescription.textContent = modelDescriptions[selectedValue] || modelDescriptions['auto'];
+        });
+
+        // Helper function to populate processing stats
+        function populateProcessingStats(stats) {
+            if (!stats) {
+                document.getElementById('processing-stats').classList.add('hidden');
+                return;
+            }
+
+            // Show processing stats section
+            document.getElementById('processing-stats').classList.remove('hidden');
+
+            // Model usage breakdown
+            document.getElementById('stat-claude-slides').textContent = stats.model_usage?.claude || 0;
+            document.getElementById('stat-openai-slides').textContent = stats.model_usage?.openai || 0;
+            document.getElementById('stat-nlp-slides').textContent = stats.model_usage?.nlp_fallback || 0;
+
+            // Token usage
+            document.getElementById('stat-input-tokens').textContent = (stats.tokens?.input_tokens || 0).toLocaleString();
+            document.getElementById('stat-output-tokens').textContent = (stats.tokens?.output_tokens || 0).toLocaleString();
+            document.getElementById('stat-total-tokens').textContent = (stats.tokens?.total_tokens || 0).toLocaleString();
+            document.getElementById('stat-estimated-cost').textContent = '$' + (stats.costs?.total || 0).toFixed(4);
+
+            // Cache performance
+            const cacheHitRate = stats.cache?.hit_rate_percent || 0;
+            document.getElementById('stat-cache-hit-rate').textContent = cacheHitRate.toFixed(1) + '%';
+            document.getElementById('stat-cache-hits').textContent = stats.cache?.cache_hits || 0;
+            document.getElementById('stat-cache-misses').textContent = stats.cache?.cache_misses || 0;
+
+            // Calculate cache savings
+            const cacheSavings = stats.costs?.cache_savings || 0;
+            document.getElementById('stat-cache-savings').textContent = '$' + cacheSavings.toFixed(4);
+
+            // Cost breakdown by model
+            document.getElementById('stat-claude-cost').textContent = '$' + (stats.costs?.claude || 0).toFixed(4);
+            document.getElementById('stat-openai-cost').textContent = '$' + (stats.costs?.openai || 0).toFixed(4);
+        }
     </script>
 </body>
 </html>
