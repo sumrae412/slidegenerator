@@ -459,6 +459,49 @@
 
                 <!-- Combined Document Selection Area -->
                 <div class="border-2 border-slate-300 rounded-xl p-6 mb-6 bg-slate-50">
+                    <!-- File Upload Option -->
+                    <div class="mb-5">
+                        <label for="file-upload" class="block text-sm font-semibold text-slate-800 mb-2">
+                            Upload a Document
+                        </label>
+                        <input type="file" id="file-upload" name="file" accept=".docx,.txt,.pdf"
+                               class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+                        <p class="text-xs text-slate-600 mt-2">
+                            Supported: Word documents (.docx), Text files (.txt), PDF files (.pdf)
+                        </p>
+
+                        <!-- PDF Warning Banner -->
+                        <div id="pdf-warning" class="hidden mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                            <p class="text-xs text-yellow-800">
+                                ⚠️ <strong>PDF Note:</strong> Scanned PDFs may have poor text extraction.
+                                For best results, use text-based PDFs or convert to Word first.
+                            </p>
+                        </div>
+
+                        <!-- Document Analysis Panel -->
+                        <div id="document-analysis" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                            <p class="text-sm text-blue-900">
+                                📊 <strong>Document Analysis:</strong>
+                            </p>
+                            <p class="text-xs text-blue-800 mt-1" id="analysis-result">
+                                <!-- Filled by JavaScript -->
+                            </p>
+                            <button type="button" onclick="acceptSuggestion()" class="mt-2 text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                                Use Suggested Mode
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="relative mb-5">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-slate-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-3 bg-slate-50 text-slate-500 font-medium">or</span>
+                        </div>
+                    </div>
+
                     <!-- Google Drive Browser Button -->
                     <div class="mb-5">
                         <button type="button" id="browse-drive-btn" class="w-full p-5 border-2 border-slate-300 rounded-lg bg-white hover:bg-slate-50 hover:border-slate-400 transition-all text-center">
@@ -771,6 +814,7 @@
         let selectedDocUrl = null;
         let selectedDocName = null;
         let processingStartTime = null;
+        let documentSuggestion = null;
 
         // DOM elements
         const uploadForm = document.getElementById('upload-form');
@@ -783,6 +827,75 @@
         const googleDocsUrlInput = document.getElementById('google-docs-url');
         const docInfo = document.getElementById('doc-info');
         const browseDriveBtn = document.getElementById('browse-drive-btn');
+        const fileUploadInput = document.getElementById('file-upload');
+
+        // File upload handling with PDF warning and document analysis
+        fileUploadInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const pdfWarning = document.getElementById('pdf-warning');
+
+            // Show PDF warning
+            if (file.name.toLowerCase().endsWith('.pdf')) {
+                pdfWarning.classList.remove('hidden');
+            } else {
+                pdfWarning.classList.add('hidden');
+            }
+
+            // Clear Google Docs URL when file is selected
+            googleDocsUrlInput.value = '';
+            selectedDocUrl = null;
+
+            // Enable convert button
+            convertBtn.disabled = false;
+
+            // Analyze document
+            await analyzeDocument(file);
+        });
+
+        async function analyzeDocument(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/analyze-document', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    console.error('Analysis failed:', response.statusText);
+                    return;
+                }
+
+                const analysis = await response.json();
+                displayAnalysis(analysis);
+            } catch (error) {
+                console.error('Analysis failed:', error);
+            }
+        }
+
+        function displayAnalysis(analysis) {
+            const resultDiv = document.getElementById('analysis-result');
+            const panel = document.getElementById('document-analysis');
+
+            if (analysis.primary_type === 'table') {
+                resultDiv.innerHTML = `Found ${analysis.tables} table(s). Suggested mode: <strong>Table Column ${analysis.suggested_mode}</strong>`;
+            } else {
+                resultDiv.innerHTML = `Found ${analysis.paragraphs} paragraph(s). Suggested mode: <strong>Paragraph Mode</strong>`;
+            }
+
+            documentSuggestion = analysis.suggested_mode;
+            panel.classList.remove('hidden');
+        }
+
+        function acceptSuggestion() {
+            if (documentSuggestion !== null) {
+                scriptColumnSelect.value = documentSuggestion;
+                alert(`Mode set to: ${documentSuggestion === 0 ? 'Paragraph Mode' : 'Column ' + documentSuggestion}`);
+            }
+        }
 
         // Document History Management (localStorage)
         const MAX_HISTORY_ITEMS = 10;
@@ -843,6 +956,11 @@
             // Show document info
             showDocInfo(historyItem.name, historyItem.url);
             convertBtn.disabled = false;
+
+            // Clear file upload when loading from history
+            fileUploadInput.value = '';
+            document.getElementById('pdf-warning').classList.add('hidden');
+            document.getElementById('document-analysis').classList.add('hidden');
 
             // Scroll to form
             uploadForm.scrollIntoView({ behavior: 'smooth' });
@@ -913,10 +1031,17 @@
                 selectedDocUrl = url;
                 showDocInfo(extractDocNameFromUrl(url), url);
                 convertBtn.disabled = false;
+                // Clear file upload when URL is entered
+                fileUploadInput.value = '';
+                document.getElementById('pdf-warning').classList.add('hidden');
+                document.getElementById('document-analysis').classList.add('hidden');
             } else {
                 selectedDocUrl = null;
                 docInfo.classList.add('hidden');
-                convertBtn.disabled = true;
+                // Only disable if no file is selected either
+                if (!fileUploadInput.files[0]) {
+                    convertBtn.disabled = true;
+                }
             }
         });
 
@@ -944,7 +1069,10 @@
             selectedDocUrl = null;
             selectedDocName = null;
             googleDocsUrlInput.value = '';
+            fileUploadInput.value = '';
             docInfo.classList.add('hidden');
+            document.getElementById('pdf-warning').classList.add('hidden');
+            document.getElementById('document-analysis').classList.add('hidden');
             convertBtn.disabled = true;
             hideError();
             hideResults();
@@ -1093,6 +1221,11 @@
                 selectedDocUrl = docUrl;
                 showDocInfo(docName, docUrl);
                 convertBtn.disabled = false;
+
+                // Clear file upload when Drive document is selected
+                fileUploadInput.value = '';
+                document.getElementById('pdf-warning').classList.add('hidden');
+                document.getElementById('document-analysis').classList.add('hidden');
             }
         }
 
@@ -1182,9 +1315,10 @@
             e.preventDefault();
 
             const googleDocsUrl = googleDocsUrlInput.value.trim();
+            const uploadedFile = fileUploadInput.files[0];
 
-            if (!googleDocsUrl) {
-                showError('Please enter a Google Docs URL or browse Google Drive to select a document.');
+            if (!googleDocsUrl && !uploadedFile) {
+                showError('Please upload a file, enter a Google Docs URL, or browse Google Drive to select a document.');
                 return;
             }
 
@@ -1194,7 +1328,14 @@
             hideResults();
 
             const formData = new FormData();
-            formData.append('google_docs_url', googleDocsUrl);
+
+            // Add file or Google Docs URL
+            if (uploadedFile) {
+                formData.append('file', uploadedFile);
+            } else if (googleDocsUrl) {
+                formData.append('google_docs_url', googleDocsUrl);
+            }
+
             formData.append('script_column', document.getElementById('script-column').value);
             formData.append('output_format', 'google_slides'); // Always Google Slides
 
@@ -1476,7 +1617,10 @@
             selectedDocUrl = null;
             selectedDocName = null;
             googleDocsUrlInput.value = '';
+            fileUploadInput.value = '';
             docInfo.classList.add('hidden');
+            document.getElementById('pdf-warning').classList.add('hidden');
+            document.getElementById('document-analysis').classList.add('hidden');
             convertBtn.disabled = true;
             hideResults();
             hideError();
