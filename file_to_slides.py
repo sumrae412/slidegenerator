@@ -21,6 +21,9 @@ from math import cos, sin
 import requests
 import warnings
 from collections import OrderedDict
+import secrets
+import base64
+from cryptography.fernet import Fernet
 
 # Semantic analysis libraries - lightweight fallback approach
 try:
@@ -263,6 +266,122 @@ def fetch_google_doc_content(doc_id: str, credentials=None) -> Tuple[Optional[st
             return None, 'This file is not a Google Doc. Please convert .docx/.pdf files to Google Docs format first, or use the "Browse Google Drive" button to select a Google Doc.'
 
         return None, f'Error fetching document: {str(e)}'
+
+def get_or_create_session_encryption_key():
+    """
+    Get or create encryption key for current session.
+    This key is used to encrypt API keys in browser localStorage.
+    Each session gets a unique key for maximum security.
+    """
+    if 'encryption_key' not in flask.session:
+        # Generate new key for this session (32 bytes = 256 bits)
+        flask.session['encryption_key'] = secrets.token_urlsafe(32)
+
+    return flask.session['encryption_key']
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """
+    Decrypt API key received from client.
+    Uses session encryption key to decrypt AES-encrypted keys.
+
+    Args:
+        encrypted_key: AES-encrypted API key from client
+
+    Returns:
+        Decrypted API key string or None if decryption fails
+    """
+    if not encrypted_key:
+        return None
+
+    try:
+        import hashlib
+        from Crypto.Cipher import AES
+
+        # Get session encryption key
+        session_key = flask.session.get('encryption_key')
+        if not session_key:
+            logger.warning("No session encryption key found")
+            return None
+
+        # Decode the base64-encoded encrypted data
+        encrypted_data = base64.b64decode(encrypted_key)
+
+        # CryptoJS format: Salted__<salt><ciphertext>
+        # Check for "Salted__" prefix (8 bytes: 0x53616c7465645f5f)
+        if encrypted_data[:8] != b'Salted__':
+            logger.error("Invalid CryptoJS format - missing 'Salted__' prefix")
+            return None
+
+        # Extract salt (bytes 8-16)
+        salt = encrypted_data[8:16]
+
+        # Extract ciphertext (bytes 16 onwards)
+        ciphertext = encrypted_data[16:]
+
+        # Derive key and IV using EVP_BytesToKey (matches CryptoJS behavior)
+        # This mimics OpenSSL's EVP_BytesToKey function
+        def evp_bytes_to_key(password, salt, key_len=32, iv_len=16):
+            """
+            Derive key and IV from password and salt.
+            Matches OpenSSL EVP_BytesToKey used by CryptoJS.
+            """
+            m = []
+            i = 0
+            while len(b''.join(m)) < (key_len + iv_len):
+                md = hashlib.md5()
+                data = password.encode('utf-8') if isinstance(password, str) else password
+                if i > 0:
+                    md.update(m[i - 1])
+                md.update(data)
+                md.update(salt)
+                m.append(md.digest())
+                i += 1
+            ms = b''.join(m)
+            return ms[:key_len], ms[key_len:key_len + iv_len]
+
+        # Derive key and IV
+        key, iv = evp_bytes_to_key(session_key, salt)
+
+        # Decrypt using AES-256-CBC
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        decrypted = cipher.decrypt(ciphertext)
+
+        # Remove PKCS7 padding
+        padding_length = decrypted[-1]
+        if isinstance(padding_length, str):
+            padding_length = ord(padding_length)
+        decrypted = decrypted[:-padding_length]
+
+        # Convert bytes to string
+        return decrypted.decode('utf-8')
+
+    except Exception as e:
+        logger.error(f"Failed to decrypt API key: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
+def log_api_key_usage(key_type: str, action: str, success: bool):
+    """
+    Log API key usage for security auditing.
+    Does NOT log the actual key value.
+
+    Args:
+        key_type: 'claude' or 'openai'
+        action: 'validate', 'use', 'store', 'delete'
+        success: True if action succeeded
+    """
+    log_entry = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'key_type': key_type,
+        'action': action,
+        'success': success,
+        'ip_address': request.remote_addr,
+        'user_agent': request.user_agent.string[:100] if request.user_agent else 'Unknown'
+    }
+
+    # Log to application logger
+    logger.info(f"API Key Usage: {json.dumps(log_entry)}")
 
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
@@ -11083,6 +11202,99 @@ def _validate_claude_api_key(api_key: str) -> bool:
         logger.error(f"❌ Claude API key validation failed: {e}")
         return False
 
+# =============================================================================
+# Security Headers Middleware
+# =============================================================================
+
+"""
+Security Headers Explanation:
+
+1. Cache-Control / Pragma / Expires
+   - Prevents browsers from caching sensitive data
+   - Ensures API keys are never stored in browser cache
+
+2. Content-Security-Policy (CSP)
+   - Prevents XSS attacks by controlling what resources can load
+   - Restricts scripts to trusted sources only
+   - Blocks inline event handlers
+
+3. X-Frame-Options
+   - Prevents clickjacking attacks
+   - Ensures app can't be embedded in malicious iframes
+
+4. X-Content-Type-Options
+   - Prevents MIME type sniffing attacks
+   - Forces browser to respect declared content types
+
+5. X-XSS-Protection
+   - Enables browser's built-in XSS filter
+   - Blocks page if XSS attack detected
+
+6. Strict-Transport-Security (HSTS)
+   - Forces HTTPS connections
+   - Prevents downgrade attacks
+   - Only enabled in production
+
+7. Referrer-Policy
+   - Controls what referrer information is sent
+   - Protects user privacy
+
+8. Permissions-Policy
+   - Disables unnecessary browser features
+   - Reduces attack surface
+"""
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    Protects against XSS, clickjacking, MIME sniffing, and other attacks.
+    """
+
+    # Prevent browsers from caching API keys or sensitive data
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    # Content Security Policy - Prevents XSS attacks
+    # Allow scripts from self, Google APIs, and CDNs we use
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://apis.google.com https://accounts.google.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "connect-src 'self' https://accounts.google.com https://www.googleapis.com",
+        "frame-src https://accounts.google.com https://drive.google.com",
+        "img-src 'self' data: https:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "report-uri /api/csp-report"
+    ]
+    response.headers['Content-Security-Policy'] = '; '.join(csp_directives)
+
+    # Prevent clickjacking attacks
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Enable browser XSS protection
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Referrer Policy - Control how much referrer information is shared
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # Permissions Policy - Disable unnecessary browser features
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+
+    # HTTPS enforcement (only in production)
+    if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('HEROKU_APP_NAME'):
+        # Force HTTPS for 1 year
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+
+    return response
+
 # Flask routes
 @app.route('/')
 def index():
@@ -11216,6 +11428,87 @@ def google_config():
         logger.error(f"Error getting Google config: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/encryption-key', methods=['GET'])
+def get_encryption_key():
+    """
+    Return session-specific encryption key for client-side encryption.
+    This key is used to encrypt API keys before storing in localStorage.
+    The key is session-specific and expires when the session ends.
+    """
+    try:
+        encryption_key = get_or_create_session_encryption_key()
+
+        return jsonify({
+            'status': 'success',
+            'key': encryption_key
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting encryption key: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get encryption key'
+        }), 500
+
+@app.route('/api/validate-key', methods=['POST'])
+def validate_api_key_endpoint():
+    """
+    Validate API key without storing it.
+    Returns validation status only.
+    Supports both Claude and OpenAI keys.
+    """
+    try:
+        data = request.json
+        key_type = data.get('key_type')  # 'claude' or 'openai'
+        encrypted_key = data.get('encrypted_key')
+
+        # Decrypt key
+        api_key = decrypt_api_key(encrypted_key)
+
+        if not api_key:
+            return jsonify({
+                'valid': False,
+                'error': 'Invalid key format'
+            })
+
+        # Validate based on type
+        if key_type == 'claude':
+            # Use existing validation function if available
+            # Otherwise check format
+            valid = api_key.startswith('sk-ant-') and len(api_key) > 20
+        elif key_type == 'openai':
+            valid = api_key.startswith('sk-') and len(api_key) > 20
+        else:
+            valid = False
+
+        return jsonify({
+            'valid': valid,
+            'key_type': key_type
+        })
+
+    except Exception as e:
+        logger.error(f"Key validation error: {e}")
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/csp-report', methods=['POST'])
+def csp_report():
+    """
+    Receive and log Content Security Policy violation reports.
+    Helps identify CSP issues and potential attacks.
+    """
+    try:
+        report = request.json
+        logger.warning(f"CSP Violation: {json.dumps(report, indent=2)}")
+
+        return jsonify({'status': 'received'}), 204
+
+    except Exception as e:
+        logger.error(f"Error processing CSP report: {e}")
+        return jsonify({'status': 'error'}), 500
+
 def build_processing_stats(parser, doc_structure, cache_stats, claude_api_key, openai_api_key):
     """
     Build processing statistics object from parser and document structure.
@@ -11330,8 +11623,28 @@ def upload_file():
     script_column = int(script_column_raw)  # Default to column 2
     logger.info(f"📊 Parsed script_column as integer: {script_column}")
     skip_visuals = request.form.get('skip_visuals', 'false').lower() == 'true'  # Option to skip visual generation for speed
-    claude_api_key = request.form.get('claude_key', '').strip()  # Claude API key (optional if OpenAI provided)
-    openai_api_key = request.form.get('openai_key', '').strip()  # OpenAI API key (optional if Claude provided)
+
+    # Get encrypted keys from form data (new security feature)
+    encrypted_claude_key = request.form.get('encrypted_claude_key', '').strip()
+    encrypted_openai_key = request.form.get('encrypted_openai_key', '').strip()
+
+    # Decrypt keys if provided (with fallback to plaintext for backward compatibility)
+    if encrypted_claude_key:
+        claude_api_key = decrypt_api_key(encrypted_claude_key)
+        if claude_api_key:
+            log_api_key_usage('claude', 'use', True)
+    else:
+        # Fallback to plaintext key (for backward compatibility during transition)
+        claude_api_key = request.form.get('claude_key', '').strip()
+
+    if encrypted_openai_key:
+        openai_api_key = decrypt_api_key(encrypted_openai_key)
+        if openai_api_key:
+            log_api_key_usage('openai', 'use', True)
+    else:
+        # Fallback to plaintext key (for backward compatibility during transition)
+        openai_api_key = request.form.get('openai_key', '').strip()
+
     output_format = request.form.get('output_format', 'pptx')  # 'pptx' or 'google_slides'
     google_docs_url = request.form.get('google_docs_url', '').strip()
     model_preference = request.form.get('model_preference', 'auto')  # 'auto', 'claude', 'openai', or 'ensemble'

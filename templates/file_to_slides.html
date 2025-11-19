@@ -157,6 +157,7 @@
             border-color: var(--slate-300);
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -256,7 +257,7 @@
                                 <span id="key-status"></span>
                             </div>
                             <p class="text-xs text-slate-500 mt-1.5">
-                                Excellent for nuanced content and long documents. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
+                                🔒 Your API key is encrypted before storage and expires after 24 hours. Never shared or logged. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a>
                             </p>
                         </div>
 
@@ -772,6 +773,68 @@
         let selectedDocName = null;
         let processingStartTime = null;
 
+        // KeyManager for encrypted API key storage
+        const KeyManager = {
+            // Fetch session-specific encryption key from server
+            async getEncryptionKey() {
+                const response = await fetch('/api/encryption-key');
+                const data = await response.json();
+                return data.key;
+            },
+
+            // Encrypt API key using AES-256
+            async encryptKey(apiKey) {
+                if (!apiKey) return null;
+                const encryptionKey = await this.getEncryptionKey();
+                const encrypted = CryptoJS.AES.encrypt(apiKey, encryptionKey).toString();
+                return encrypted;
+            },
+
+            // Decrypt API key
+            async decryptKey(encryptedKey) {
+                if (!encryptedKey) return null;
+                const encryptionKey = await this.getEncryptionKey();
+                const decrypted = CryptoJS.AES.decrypt(encryptedKey, encryptionKey);
+                return decrypted.toString(CryptoJS.enc.Utf8);
+            },
+
+            // Save encrypted key to localStorage with timestamp
+            async saveKey(keyType, apiKey) {
+                if (!apiKey) {
+                    localStorage.removeItem(`encrypted_${keyType}_key`);
+                    localStorage.removeItem(`${keyType}_key_timestamp`);
+                    return;
+                }
+                const encrypted = await this.encryptKey(apiKey);
+                localStorage.setItem(`encrypted_${keyType}_key`, encrypted);
+                localStorage.setItem(`${keyType}_key_timestamp`, Date.now());
+            },
+
+            // Load and decrypt key with expiration check (24 hours)
+            async loadKey(keyType) {
+                const encrypted = localStorage.getItem(`encrypted_${keyType}_key`);
+                if (!encrypted) return null;
+
+                const timestamp = localStorage.getItem(`${keyType}_key_timestamp`);
+                if (timestamp) {
+                    const age = Date.now() - parseInt(timestamp);
+                    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                    if (age > maxAge) {
+                        console.log(`${keyType} key expired, removing`);
+                        this.clearKey(keyType);
+                        return null;
+                    }
+                }
+                return await this.decryptKey(encrypted);
+            },
+
+            // Clear key from storage
+            clearKey(keyType) {
+                localStorage.removeItem(`encrypted_${keyType}_key`);
+                localStorage.removeItem(`${keyType}_key_timestamp`);
+            }
+        };
+
         // DOM elements
         const uploadForm = document.getElementById('upload-form');
         const convertBtn = document.getElementById('convert-btn');
@@ -905,6 +968,61 @@
 
         // Load history on page load
         renderDocumentHistory();
+
+        // Load saved API keys from encrypted storage
+        async function loadSavedKeys() {
+            const claudeKey = await KeyManager.loadKey('claude');
+            if (claudeKey) {
+                document.getElementById('claude-key').value = claudeKey;
+                validateApiKey();
+                document.getElementById('clear-key-btn').classList.remove('hidden');
+            }
+
+            const openaiKey = await KeyManager.loadKey('openai');
+            if (openaiKey) {
+                document.getElementById('openai-key').value = openaiKey;
+            }
+        }
+
+        // Validate API key format
+        function validateApiKey() {
+            const key = document.getElementById('claude-key').value.trim();
+            const validationDiv = document.getElementById('key-validation');
+            const statusSpan = document.getElementById('key-status');
+
+            if (key === '') {
+                validationDiv.classList.add('hidden');
+                return;
+            }
+
+            if (key.startsWith('sk-ant-') && key.length > 20) {
+                statusSpan.textContent = '✓ API key format looks valid';
+                statusSpan.className = 'text-green-600';
+                validationDiv.classList.remove('hidden');
+            } else {
+                statusSpan.textContent = '⚠ Claude API key should start with "sk-ant-"';
+                statusSpan.className = 'text-orange-600';
+                validationDiv.classList.remove('hidden');
+            }
+        }
+
+        // Check for key expiration and warn user
+        function checkKeyExpiration() {
+            const timestamp = localStorage.getItem('claude_key_timestamp');
+            if (!timestamp) return;
+
+            const age = Date.now() - parseInt(timestamp);
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+            const warningThreshold = 22 * 60 * 60 * 1000; // 22 hours
+
+            if (age > warningThreshold && age < maxAge) {
+                const hoursLeft = Math.floor((maxAge - age) / (60 * 60 * 1000));
+                console.log(`Your API key will expire in ${hoursLeft} hour(s). Consider re-entering it.`);
+            }
+        }
+
+        // Check expiration every 30 minutes
+        setInterval(checkKeyExpiration, 30 * 60 * 1000);
 
         // Google Docs URL handling
         googleDocsUrlInput.addEventListener('input', () => {
@@ -1101,12 +1219,11 @@
             onGoogleApiLoad();
             await fetchGoogleConfig();
 
-            // Load saved API key from localStorage
-            const savedKey = localStorage.getItem('claude_api_key');
-            if (savedKey) {
-                document.getElementById('claude-key').value = savedKey;
-                document.getElementById('clear-key-btn').classList.remove('hidden');
-            }
+            // Load saved API keys from encrypted storage
+            await loadSavedKeys();
+
+            // Check for key expiration on load
+            checkKeyExpiration();
 
             // Show/hide Gmail connect button and quality info banner based on authentication
             const gmailConnectSection = document.getElementById('gmail-connect-section');
@@ -1121,43 +1238,43 @@
             }
         };
 
-        // API Key validation and localStorage saving
-        document.getElementById('claude-key').addEventListener('input', (e) => {
+        // Claude API Key input handler with encryption
+        document.getElementById('claude-key').addEventListener('input', async (e) => {
             const key = e.target.value.trim();
-            const validationDiv = document.getElementById('key-validation');
-            const statusSpan = document.getElementById('key-status');
             const clearBtn = document.getElementById('clear-key-btn');
 
             if (key === '') {
-                validationDiv.classList.add('hidden');
+                document.getElementById('key-validation').classList.add('hidden');
                 clearBtn.classList.add('hidden');
-                localStorage.removeItem('claude_api_key');
+                await KeyManager.saveKey('claude', '');
                 return;
             }
 
             // Show clear button when key is entered
             clearBtn.classList.remove('hidden');
 
-            // Save to localStorage
-            localStorage.setItem('claude_api_key', key);
+            // Validate API key format
+            validateApiKey();
+        });
 
-            if (key.startsWith('sk-ant-') && key.length > 20) {
-                statusSpan.textContent = '✓ API key format looks valid';
-                statusSpan.className = 'text-green-600';
-                validationDiv.classList.remove('hidden');
-            } else {
-                statusSpan.textContent = '⚠ Claude API key should start with "sk-ant-"';
-                statusSpan.className = 'text-orange-600';
-                validationDiv.classList.remove('hidden');
-            }
+        // Auto-save Claude key on change (debounced)
+        document.getElementById('claude-key').addEventListener('change', async function() {
+            const key = this.value.trim();
+            await KeyManager.saveKey('claude', key);
+        });
+
+        // Auto-save OpenAI key on change
+        document.getElementById('openai-key').addEventListener('change', async function() {
+            const key = this.value.trim();
+            await KeyManager.saveKey('openai', key);
         });
 
         // Clear API key button
-        document.getElementById('clear-key-btn').addEventListener('click', () => {
+        document.getElementById('clear-key-btn').addEventListener('click', async () => {
+            KeyManager.clearKey('claude');
             document.getElementById('claude-key').value = '';
             document.getElementById('key-validation').classList.add('hidden');
             document.getElementById('clear-key-btn').classList.add('hidden');
-            localStorage.removeItem('claude_api_key');
         });
 
         // Gmail connect button
@@ -1207,16 +1324,18 @@
                 formData.append('visual_quality', visualQuality ? visualQuality.value : 'standard');
             }
 
-            // Add Claude API key if provided
+            // Add Claude API key if provided (encrypted)
             const claudeKey = document.getElementById('claude-key').value.trim();
             if (claudeKey) {
-                formData.append('claude_key', claudeKey);
+                const encryptedClaude = await KeyManager.encryptKey(claudeKey);
+                formData.append('encrypted_claude_key', encryptedClaude);
             }
 
-            // Add OpenAI API key if provided
+            // Add OpenAI API key if provided (encrypted)
             const openaiKey = document.getElementById('openai-key').value.trim();
             if (openaiKey) {
-                formData.append('openai_key', openaiKey);
+                const encryptedOpenai = await KeyManager.encryptKey(openaiKey);
+                formData.append('encrypted_openai_key', encryptedOpenai);
             }
 
             // Add model preference
