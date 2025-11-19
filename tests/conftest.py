@@ -4,6 +4,16 @@ Pytest configuration and shared fixtures for slidegenerator tests.
 This module provides reusable fixtures for testing Flask app, Google Docs API,
 Claude API, document parsing, and file handling.
 """
+
+# ============================================================================
+# WARNING: FIXTURE SHADOWING
+# ============================================================================
+# DO NOT redefine fixtures from this file in individual test files.
+# Fixture shadowing causes confusing behavior and test pollution.
+# If you need a modified fixture, create a new fixture with a different name
+# or parametrize the existing fixture.
+# ============================================================================
+
 import pytest
 import sys
 import os
@@ -33,9 +43,18 @@ def flask_app():
     Yields:
         Flask: Configured Flask application instance
     """
+    # Save original config state
+    original_config = app.config.copy()
+
+    # Set test configuration
     app.config['TESTING'] = True
     app.config['ENV'] = 'testing'
+
     yield app
+
+    # Restore original config to prevent test pollution
+    app.config.clear()
+    app.config.update(original_config)
 
 
 @pytest.fixture
@@ -81,7 +100,7 @@ def app_context(flask_app):
 # MOCK FIXTURES
 # ============================================================================
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_google_docs():
     """
     Fixture that provides a mocked Google Docs API client.
@@ -120,7 +139,7 @@ def mock_google_docs():
     return mock_client
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_anthropic_client():
     """
     Fixture that provides a mocked Anthropic (Claude) API client.
@@ -142,7 +161,7 @@ def mock_anthropic_client():
     return mock_client
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_openai_client():
     """
     Fixture that provides a mocked OpenAI API client.
@@ -167,7 +186,7 @@ def mock_openai_client():
 # TEST DATA FIXTURES
 # ============================================================================
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_document():
     """
     Fixture that provides sample document content for testing.
@@ -242,7 +261,7 @@ def sample_document():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_bullets():
     """
     Fixture that provides sample bullet point content for testing.
@@ -262,7 +281,7 @@ def sample_bullets():
     ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def google_doc_url():
     """
     Fixture that provides a valid Google Docs URL format for testing.
