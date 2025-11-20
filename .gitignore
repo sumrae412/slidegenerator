@@ -218,3 +218,8 @@ client_secret_*.json
 # Test and debug files
 debug_*.py
 test_*.py
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
