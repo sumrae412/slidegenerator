@@ -127,7 +127,7 @@
         }
 
         .collapsible-content.open {
-            max-height: 800px;
+            max-height: 1000px;
         }
 
         .toggle-icon {
@@ -238,179 +238,266 @@
                         </p>
                     </div>
 
-                    <!-- API Keys Section -->
-                    <div id="api-keys-section" class="space-y-4">
-                        <!-- Claude API Key -->
-                        <div id="claude-key-section">
-                            <label for="claude-key" class="block text-sm font-semibold text-slate-800 mb-2">
-                                Claude API Key <span class="text-xs text-slate-600 font-normal">(Provide Claude or OpenAI)</span>
-                            </label>
-                            <div class="flex gap-2">
-                                <input type="password" id="claude-key" name="claude_key"
-                                       class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
-                                       placeholder="sk-ant-...">
-                                <button type="button" id="clear-key-btn" class="hidden px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
-                                    Clear
-                                </button>
-                            </div>
-                            <div id="key-validation" class="mt-2 text-xs hidden">
-                                <span id="key-status"></span>
-                            </div>
-                            <p class="text-xs text-slate-500 mt-1.5">
-                                🔒 Your API key is encrypted before storage and expires after 24 hours. Never shared or logged. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a>
-                            </p>
-                        </div>
-
-                        <!-- OpenAI API Key -->
-                        <div id="openai-key-section">
-                            <label for="openai-key" class="block text-sm font-semibold text-slate-800 mb-2">
-                                OpenAI API Key <span class="text-xs text-slate-600 font-normal">(Alternative to Claude)</span>
-                            </label>
-                            <div class="flex gap-2">
-                                <input type="password" id="openai-key" name="openai_key"
-                                       class="flex-1 px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all"
-                                       placeholder="sk-...">
-                            </div>
-                            <p class="text-xs text-slate-500 mt-1.5">
-                                Great for structured data and technical content. <a href="https://platform.openai.com/api-keys" target="_blank" class="text-slate-700 underline hover:text-slate-800">Get a key</a> · Not stored or logged
-                            </p>
-                        </div>
-
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p class="text-xs text-blue-800">
-                                💡 <strong>Smart Routing:</strong> Provide both keys for automatic selection of the best AI model for each slide (tables → OpenAI, long content → Claude)
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Model Preference & Quality Settings -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <!-- Model Preference Dropdown -->
-                    <div>
-                        <label for="model-preference" class="block text-sm font-semibold text-slate-800 mb-2">
-                            Model Preference
-                            <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about model preferences">
-                                <span>?</span>
-                            </button>
-                        </label>
-                        <select id="model-preference" name="model_preference" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
-                            <option value="auto" selected>Auto (Smart Routing)</option>
-                            <option value="claude">Claude Only</option>
-                            <option value="openai">OpenAI Only</option>
-                            <option value="ensemble">Ensemble Mode</option>
-                        </select>
-                        <p class="text-xs text-slate-500 mt-1.5" id="model-preference-description">
-                            Automatically selects the best AI model for each slide based on content type
-                        </p>
-                    </div>
-
-                    <!-- Quality Refinement Checkbox -->
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-800 mb-2">
-                            Quality Settings
-                            <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about quality refinement">
-                                <span>?</span>
-                            </button>
-                        </label>
-                        <div class="flex items-start">
-                            <input type="checkbox" id="enable-refinement" name="enable_refinement" class="mt-1 mr-3 h-4 w-4 text-slate-700 border-slate-300 rounded focus:ring-slate-500">
-                            <div>
-                                <label for="enable-refinement" class="text-sm font-medium text-slate-700 cursor-pointer">Enable Quality Refinement</label>
-                                <p class="text-xs text-slate-500 mt-0.5">
-                                    <span class="font-medium text-amber-700">+50% token cost</span> · Runs a second pass to improve bullet quality and relevance
-                                </p>
-                            </div>
-                        </div>
-                        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                            <p class="text-xs text-amber-800">
-                                💰 <strong>Cost Impact:</strong> Refinement doubles processing for higher quality. Typically adds $0.10-0.30 per document.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- AI Visual Generation Settings -->
-                <div class="card p-6 mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg">
-                    <div class="mb-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center">
-                                <span class="text-2xl mr-3">🎨</span>
+                    <!-- API Settings Section (Collapsible) -->
+                    <div id="api-settings-section" class="card p-4 bg-slate-50 border-2 border-slate-200">
+                        <!-- Header with Toggle Button -->
+                        <button type="button" id="api-settings-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group mb-4">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-5 h-5 text-slate-600 group-hover:text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
                                 <div>
-                                    <h3 class="text-lg font-semibold text-slate-800">AI Visual Generation</h3>
-                                    <p class="text-sm text-slate-600">Generate professional images for slides using DALL-E 3</p>
+                                    <h4 class="text-sm font-semibold text-slate-800">API Settings</h4>
+                                    <p class="text-xs text-slate-600 mt-0.5" id="api-status-badge">Optional · Enhanced quality</p>
                                 </div>
                             </div>
-                            <span class="px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-full">NEW</span>
+                            <svg class="api-toggle-icon w-5 h-5 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+
+                        <!-- Collapsible Content -->
+                        <div id="api-settings-content" class="collapsible-content">
+                            <!-- Mode Selector (Radio Buttons) -->
+                            <div class="mb-4 pb-4 border-b border-slate-300">
+                                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">AI Model Mode</label>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <!-- Claude Only -->
+                                    <label class="relative flex items-center p-2.5 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 transition-all group api-mode-option" data-mode="claude">
+                                        <input type="radio" name="api_mode" value="claude" class="h-4 w-4 text-slate-700 cursor-pointer mr-2">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-sm font-medium text-slate-800">Claude</div>
+                                            <div class="text-xs text-slate-500">Long-form content</div>
+                                        </div>
+                                    </label>
+
+                                    <!-- OpenAI Only -->
+                                    <label class="relative flex items-center p-2.5 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 transition-all group api-mode-option" data-mode="openai">
+                                        <input type="radio" name="api_mode" value="openai" class="h-4 w-4 text-slate-700 cursor-pointer mr-2">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-sm font-medium text-slate-800">OpenAI</div>
+                                            <div class="text-xs text-slate-500">Structured data</div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Both (Smart Routing) -->
+                                    <label class="relative flex items-center p-2.5 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 transition-all group api-mode-option" data-mode="both">
+                                        <input type="radio" name="api_mode" value="both" class="h-4 w-4 text-slate-700 cursor-pointer mr-2">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-sm font-medium text-slate-800">Both <span class="ml-1 inline-block text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold">Auto</span></div>
+                                            <div class="text-xs text-slate-500">Smart routing</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- API Key Inputs (Conditional Visibility) -->
+                            <div class="space-y-3 mb-4">
+                                <!-- Claude API Key Input -->
+                                <div id="claude-key-input-wrapper" class="api-input-wrapper hidden">
+                                    <label for="claude-key" class="block text-xs font-semibold text-slate-700 mb-1.5">
+                                        Claude API Key
+                                    </label>
+                                    <div class="flex gap-2 items-center">
+                                        <input type="password" id="claude-key" name="claude_key"
+                                               class="flex-1 px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 text-sm transition-all"
+                                               placeholder="sk-ant-...">
+                                        <button type="button" id="clear-key-btn" class="hidden px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <div id="key-validation" class="mt-1.5 text-xs hidden">
+                                        <span id="key-status" class="text-green-600">✓ Valid format</span>
+                                    </div>
+                                </div>
+
+                                <!-- OpenAI API Key Input -->
+                                <div id="openai-key-input-wrapper" class="api-input-wrapper hidden">
+                                    <label for="openai-key" class="block text-xs font-semibold text-slate-700 mb-1.5">
+                                        OpenAI API Key
+                                    </label>
+                                    <div class="flex gap-2 items-center">
+                                        <input type="password" id="openai-key" name="openai_key"
+                                               class="flex-1 px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-800 text-sm transition-all"
+                                               placeholder="sk-...">
+                                        <button type="button" id="clear-openai-btn" class="hidden px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition-all whitespace-nowrap">
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Security & Get Keys Info -->
+                            <div class="flex items-start gap-2 pt-3 border-t border-slate-300 text-xs text-slate-600">
+                                <svg class="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                                <div>
+                                    <p class="font-medium mb-1.5">Encrypted & private · 24-hour expiration</p>
+                                    <div class="space-y-0.5">
+                                        <a href="https://console.anthropic.com" target="_blank" class="text-slate-700 hover:text-slate-900 underline mr-3">Get Claude key</a>
+                                        <a href="https://platform.openai.com/api-keys" target="_blank" class="text-slate-700 hover:text-slate-900 underline">Get OpenAI key</a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Enable Visual Generation Checkbox -->
-                    <div class="flex items-start mb-4">
-                        <input type="checkbox" id="enable-visual-generation" name="enable_visual_generation" class="mt-1 mr-3 h-4 w-4 text-purple-700 border-slate-300 rounded focus:ring-purple-500">
+                <!-- ========== ADVANCED SETTINGS: COLLAPSIBLE SECTIONS ========== -->
+                <!-- Collapsible Section 1: AI Model Settings -->
+                <div class="card p-6 mb-6 bg-white border-2 border-slate-200 rounded-lg">
+                    <!-- Toggle Button Header -->
+                    <button type="button" id="model-settings-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
                         <div>
-                            <label for="enable-visual-generation" class="text-sm font-medium text-slate-700 cursor-pointer">Enable AI Visual Generation</label>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Automatically generate contextual images for your slides using DALL-E 3
-                            </p>
+                            <h3 class="text-lg font-semibold text-slate-800 mb-1">AI Model Settings</h3>
+                            <p class="text-sm text-slate-600">Configure model preference and quality refinement</p>
+                        </div>
+                        <svg class="toggle-icon w-5 h-5 text-slate-500 group-hover:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Collapsible Content Container -->
+                    <div id="model-settings-content" class="collapsible-content mt-4">
+                        <div class="space-y-6">
+                            <!-- Model Preference Dropdown -->
+                            <div>
+                                <label for="model-preference" class="block text-sm font-semibold text-slate-800 mb-2">
+                                    Model Preference
+                                    <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about model preferences">
+                                        <span>?</span>
+                                    </button>
+                                </label>
+                                <select id="model-preference" name="model_preference" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
+                                    <option value="auto" selected>Auto (Smart Routing)</option>
+                                    <option value="claude">Claude Only</option>
+                                    <option value="openai">OpenAI Only</option>
+                                    <option value="ensemble">Ensemble Mode</option>
+                                </select>
+                                <p class="text-xs text-slate-500 mt-1.5" id="model-preference-description">
+                                    Automatically selects the best AI model for each slide based on content type
+                                </p>
+                            </div>
+
+                            <!-- Quality Refinement Checkbox (separated with divider) -->
+                            <div class="border-t border-slate-200 pt-6">
+                                <label class="block text-sm font-semibold text-slate-800 mb-3">
+                                    Quality Settings
+                                    <button type="button" class="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors" title="Learn more about quality refinement">
+                                        <span>?</span>
+                                    </button>
+                                </label>
+                                <div class="flex items-start">
+                                    <input type="checkbox" id="enable-refinement" name="enable_refinement" class="mt-1 mr-3 h-4 w-4 text-slate-700 border-slate-300 rounded focus:ring-slate-500">
+                                    <div>
+                                        <label for="enable-refinement" class="text-sm font-medium text-slate-700 cursor-pointer">Enable Quality Refinement</label>
+                                        <p class="text-xs text-slate-500 mt-0.5">
+                                            <span class="font-medium text-amber-700">+50% token cost</span> · Runs a second pass to improve bullet quality and relevance
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <p class="text-xs text-amber-800">
+                                        💰 <strong>Cost Impact:</strong> Refinement requires additional API calls for quality enhancement. Typically adds $0.10-0.30 per document.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Visual Filter Strategy (shown when enabled) -->
-                    <div id="visual-filter-section" class="hidden ml-7 mt-3 space-y-3">
+                <!-- Collapsible Section 2: Visual Generation Settings -->
+                <div class="card p-6 mb-6 bg-white border-2 border-slate-200 rounded-lg">
+                    <!-- Toggle Button Header with NEW Badge -->
+                    <button type="button" id="visual-settings-toggle" class="w-full flex items-center justify-between text-left focus:outline-none group">
                         <div>
-                            <label for="visual-filter" class="block text-sm font-semibold text-slate-800 mb-2">
-                                Which slides should get visuals?
-                            </label>
-                            <select id="visual-filter" name="visual_filter" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
-                                <option value="key_slides" selected>Key Slides Only (Title & Section Headers)</option>
-                                <option value="all">All Slides</option>
-                                <option value="none">None (Disable)</option>
-                            </select>
-                            <p class="text-xs text-slate-500 mt-1.5" id="visual-filter-description">
-                                Recommended: Key slides only for cost efficiency
-                            </p>
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-lg font-semibold text-slate-800">Visual Generation</h3>
+                                <span class="px-2.5 py-0.5 bg-purple-600 text-white text-xs font-semibold rounded-full">NEW</span>
+                            </div>
+                            <p class="text-sm text-slate-600 mt-1">Generate professional images for slides using DALL-E 3</p>
                         </div>
+                        <svg class="toggle-icon w-5 h-5 text-slate-500 group-hover:text-slate-700 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
 
-                        <!-- Cost Estimation -->
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <p class="text-xs text-amber-800 mb-2">
-                                💰 <strong>DALL-E 3 Pricing:</strong>
-                            </p>
-                            <ul class="text-xs text-amber-700 space-y-1 ml-4">
-                                <li>• Standard Quality: $0.04 per image (1024x1024)</li>
-                                <li>• HD Quality: $0.08 per image (1024x1024)</li>
-                                <li id="estimated-cost" class="font-semibold text-amber-900 mt-2">• Estimated cost: $0.00 (0 images)</li>
-                            </ul>
-                        </div>
-
-                        <!-- OpenAI API Key Requirement -->
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p class="text-xs text-blue-800">
-                                <span class="font-semibold">⚠️ Requires OpenAI API Key:</span> Visual generation uses DALL-E 3. Make sure you've provided an OpenAI API key above.
-                            </p>
-                        </div>
-
-                        <!-- Visual Quality Selection -->
-                        <div>
-                            <label for="visual-quality" class="block text-sm font-semibold text-slate-800 mb-2">
-                                Image Quality
-                            </label>
-                            <div class="grid grid-cols-2 gap-3">
-                                <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
-                                    <input type="radio" name="visual_quality" value="standard" checked class="mr-3">
+                    <!-- Collapsible Content Container -->
+                    <div id="visual-settings-content" class="collapsible-content mt-4">
+                        <div class="space-y-5">
+                            <!-- Enable Visual Generation Checkbox -->
+                            <div>
+                                <div class="flex items-start">
+                                    <input type="checkbox" id="enable-visual-generation" name="enable_visual_generation" class="mt-1 mr-3 h-4 w-4 text-purple-700 border-slate-300 rounded focus:ring-purple-500">
                                     <div>
-                                        <div class="font-medium text-sm text-slate-800">Standard</div>
-                                        <div class="text-xs text-slate-500">$0.04/image</div>
+                                        <label for="enable-visual-generation" class="text-sm font-medium text-slate-700 cursor-pointer">Enable AI Visual Generation</label>
+                                        <p class="text-xs text-slate-500 mt-0.5">
+                                            Automatically generate contextual images for your slides using DALL-E 3
+                                        </p>
                                     </div>
-                                </label>
-                                <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
-                                    <input type="radio" name="visual_quality" value="hd" class="mr-3">
-                                    <div>
-                                        <div class="font-medium text-sm text-slate-800">HD</div>
-                                        <div class="text-xs text-slate-500">$0.08/image</div>
+                                </div>
+                            </div>
+
+                            <!-- Visual Settings (shown when visual generation enabled) -->
+                            <div id="visual-filter-section" class="hidden space-y-4 border-t border-slate-200 pt-4">
+                                <!-- Which slides should get visuals -->
+                                <div>
+                                    <label for="visual-filter" class="block text-sm font-semibold text-slate-800 mb-2">
+                                        Which slides should get visuals?
+                                    </label>
+                                    <select id="visual-filter" name="visual_filter" class="w-full px-4 py-3 border border-slate-300 rounded-lg bg-white text-slate-800 transition-all">
+                                        <option value="key_slides" selected>Key Slides Only (Title & Section Headers)</option>
+                                        <option value="all">All Slides</option>
+                                        <option value="none">None (Disable)</option>
+                                    </select>
+                                    <p class="text-xs text-slate-500 mt-1.5" id="visual-filter-description">
+                                        Recommended: Key slides only for cost efficiency
+                                    </p>
+                                </div>
+
+                                <!-- Image Quality Selection -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-800 mb-3">
+                                        Image Quality
+                                    </label>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
+                                            <input type="radio" name="visual_quality" value="standard" checked class="mr-3">
+                                            <div>
+                                                <div class="font-medium text-sm text-slate-800">Standard</div>
+                                                <div class="text-xs text-slate-500">$0.04/image</div>
+                                            </div>
+                                        </label>
+                                        <label class="relative flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:border-purple-400 transition-all">
+                                            <input type="radio" name="visual_quality" value="hd" class="mr-3">
+                                            <div>
+                                                <div class="font-medium text-sm text-slate-800">HD</div>
+                                                <div class="text-xs text-slate-500">$0.08/image</div>
+                                            </div>
+                                        </label>
                                     </div>
-                                </label>
+                                </div>
+
+                                <!-- Cost Estimation -->
+                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                    <p class="text-xs text-amber-800 font-semibold mb-2">
+                                        💰 DALL-E 3 Pricing:
+                                    </p>
+                                    <ul class="text-xs text-amber-700 space-y-1.5 ml-4">
+                                        <li>• Standard Quality: $0.04 per image (1024x1024)</li>
+                                        <li>• HD Quality: $0.08 per image (1024x1024)</li>
+                                        <li id="estimated-cost" class="font-semibold text-amber-900 mt-2">• Estimated cost: $0.00 (0 images)</li>
+                                    </ul>
+                                </div>
+
+                                <!-- OpenAI API Key Requirement Notice -->
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <p class="text-xs text-blue-800">
+                                        <span class="font-semibold">⚠️ Requires OpenAI API Key:</span> Visual generation uses DALL-E 3. Make sure you've provided an OpenAI API key in the "API Keys" section above.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1757,14 +1844,35 @@
             }
         });
 
-        // Collapsible guide toggle
+        // ========== COLLAPSIBLE SECTIONS TOGGLE HANDLERS ==========
+        // AI Model Settings Collapsible (Collapsed by default)
+        const modelSettingsToggle = document.getElementById('model-settings-toggle');
+        const modelSettingsContent = document.getElementById('model-settings-content');
+        const modelSettingsIcon = modelSettingsToggle.querySelector('.toggle-icon');
+
+        modelSettingsToggle.addEventListener('click', () => {
+            modelSettingsContent.classList.toggle('open');
+            modelSettingsIcon.classList.toggle('open');
+        });
+
+        // Visual Generation Settings Collapsible (Collapsed by default)
+        const visualSettingsToggle = document.getElementById('visual-settings-toggle');
+        const visualSettingsContent = document.getElementById('visual-settings-content');
+        const visualSettingsIcon = visualSettingsToggle.querySelector('.toggle-icon');
+
+        visualSettingsToggle.addEventListener('click', () => {
+            visualSettingsContent.classList.toggle('open');
+            visualSettingsIcon.classList.toggle('open');
+        });
+
+        // Document Structure Guide Collapsible (Collapsed by default)
         const guideToggle = document.getElementById('guide-toggle');
         const guideContent = document.getElementById('guide-content');
-        const toggleIcon = guideToggle.querySelector('.toggle-icon');
+        const guideToggleIcon = guideToggle.querySelector('.toggle-icon');
 
         guideToggle.addEventListener('click', () => {
             guideContent.classList.toggle('open');
-            toggleIcon.classList.toggle('open');
+            guideToggleIcon.classList.toggle('open');
         });
 
         // Model Preference Dropdown Handler
