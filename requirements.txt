@@ -29,3 +29,7 @@ google-auth-oauthlib==1.2.0
 pdfplumber>=0.10.0  # Advanced PDF parsing with table detection
 pdf2image>=1.16.3  # PDF to image conversion (for future OCR)
 pytesseract>=0.3.10  # OCR for scanned PDFs (future feature)
+# UI Testing & Automation (Development)
+playwright>=1.40.0
+pytest>=8.0.0
+pytest-playwright>=0.7.0

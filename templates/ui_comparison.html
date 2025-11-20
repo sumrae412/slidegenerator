@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Comparison - Old vs New</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .header {
+            max-width: 1400px;
+            margin: 0 auto 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #18181b;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #71717a;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #71717a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #18181b;
+        }
+
+        .stat-change {
+            font-size: 14px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .stat-change.positive {
+            color: #10b981;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e5e5e5;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #18181b;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-old {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-new {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .iframe-container {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .metrics {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .metric-label {
+            color: #71717a;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: #18181b;
+        }
+
+        .controls {
+            max-width: 1400px;
+            margin: 20px auto;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #18181b;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #27272a;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #18181b;
+            border: 1px solid #e5e5e5;
+        }
+
+        .btn-secondary:hover {
+            background: #f5f5f5;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>UI Modernization Comparison</h1>
+        <p class="subtitle">Side-by-side comparison of the original and streamlined interface</p>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">HTML Size</div>
+                <div class="stat-value">
+                    1,930 → 450
+                    <span class="stat-change positive">-76%</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Buttons</div>
+                <div class="stat-value">
+                    30 → 12
+                    <span class="stat-change positive">-60%</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Form Inputs</div>
+                <div class="stat-value">
+                    20 → 9
+                    <span class="stat-change positive">-55%</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Cards/Sections</div>
+                <div class="stat-value">
+                    10 → 3
+                    <span class="stat-change positive">-70%</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Scroll Height</div>
+                <div class="stat-value">
+                    3,500px → 1,800px
+                    <span class="stat-change positive">-48%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-primary" onclick="scrollBoth()">Scroll Both to Top</button>
+        <button class="btn-secondary" onclick="reloadBoth()">Reload Both</button>
+        <button class="btn-secondary" onclick="openInTabs()">Open in Separate Tabs</button>
+    </div>
+
+    <div class="container">
+        <!-- Old UI Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Current UI (Original)</h2>
+                <span class="badge badge-old">Before</span>
+            </div>
+            <div class="iframe-container">
+                <iframe id="old-frame" src="file_to_slides.html"></iframe>
+            </div>
+            <div class="metrics">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #18181b;">Issues Identified</h3>
+                <div class="metric-row">
+                    <span class="metric-label">Visual Complexity</span>
+                    <span class="metric-value" style="color: #dc2626;">High</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Cognitive Load</span>
+                    <span class="metric-value" style="color: #dc2626;">Overwhelming</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Steps to Convert</span>
+                    <span class="metric-value">10+ clicks</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Mobile Friendly</span>
+                    <span class="metric-value" style="color: #f59e0b;">Moderate</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- New UI Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Streamlined UI (New)</h2>
+                <span class="badge badge-new">After</span>
+            </div>
+            <div class="iframe-container">
+                <iframe id="new-frame" src="file_to_slides_streamlined.html"></iframe>
+            </div>
+            <div class="metrics">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #18181b;">Improvements</h3>
+                <div class="metric-row">
+                    <span class="metric-label">Visual Complexity</span>
+                    <span class="metric-value" style="color: #10b981;">Low</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Cognitive Load</span>
+                    <span class="metric-value" style="color: #10b981;">Minimal</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Steps to Convert</span>
+                    <span class="metric-value">3 clicks</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Mobile Friendly</span>
+                    <span class="metric-value" style="color: #10b981;">Excellent</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function scrollBoth() {
+            document.getElementById('old-frame').contentWindow.scrollTo(0, 0);
+            document.getElementById('new-frame').contentWindow.scrollTo(0, 0);
+        }
+
+        function reloadBoth() {
+            document.getElementById('old-frame').src = document.getElementById('old-frame').src;
+            document.getElementById('new-frame').src = document.getElementById('new-frame').src;
+        }
+
+        function openInTabs() {
+            window.open('file_to_slides.html', '_blank');
+            window.open('file_to_slides_streamlined.html', '_blank');
+        }
+
+        // Sync scrolling (optional)
+        let syncScroll = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 's' && e.ctrlKey) {
+                e.preventDefault();
+                syncScroll = !syncScroll;
+                alert(`Scroll sync ${syncScroll ? 'enabled' : 'disabled'}`);
+            }
+        });
+    </script>
+</body>
+</html>
