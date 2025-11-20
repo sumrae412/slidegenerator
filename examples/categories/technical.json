@@ -1,0 +1,41 @@
+[
+  {
+    "input_text": "The microservices architecture enables independent deployment and scaling\nof application components. Each service communicates via REST APIs using JSON payloads.\nThe system uses Kubernetes for orchestration and Docker for containerization. Service\ndiscovery is handled by Consul with health checks monitoring endpoint availability. Load\nbalancing distributes requests across service instances using NGINX.",
+    "generated_bullets": [
+      "Microservices architecture enables independent component deployment and scaling",
+      "Services communicate via REST APIs using JSON payloads",
+      "Kubernetes orchestrates Docker containerized services across infrastructure",
+      "Consul manages service discovery with automated health monitoring"
+    ],
+    "context_heading": "Microservices Architecture",
+    "style": "technical",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "tech_microservices",
+      "technical"
+    ],
+    "timestamp": "2025-11-19T05:15:59.187531",
+    "example_id": "technical_bde36ce85af5"
+  },
+  {
+    "input_text": "The authenticate() function validates user credentials against the database.\nIt accepts username and password parameters, returns a JWT token on success or null on failure.\nRate limiting prevents brute force attacks by allowing maximum 5 attempts per minute.\nImplementation uses bcrypt for password hashing with salt rounds set to 12.",
+    "generated_bullets": [
+      "authenticate() validates credentials and returns JWT token or null",
+      "Rate limiting restricts login attempts to 5 per minute preventing brute force",
+      "Password security implemented with bcrypt hashing using 12 salt rounds"
+    ],
+    "context_heading": "Authentication API",
+    "style": "technical",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "tech_code_documentation",
+      "technical"
+    ],
+    "timestamp": "2025-11-19T05:15:59.195532",
+    "example_id": "technical_6f4b8044ba6f"
+  }
+]

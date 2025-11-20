@@ -1,0 +1,22 @@
+[
+  {
+    "input_text": "The new analytics platform processes 10 million events per day with\nsub-second latency. Implementation reduced infrastructure costs by $400K annually.\nThe system uses Apache Kafka for event streaming and ClickHouse for real-time analytics.\nDevelopment time decreased from 6 months to 2 months using microservices architecture.\nTeams deploy updates 5x more frequently with zero downtime.",
+    "generated_bullets": [
+      "Platform processes 10 million daily events with sub-second latency",
+      "Infrastructure costs reduced by $400K annually through optimization",
+      "Apache Kafka and ClickHouse enable real-time event streaming analytics",
+      "Microservices architecture accelerated development from 6 months to 2 months"
+    ],
+    "context_heading": "Analytics Platform Performance",
+    "style": "mixed",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "mixed_paragraph_with_metrics",
+      "mixed"
+    ],
+    "timestamp": "2025-11-19T05:15:59.193004",
+    "example_id": "mixed_4534e6acc4a4"
+  }
+]

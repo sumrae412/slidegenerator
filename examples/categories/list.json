@@ -1,0 +1,41 @@
+[
+  {
+    "input_text": "\u2022 Scalable infrastructure\n\u2022 Cost optimization\n\u2022 Pay-as-you-go pricing\n\u2022 Global availability\n\u2022 Automatic backups\n\u2022 High availability\n\u2022 Disaster recovery\n\u2022 Security compliance",
+    "generated_bullets": [
+      "Infrastructure scales elastically with automatic resource adjustment",
+      "Cost optimization through pay-as-you-go flexible pricing models",
+      "Global availability ensures high performance across worldwide regions",
+      "Security and disaster recovery with automated backup systems"
+    ],
+    "context_heading": "Cloud Benefits",
+    "style": "list",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "list_consolidation",
+      "list"
+    ],
+    "timestamp": "2025-11-19T05:15:59.189962",
+    "example_id": "list_a887dfe9cf19"
+  },
+  {
+    "input_text": "Core Features:\n\u2022 User Management\n  - Role-based access control\n  - Single sign-on integration\n  - Activity logging\n\u2022 Data Analytics\n  - Real-time dashboards\n  - Custom report builder\n  - Export to CSV/PDF\n\u2022 API Integration\n  - REST endpoints\n  - Webhook support\n  - Rate limiting",
+    "generated_bullets": [
+      "User management includes role-based access, SSO integration, and activity logging",
+      "Data analytics provides real-time dashboards and custom reports with CSV/PDF export",
+      "API integration supports REST endpoints, webhooks, and rate limiting"
+    ],
+    "context_heading": "Platform Features",
+    "style": "list",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "list_nested_features",
+      "list"
+    ],
+    "timestamp": "2025-11-19T05:15:59.200203",
+    "example_id": "list_5c5c39e1b500"
+  }
+]

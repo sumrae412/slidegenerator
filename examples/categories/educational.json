@@ -1,0 +1,42 @@
+[
+  {
+    "input_text": "Students in this course will learn to apply machine learning algorithms\nto real-world datasets. The curriculum covers supervised learning fundamentals including\nlinear regression, logistic regression, and decision trees. Each module includes hands-on\ncoding exercises using Python and scikit-learn. Students complete a final project analyzing\na dataset of their choice.",
+    "generated_bullets": [
+      "Students apply machine learning algorithms to real-world datasets",
+      "Course covers supervised learning fundamentals including regression and classification",
+      "Hands-on coding exercises reinforce concepts using Python and scikit-learn",
+      "Final project enables students to analyze self-selected datasets"
+    ],
+    "context_heading": "Machine Learning Fundamentals",
+    "style": "educational",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edu_ml_basics",
+      "educational"
+    ],
+    "timestamp": "2025-11-19T05:15:59.186677",
+    "example_id": "educational_83938e00b102"
+  },
+  {
+    "input_text": "This module introduces Python programming fundamentals.\nStudents learn variables, data types, and control flow structures.\nHands-on exercises cover loops, conditionals, and function definitions.\nFinal project builds a simple calculator application.",
+    "generated_bullets": [
+      "Module introduces Python fundamentals including variables and data types",
+      "Students practice control flow with loops and conditionals",
+      "Hands-on exercises reinforce function definition concepts",
+      "Final project applies learning through calculator application development"
+    ],
+    "context_heading": "Python Programming 101",
+    "style": "educational",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edu_python_basics",
+      "educational"
+    ],
+    "timestamp": "2025-11-19T05:15:59.197337",
+    "example_id": "educational_313fcc667d5b"
+  }
+]

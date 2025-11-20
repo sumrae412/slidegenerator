@@ -1,0 +1,42 @@
+[
+  {
+    "input_text": "Feature\tBasic\tPremium\tEnterprise\nStorage\t10GB\t100GB\t1TB\nUsers\t5\t25\tUnlimited\nSupport\tEmail\tPhone\t24/7 Dedicated\nAPI Access\tNo\tYes\tYes",
+    "generated_bullets": [
+      "Storage capacity ranges from 10GB in Basic to 1TB in Enterprise",
+      "User limits increase from 5 users to unlimited across plan tiers",
+      "Premium and Enterprise plans include API access capabilities",
+      "Support escalates from email-only to dedicated 24/7 assistance"
+    ],
+    "context_heading": "Pricing Plan Comparison",
+    "style": "table",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "table_feature_comparison",
+      "table"
+    ],
+    "timestamp": "2025-11-19T05:15:59.189360",
+    "example_id": "table_a34addd53228"
+  },
+  {
+    "input_text": "Endpoint\tMethod\tDescription\n/users\tGET\tRetrieve user list\n/users/{id}\tGET\tGet specific user\n/users\tPOST\tCreate new user\n/users/{id}\tPUT\tUpdate user\n/users/{id}\tDELETE\tRemove user",
+    "generated_bullets": [
+      "GET /users retrieves complete user list",
+      "GET /users/{id} fetches specific user details",
+      "POST /users creates new user records",
+      "PUT and DELETE enable user updates and removal"
+    ],
+    "context_heading": "REST API Endpoints",
+    "style": "table",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "table_api_endpoints",
+      "table"
+    ],
+    "timestamp": "2025-11-19T05:15:59.199330",
+    "example_id": "table_ef67f66fd7cb"
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "input_text": "The digital transformation initiative reduced operational costs by 23%\nin Q3 2025. Customer satisfaction scores improved from 72% to 86% following the new UX\nredesign. The cloud migration project completed two months ahead of schedule, saving\n$1.2M in infrastructure costs. Employee productivity increased 18% after implementing\nthe new workflow automation tools.",
+    "generated_bullets": [
+      "Digital transformation reduced operational costs by 23% in Q3 2025",
+      "UX redesign improved customer satisfaction from 72% to 86%",
+      "Cloud migration completed early, saving $1.2M in infrastructure costs",
+      "Workflow automation increased employee productivity by 18%"
+    ],
+    "context_heading": "Digital Transformation Results",
+    "style": "executive",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "exec_digital_transform",
+      "executive"
+    ],
+    "timestamp": "2025-11-19T05:15:59.188126",
+    "example_id": "executive_e77116f1bf75"
+  },
+  {
+    "input_text": "Q4 revenue reached $2.8M, up 34% year-over-year.\nCustomer retention improved to 94%, highest in company history.\nNew enterprise contracts signed with 3 Fortune 500 companies.\nOperating margin expanded from 12% to 18% through efficiency gains.",
+    "generated_bullets": [
+      "Q4 revenue hit $2.8M with 34% year-over-year growth",
+      "Customer retention reached record 94%",
+      "Secured 3 new Fortune 500 enterprise contracts",
+      "Operating margin expanded from 12% to 18% via efficiency improvements"
+    ],
+    "context_heading": "Q4 Performance",
+    "style": "executive",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "exec_quarterly_results",
+      "executive"
+    ],
+    "timestamp": "2025-11-19T05:15:59.196367",
+    "example_id": "executive_a815c4c2ebbe"
+  }
+]

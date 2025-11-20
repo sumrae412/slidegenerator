@@ -1,0 +1,81 @@
+[
+  {
+    "input_text": "AI improves efficiency.",
+    "generated_bullets": [
+      "Artificial intelligence improves operational efficiency through automation",
+      "AI systems optimize workflows and reduce manual processing time"
+    ],
+    "context_heading": "AI Benefits",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_very_short",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.191433",
+    "example_id": "edge_case_57453cf33f54"
+  },
+  {
+    "input_text": "Cloud computing has fundamentally transformed how organizations approach\ninfrastructure, development, and deployment. The shift from on-premises data centers to\ncloud-based services represents a paradigm change in IT strategy. Organizations benefit\nfrom elastic scalability, allowing them to dynamically adjust resources based on demand\npatterns. Cost models have evolved from capital expenditure to operational expenditure,\nproviding financial flexibility and eliminating upfront hardware investments. Security\nand compliance have become shared responsibilities, with cloud providers maintaining\nextensive certifications and security controls. Development teams leverage platform\nservices to accelerate application delivery, utilizing managed databases, container\norchestration, and serverless computing. Global reach enables organizations to serve\ncustomers worldwide with low-latency performance through distributed data centers.\nDisaster recovery and business continuity have been simplified through automated backups\nand geographic redundancy. The cloud ecosystem continues evolving with emerging technologies\nlike artificial intelligence, machine learning, and edge computing integration.",
+    "generated_bullets": [
+      "Cloud computing transforms infrastructure from on-premises to elastic scalable services",
+      "Organizations shift from capital expenditure to flexible operational cost models",
+      "Cloud providers manage extensive security certifications and compliance controls",
+      "Platform services accelerate development through managed databases and serverless computing",
+      "Global infrastructure enables low-latency worldwide performance and disaster recovery"
+    ],
+    "context_heading": "Cloud Computing Evolution",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_very_long",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.192117",
+    "example_id": "edge_case_9966d836b895"
+  },
+  {
+    "input_text": "The algorithm implements a modified A* pathfinding with bidirectional search optimization. Time complexity reduces from O(b^d) to O(b^(d/2)) through simultaneous forward-backward traversal. Memory overhead increases linearly with branching factor but remains manageable for typical graph densities. Heuristic admissibility ensures optimal path discovery while maintaining monotonicity constraints.",
+    "generated_bullets": [
+      "Modified A* uses bidirectional search for optimization",
+      "Time complexity improves from O(b^d) to O(b^(d/2)) via simultaneous traversal",
+      "Memory scales linearly with branching factor",
+      "Heuristic maintains admissibility and monotonicity for optimal paths"
+    ],
+    "context_heading": "Pathfinding Algorithm",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_dense_technical",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.201077",
+    "example_id": "edge_case_594381666f17"
+  },
+  {
+    "input_text": "Performance improved 45% (from 2.3s to 1.26s average response time). Database queries reduced 67% through caching. Memory consumption decreased from 512MB to 187MB (-63%). Error rate dropped from 0.8% to 0.1% (87.5% reduction). CPU utilization optimized from 78% to 34%.",
+    "generated_bullets": [
+      "Performance improved 45% reducing response time from 2.3s to 1.26s",
+      "Database queries decreased 67% through caching implementation",
+      "Memory consumption reduced 63% from 512MB to 187MB",
+      "Error rate dropped 87.5% from 0.8% to 0.1%"
+    ],
+    "context_heading": "Optimization Results",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_multiple_metrics",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.201991",
+    "example_id": "edge_case_9f05a176eddd"
+  }
+]

@@ -1,0 +1,21 @@
+[
+  {
+    "input_text": "[full screen TH]\nAs you've seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform what might be a relatively simple task for you or me, like recognizing what's in an image, can actually be a powerful tool in many types of projects.\n\nI'd now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying AI in your projects.\n\nThe goal of any AI for Good project is to have a positive impact in the world, whether that's",
+    "generated_bullets": [
+      "the possible applications of AI are wide ranging",
+      "being able to get an algorithm to reliably perform what might be a relatively simple task for you or me can actually be a powerful tool in many types of projects",
+      "the goal of any AI for Good project is to have a positive impact in the world"
+    ],
+    "context_heading": "Draft Script",
+    "style": "transcript",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "transcript_ai_for_good",
+      "transcript"
+    ],
+    "timestamp": "2025-11-19T05:15:59.194802",
+    "example_id": "transcript_24cba5d1cc64"
+  }
+]

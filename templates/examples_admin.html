@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example Storage Admin - Slide Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            font-weight: 500;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .filters select, .filters input {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .filters select:hover, .filters input:hover {
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .examples-list {
+            display: grid;
+            gap: 20px;
+        }
+
+        .example-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+
+        .example-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(4px);
+        }
+
+        .example-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .example-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-style {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-type {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .badge-quality {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .example-heading {
+            font-size: 1.1rem;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .example-input {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .example-bullets {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .example-bullets ul {
+            list-style: none;
+        }
+
+        .example-bullets li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+            color: #333;
+        }
+
+        .example-bullets li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .rating-stars {
+            display: flex;
+            gap: 5px;
+        }
+
+        .star {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: #ddd;
+            transition: color 0.2s;
+        }
+
+        .star.active {
+            color: #ffc107;
+        }
+
+        .star:hover {
+            color: #ffb300;
+        }
+
+        .example-id {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Example Storage Admin</h1>
+        <p class="subtitle">Manage training examples for few-shot learning</p>
+
+        <div id="message"></div>
+
+        <!-- Stats Dashboard -->
+        <div class="stats-grid" id="stats">
+            <div class="stat-card">
+                <h3>Total Examples</h3>
+                <div class="value" id="total-examples">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Quality Score</h3>
+                <div class="value" id="avg-quality">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Professional</h3>
+                <div class="value" id="professional-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Educational</h3>
+                <div class="value" id="educational-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Technical</h3>
+                <div class="value" id="technical-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Executive</h3>
+                <div class="value" id="executive-count">-</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <select id="style-filter">
+                <option value="">All Styles</option>
+                <option value="professional">Professional</option>
+                <option value="educational">Educational</option>
+                <option value="technical">Technical</option>
+                <option value="executive">Executive</option>
+            </select>
+
+            <select id="type-filter">
+                <option value="">All Types</option>
+                <option value="paragraph">Paragraph</option>
+                <option value="table">Table</option>
+                <option value="list">List</option>
+                <option value="heading">Heading</option>
+            </select>
+
+            <input type="number" id="limit-input" placeholder="Limit (default: 20)" min="1" max="100" value="20">
+
+            <button class="btn" onclick="loadExamples()">🔄 Refresh</button>
+        </div>
+
+        <!-- Examples List -->
+        <div class="examples-list" id="examples-list">
+            <div class="loading">Loading examples...</div>
+        </div>
+    </div>
+
+    <script>
+        // Load stats on page load
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/examples/stats');
+                const stats = await response.json();
+
+                document.getElementById('total-examples').textContent = stats.total_examples;
+                document.getElementById('avg-quality').textContent = stats.avg_quality_score.toFixed(1);
+                document.getElementById('professional-count').textContent = stats.by_style.professional || 0;
+                document.getElementById('educational-count').textContent = stats.by_style.educational || 0;
+                document.getElementById('technical-count').textContent = stats.by_style.technical || 0;
+                document.getElementById('executive-count').textContent = stats.by_style.executive || 0;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load examples with filters
+        async function loadExamples() {
+            const style = document.getElementById('style-filter').value;
+            const type = document.getElementById('type-filter').value;
+            const limit = document.getElementById('limit-input').value || 20;
+
+            const params = new URLSearchParams();
+            if (style) params.append('style', style);
+            if (type) params.append('content_type', type);
+            params.append('limit', limit);
+
+            const examplesList = document.getElementById('examples-list');
+            examplesList.innerHTML = '<div class="loading">Loading examples...</div>';
+
+            try {
+                const response = await fetch(`/api/examples/list?${params}`);
+                const data = await response.json();
+
+                if (data.examples.length === 0) {
+                    examplesList.innerHTML = '<div class="loading">No examples found</div>';
+                    return;
+                }
+
+                examplesList.innerHTML = data.examples.map(ex => `
+                    <div class="example-card">
+                        <div class="example-header">
+                            <div class="example-meta">
+                                <span class="badge badge-style">${ex.style}</span>
+                                <span class="badge badge-type">${ex.content_type}</span>
+                                ${ex.quality_score ? `<span class="badge badge-quality">Q: ${ex.quality_score.toFixed(1)}</span>` : ''}
+                            </div>
+                            <div class="rating-stars" data-example-id="${ex.example_id}">
+                                ${[1,2,3,4,5].map(i => `
+                                    <span class="star ${ex.user_rating >= i ? 'active' : ''}"
+                                          onclick="rateExample('${ex.example_id}', ${i})">★</span>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="example-heading">${ex.context_heading}</div>
+
+                        <div class="example-input">
+                            <strong>Input:</strong><br>
+                            ${ex.input_text.substring(0, 300)}${ex.input_text.length > 300 ? '...' : ''}
+                        </div>
+
+                        <div class="example-bullets">
+                            <strong>Generated Bullets:</strong>
+                            <ul>
+                                ${ex.generated_bullets.map(b => `<li>${b}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <div class="example-id">ID: ${ex.example_id} | ${new Date(ex.timestamp).toLocaleDateString()}</div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading examples:', error);
+                examplesList.innerHTML = '<div class="error">Error loading examples</div>';
+            }
+        }
+
+        // Rate an example
+        async function rateExample(exampleId, rating) {
+            try {
+                const response = await fetch('/api/examples/rate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        example_id: exampleId,
+                        user_rating: rating
+                    })
+                });
+
+                if (response.ok) {
+                    showMessage('Rating saved!', 'success');
+                    // Update stars visually
+                    const stars = document.querySelectorAll(`[data-example-id="${exampleId}"] .star`);
+                    stars.forEach((star, index) => {
+                        star.classList.toggle('active', index < rating);
+                    });
+                }
+            } catch (error) {
+                console.error('Error rating example:', error);
+                showMessage('Error saving rating', 'error');
+            }
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        // Initialize
+        loadStats();
+        loadExamples();
+
+        // Auto-refresh on filter change
+        document.getElementById('style-filter').addEventListener('change', loadExamples);
+        document.getElementById('type-filter').addEventListener('change', loadExamples);
+    </script>
+</body>
+</html>

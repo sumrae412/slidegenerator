@@ -1,0 +1,21 @@
+[
+  {
+    "input_text": "Introduction to Neural Networks",
+    "generated_bullets": [
+      "Neural networks model complex patterns inspired by biological brain structure",
+      "Artificial neurons process inputs through weighted connections and activation functions",
+      "Applications include image recognition, natural language processing, and prediction"
+    ],
+    "context_heading": "Introduction to Neural Networks",
+    "style": "heading",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "heading_expansion",
+      "heading"
+    ],
+    "timestamp": "2025-11-19T05:15:59.190684",
+    "example_id": "heading_a1cf10021d63"
+  }
+]

@@ -1,0 +1,434 @@
+[
+  {
+    "input_text": "Students in this course will learn to apply machine learning algorithms\nto real-world datasets. The curriculum covers supervised learning fundamentals including\nlinear regression, logistic regression, and decision trees. Each module includes hands-on\ncoding exercises using Python and scikit-learn. Students complete a final project analyzing\na dataset of their choice.",
+    "generated_bullets": [
+      "Students apply machine learning algorithms to real-world datasets",
+      "Course covers supervised learning fundamentals including regression and classification",
+      "Hands-on coding exercises reinforce concepts using Python and scikit-learn",
+      "Final project enables students to analyze self-selected datasets"
+    ],
+    "context_heading": "Machine Learning Fundamentals",
+    "style": "educational",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edu_ml_basics",
+      "educational"
+    ],
+    "timestamp": "2025-11-19T05:15:59.186677",
+    "example_id": "educational_83938e00b102"
+  },
+  {
+    "input_text": "The microservices architecture enables independent deployment and scaling\nof application components. Each service communicates via REST APIs using JSON payloads.\nThe system uses Kubernetes for orchestration and Docker for containerization. Service\ndiscovery is handled by Consul with health checks monitoring endpoint availability. Load\nbalancing distributes requests across service instances using NGINX.",
+    "generated_bullets": [
+      "Microservices architecture enables independent component deployment and scaling",
+      "Services communicate via REST APIs using JSON payloads",
+      "Kubernetes orchestrates Docker containerized services across infrastructure",
+      "Consul manages service discovery with automated health monitoring"
+    ],
+    "context_heading": "Microservices Architecture",
+    "style": "technical",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "tech_microservices",
+      "technical"
+    ],
+    "timestamp": "2025-11-19T05:15:59.187531",
+    "example_id": "technical_bde36ce85af5"
+  },
+  {
+    "input_text": "The digital transformation initiative reduced operational costs by 23%\nin Q3 2025. Customer satisfaction scores improved from 72% to 86% following the new UX\nredesign. The cloud migration project completed two months ahead of schedule, saving\n$1.2M in infrastructure costs. Employee productivity increased 18% after implementing\nthe new workflow automation tools.",
+    "generated_bullets": [
+      "Digital transformation reduced operational costs by 23% in Q3 2025",
+      "UX redesign improved customer satisfaction from 72% to 86%",
+      "Cloud migration completed early, saving $1.2M in infrastructure costs",
+      "Workflow automation increased employee productivity by 18%"
+    ],
+    "context_heading": "Digital Transformation Results",
+    "style": "executive",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "exec_digital_transform",
+      "executive"
+    ],
+    "timestamp": "2025-11-19T05:15:59.188126",
+    "example_id": "executive_e77116f1bf75"
+  },
+  {
+    "input_text": "Cloud computing provides scalable resources on demand, allowing organizations\nto adjust infrastructure capacity based on actual usage. Companies reduce capital expenditure\nby eliminating upfront hardware costs and paying only for consumed resources. Cloud providers\nmanage security and compliance with extensive expertise and certifications. Global reach enables\ncompanies to serve customers worldwide with low-latency performance.",
+    "generated_bullets": [
+      "Cloud computing provides scalable on-demand resource adjustment",
+      "Organizations eliminate upfront hardware costs through pay-as-you-go pricing",
+      "Cloud providers manage security and compliance with certified expertise",
+      "Global infrastructure enables low-latency worldwide customer service"
+    ],
+    "context_heading": "Cloud Computing Benefits",
+    "style": "professional",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "pro_cloud_benefits",
+      "professional"
+    ],
+    "timestamp": "2025-11-19T05:15:59.188761",
+    "example_id": "professional_0e692b5814fc"
+  },
+  {
+    "input_text": "Feature\tBasic\tPremium\tEnterprise\nStorage\t10GB\t100GB\t1TB\nUsers\t5\t25\tUnlimited\nSupport\tEmail\tPhone\t24/7 Dedicated\nAPI Access\tNo\tYes\tYes",
+    "generated_bullets": [
+      "Storage capacity ranges from 10GB in Basic to 1TB in Enterprise",
+      "User limits increase from 5 users to unlimited across plan tiers",
+      "Premium and Enterprise plans include API access capabilities",
+      "Support escalates from email-only to dedicated 24/7 assistance"
+    ],
+    "context_heading": "Pricing Plan Comparison",
+    "style": "table",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "table_feature_comparison",
+      "table"
+    ],
+    "timestamp": "2025-11-19T05:15:59.189360",
+    "example_id": "table_a34addd53228"
+  },
+  {
+    "input_text": "\u2022 Scalable infrastructure\n\u2022 Cost optimization\n\u2022 Pay-as-you-go pricing\n\u2022 Global availability\n\u2022 Automatic backups\n\u2022 High availability\n\u2022 Disaster recovery\n\u2022 Security compliance",
+    "generated_bullets": [
+      "Infrastructure scales elastically with automatic resource adjustment",
+      "Cost optimization through pay-as-you-go flexible pricing models",
+      "Global availability ensures high performance across worldwide regions",
+      "Security and disaster recovery with automated backup systems"
+    ],
+    "context_heading": "Cloud Benefits",
+    "style": "list",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "list_consolidation",
+      "list"
+    ],
+    "timestamp": "2025-11-19T05:15:59.189962",
+    "example_id": "list_a887dfe9cf19"
+  },
+  {
+    "input_text": "Introduction to Neural Networks",
+    "generated_bullets": [
+      "Neural networks model complex patterns inspired by biological brain structure",
+      "Artificial neurons process inputs through weighted connections and activation functions",
+      "Applications include image recognition, natural language processing, and prediction"
+    ],
+    "context_heading": "Introduction to Neural Networks",
+    "style": "heading",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "heading_expansion",
+      "heading"
+    ],
+    "timestamp": "2025-11-19T05:15:59.190684",
+    "example_id": "heading_a1cf10021d63"
+  },
+  {
+    "input_text": "AI improves efficiency.",
+    "generated_bullets": [
+      "Artificial intelligence improves operational efficiency through automation",
+      "AI systems optimize workflows and reduce manual processing time"
+    ],
+    "context_heading": "AI Benefits",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_very_short",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.191433",
+    "example_id": "edge_case_57453cf33f54"
+  },
+  {
+    "input_text": "Cloud computing has fundamentally transformed how organizations approach\ninfrastructure, development, and deployment. The shift from on-premises data centers to\ncloud-based services represents a paradigm change in IT strategy. Organizations benefit\nfrom elastic scalability, allowing them to dynamically adjust resources based on demand\npatterns. Cost models have evolved from capital expenditure to operational expenditure,\nproviding financial flexibility and eliminating upfront hardware investments. Security\nand compliance have become shared responsibilities, with cloud providers maintaining\nextensive certifications and security controls. Development teams leverage platform\nservices to accelerate application delivery, utilizing managed databases, container\norchestration, and serverless computing. Global reach enables organizations to serve\ncustomers worldwide with low-latency performance through distributed data centers.\nDisaster recovery and business continuity have been simplified through automated backups\nand geographic redundancy. The cloud ecosystem continues evolving with emerging technologies\nlike artificial intelligence, machine learning, and edge computing integration.",
+    "generated_bullets": [
+      "Cloud computing transforms infrastructure from on-premises to elastic scalable services",
+      "Organizations shift from capital expenditure to flexible operational cost models",
+      "Cloud providers manage extensive security certifications and compliance controls",
+      "Platform services accelerate development through managed databases and serverless computing",
+      "Global infrastructure enables low-latency worldwide performance and disaster recovery"
+    ],
+    "context_heading": "Cloud Computing Evolution",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_very_long",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.192117",
+    "example_id": "edge_case_9966d836b895"
+  },
+  {
+    "input_text": "The new analytics platform processes 10 million events per day with\nsub-second latency. Implementation reduced infrastructure costs by $400K annually.\nThe system uses Apache Kafka for event streaming and ClickHouse for real-time analytics.\nDevelopment time decreased from 6 months to 2 months using microservices architecture.\nTeams deploy updates 5x more frequently with zero downtime.",
+    "generated_bullets": [
+      "Platform processes 10 million daily events with sub-second latency",
+      "Infrastructure costs reduced by $400K annually through optimization",
+      "Apache Kafka and ClickHouse enable real-time event streaming analytics",
+      "Microservices architecture accelerated development from 6 months to 2 months"
+    ],
+    "context_heading": "Analytics Platform Performance",
+    "style": "mixed",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "mixed_paragraph_with_metrics",
+      "mixed"
+    ],
+    "timestamp": "2025-11-19T05:15:59.193004",
+    "example_id": "mixed_4534e6acc4a4"
+  },
+  {
+    "input_text": "AI ethics considerations include fairness, accountability, transparency,\nand privacy protection. Organizations must ensure AI systems do not perpetuate biases\nor discriminate against protected groups. Explainable AI helps stakeholders understand\nhow decisions are made. Data privacy regulations like GDPR require careful handling of\npersonal information. Continuous monitoring detects drift and performance degradation.",
+    "generated_bullets": [
+      "AI ethics encompasses fairness, accountability, transparency, and privacy protection",
+      "Organizations prevent bias and discrimination in AI decision-making systems",
+      "Explainable AI enables stakeholders to understand algorithmic decision processes",
+      "GDPR compliance requires careful personal information handling and protection"
+    ],
+    "context_heading": "AI Ethics and Governance",
+    "style": "professional",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "pro_ai_ethics",
+      "professional"
+    ],
+    "timestamp": "2025-11-19T05:15:59.193888",
+    "example_id": "professional_537026c22571"
+  },
+  {
+    "input_text": "[full screen TH]\nAs you've seen from the previous videos, the possible applications of AI are wide ranging and being able to get an algorithm to reliably perform what might be a relatively simple task for you or me, like recognizing what's in an image, can actually be a powerful tool in many types of projects.\n\nI'd now like to spend a little time discussing some of the potential issues you need to have in mind when it comes to applying AI in your projects.\n\nThe goal of any AI for Good project is to have a positive impact in the world, whether that's",
+    "generated_bullets": [
+      "the possible applications of AI are wide ranging",
+      "being able to get an algorithm to reliably perform what might be a relatively simple task for you or me can actually be a powerful tool in many types of projects",
+      "the goal of any AI for Good project is to have a positive impact in the world"
+    ],
+    "context_heading": "Draft Script",
+    "style": "transcript",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "transcript_ai_for_good",
+      "transcript"
+    ],
+    "timestamp": "2025-11-19T05:15:59.194802",
+    "example_id": "transcript_24cba5d1cc64"
+  },
+  {
+    "input_text": "The authenticate() function validates user credentials against the database.\nIt accepts username and password parameters, returns a JWT token on success or null on failure.\nRate limiting prevents brute force attacks by allowing maximum 5 attempts per minute.\nImplementation uses bcrypt for password hashing with salt rounds set to 12.",
+    "generated_bullets": [
+      "authenticate() validates credentials and returns JWT token or null",
+      "Rate limiting restricts login attempts to 5 per minute preventing brute force",
+      "Password security implemented with bcrypt hashing using 12 salt rounds"
+    ],
+    "context_heading": "Authentication API",
+    "style": "technical",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "tech_code_documentation",
+      "technical"
+    ],
+    "timestamp": "2025-11-19T05:15:59.195532",
+    "example_id": "technical_6f4b8044ba6f"
+  },
+  {
+    "input_text": "Q4 revenue reached $2.8M, up 34% year-over-year.\nCustomer retention improved to 94%, highest in company history.\nNew enterprise contracts signed with 3 Fortune 500 companies.\nOperating margin expanded from 12% to 18% through efficiency gains.",
+    "generated_bullets": [
+      "Q4 revenue hit $2.8M with 34% year-over-year growth",
+      "Customer retention reached record 94%",
+      "Secured 3 new Fortune 500 enterprise contracts",
+      "Operating margin expanded from 12% to 18% via efficiency improvements"
+    ],
+    "context_heading": "Q4 Performance",
+    "style": "executive",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "exec_quarterly_results",
+      "executive"
+    ],
+    "timestamp": "2025-11-19T05:15:59.196367",
+    "example_id": "executive_a815c4c2ebbe"
+  },
+  {
+    "input_text": "This module introduces Python programming fundamentals.\nStudents learn variables, data types, and control flow structures.\nHands-on exercises cover loops, conditionals, and function definitions.\nFinal project builds a simple calculator application.",
+    "generated_bullets": [
+      "Module introduces Python fundamentals including variables and data types",
+      "Students practice control flow with loops and conditionals",
+      "Hands-on exercises reinforce function definition concepts",
+      "Final project applies learning through calculator application development"
+    ],
+    "context_heading": "Python Programming 101",
+    "style": "educational",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edu_python_basics",
+      "educational"
+    ],
+    "timestamp": "2025-11-19T05:15:59.197337",
+    "example_id": "educational_313fcc667d5b"
+  },
+  {
+    "input_text": "Remote work provides flexibility for employees to balance professional and personal commitments.\nCompanies reduce overhead costs by minimizing office space requirements.\nAsynchronous communication enables global teams to collaborate across time zones.\nVideo conferencing technology facilitates face-to-face interaction despite physical distance.",
+    "generated_bullets": [
+      "Remote work enables employees to balance professional and personal commitments",
+      "Companies reduce overhead by minimizing physical office space needs",
+      "Asynchronous communication supports global team collaboration across time zones",
+      "Video conferencing maintains face-to-face interaction despite distance"
+    ],
+    "context_heading": "Remote Work Benefits",
+    "style": "professional",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "pro_remote_work",
+      "professional"
+    ],
+    "timestamp": "2025-11-19T05:15:59.198331",
+    "example_id": "professional_795253a62944"
+  },
+  {
+    "input_text": "Endpoint\tMethod\tDescription\n/users\tGET\tRetrieve user list\n/users/{id}\tGET\tGet specific user\n/users\tPOST\tCreate new user\n/users/{id}\tPUT\tUpdate user\n/users/{id}\tDELETE\tRemove user",
+    "generated_bullets": [
+      "GET /users retrieves complete user list",
+      "GET /users/{id} fetches specific user details",
+      "POST /users creates new user records",
+      "PUT and DELETE enable user updates and removal"
+    ],
+    "context_heading": "REST API Endpoints",
+    "style": "table",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "table_api_endpoints",
+      "table"
+    ],
+    "timestamp": "2025-11-19T05:15:59.199330",
+    "example_id": "table_ef67f66fd7cb"
+  },
+  {
+    "input_text": "Core Features:\n\u2022 User Management\n  - Role-based access control\n  - Single sign-on integration\n  - Activity logging\n\u2022 Data Analytics\n  - Real-time dashboards\n  - Custom report builder\n  - Export to CSV/PDF\n\u2022 API Integration\n  - REST endpoints\n  - Webhook support\n  - Rate limiting",
+    "generated_bullets": [
+      "User management includes role-based access, SSO integration, and activity logging",
+      "Data analytics provides real-time dashboards and custom reports with CSV/PDF export",
+      "API integration supports REST endpoints, webhooks, and rate limiting"
+    ],
+    "context_heading": "Platform Features",
+    "style": "list",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "list_nested_features",
+      "list"
+    ],
+    "timestamp": "2025-11-19T05:15:59.200203",
+    "example_id": "list_5c5c39e1b500"
+  },
+  {
+    "input_text": "The algorithm implements a modified A* pathfinding with bidirectional search optimization. Time complexity reduces from O(b^d) to O(b^(d/2)) through simultaneous forward-backward traversal. Memory overhead increases linearly with branching factor but remains manageable for typical graph densities. Heuristic admissibility ensures optimal path discovery while maintaining monotonicity constraints.",
+    "generated_bullets": [
+      "Modified A* uses bidirectional search for optimization",
+      "Time complexity improves from O(b^d) to O(b^(d/2)) via simultaneous traversal",
+      "Memory scales linearly with branching factor",
+      "Heuristic maintains admissibility and monotonicity for optimal paths"
+    ],
+    "context_heading": "Pathfinding Algorithm",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_dense_technical",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.201077",
+    "example_id": "edge_case_594381666f17"
+  },
+  {
+    "input_text": "Performance improved 45% (from 2.3s to 1.26s average response time). Database queries reduced 67% through caching. Memory consumption decreased from 512MB to 187MB (-63%). Error rate dropped from 0.8% to 0.1% (87.5% reduction). CPU utilization optimized from 78% to 34%.",
+    "generated_bullets": [
+      "Performance improved 45% reducing response time from 2.3s to 1.26s",
+      "Database queries decreased 67% through caching implementation",
+      "Memory consumption reduced 63% from 512MB to 187MB",
+      "Error rate dropped 87.5% from 0.8% to 0.1%"
+    ],
+    "context_heading": "Optimization Results",
+    "style": "edge_case",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "edge_multiple_metrics",
+      "edge_case"
+    ],
+    "timestamp": "2025-11-19T05:15:59.201991",
+    "example_id": "edge_case_9f05a176eddd"
+  },
+  {
+    "input_text": "Successful organizational change requires clear communication of objectives and rationale. Leadership must actively engage stakeholders throughout the transition process. Training programs prepare employees for new systems and workflows. Regular feedback loops identify concerns and enable course corrections. Celebrating milestones maintains momentum and reinforces positive behaviors.",
+    "generated_bullets": [
+      "Clear communication establishes change objectives and rationale for stakeholders",
+      "Leadership engagement throughout transition builds stakeholder commitment",
+      "Training programs prepare employees for new systems and workflows",
+      "Feedback loops enable concern identification and course corrections",
+      "Milestone celebrations maintain momentum and reinforce progress"
+    ],
+    "context_heading": "Change Management Best Practices",
+    "style": "professional",
+    "content_type": "paragraph",
+    "quality_score": 85.0,
+    "user_rating": null,
+    "category_tags": [
+      "pro_change_management",
+      "professional"
+    ],
+    "timestamp": "2025-11-19T05:15:59.202935",
+    "example_id": "professional_3a5f84713e6f"
+  },
+  {
+    "input_text": "Test input text for verification",
+    "generated_bullets": [
+      "Test bullet 1",
+      "Test bullet 2",
+      "Test bullet 3"
+    ],
+    "context_heading": "Test Heading",
+    "style": "professional",
+    "content_type": "paragraph",
+    "quality_score": 95.0,
+    "user_rating": 5,
+    "category_tags": [],
+    "timestamp": "2025-11-19T05:20:18.187394",
+    "example_id": "professional_5a744934cf8e"
+  }
+]
