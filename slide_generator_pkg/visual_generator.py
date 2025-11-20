@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 # OpenAI for DALL-E image generation
 try:
@@ -30,6 +32,14 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
     logging.warning("OpenAI library not available - visual generation disabled")
+
+# Anthropic Claude for AI-enhanced prompt generation
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    logging.info("Anthropic library not available - using template-based prompts")
 
 # Import data models and utilities
 from .data_models import SlideContent
@@ -70,19 +80,28 @@ class VisualGenerator:
     }
 
     def __init__(self, openai_api_key: Optional[str] = None,
+                 anthropic_api_key: Optional[str] = None,
                  cache_dir: str = '.visual_cache',
-                 cost_tracker: Optional[CostTracker] = None):
+                 cost_tracker: Optional[CostTracker] = None,
+                 max_parallel_workers: int = 5,
+                 enable_ai_prompts: bool = True):
         """
-        Initialize VisualGenerator with OpenAI API integration.
+        Initialize VisualGenerator with OpenAI and Anthropic API integration.
 
         Args:
             openai_api_key: OpenAI API key (falls back to OPENAI_API_KEY env var)
+            anthropic_api_key: Anthropic API key for AI-enhanced prompts
             cache_dir: Directory for caching generated images
             cost_tracker: Optional CostTracker instance for cost tracking
+            max_parallel_workers: Maximum number of concurrent image generation workers
+            enable_ai_prompts: Use AI to generate better DALL-E prompts
         """
         self.api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
+        self.anthropic_api_key = anthropic_api_key or os.getenv('ANTHROPIC_API_KEY')
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
+        self.max_parallel_workers = max_parallel_workers
+        self.enable_ai_prompts = enable_ai_prompts
 
         # Initialize OpenAI client
         self.client = None
@@ -97,6 +116,18 @@ class VisualGenerator:
             logger.warning("OpenAI API key provided but library not installed - run: pip install openai")
         else:
             logger.info("No OpenAI API key - visual generation will use text descriptions only")
+
+        # Initialize Anthropic client for AI-enhanced prompts
+        self.anthropic_client = None
+        if self.anthropic_api_key and ANTHROPIC_AVAILABLE and self.enable_ai_prompts:
+            try:
+                self.anthropic_client = anthropic.Anthropic(api_key=self.anthropic_api_key)
+                logger.info("✅ AI-enhanced visual prompt generation enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Anthropic client: {e}")
+                self.anthropic_client = None
+        elif not self.anthropic_api_key and self.enable_ai_prompts:
+            logger.info("No Anthropic API key - using template-based prompts")
 
         # Cost tracking
         self.cost_tracker = cost_tracker or CostTracker()
@@ -201,9 +232,117 @@ class VisualGenerator:
         # Default to concept for abstract topics
         return 'concept'
 
+    def analyze_slides_batch(self, slides: List[SlideContent]) -> Dict[int, str]:
+        """
+        Analyze multiple slides concurrently to determine their visual types.
+        Uses parallel processing for better performance on large slide decks.
+
+        Args:
+            slides: List of SlideContent objects
+
+        Returns:
+            Dict mapping slide index to visual type
+        """
+        def analyze_one(idx_slide):
+            idx, slide = idx_slide
+            return idx, self.analyze_slide_type(slide)
+
+        if len(slides) <= 3:
+            # For small numbers, sequential is faster (no threading overhead)
+            return {i: self.analyze_slide_type(slide) for i, slide in enumerate(slides)}
+
+        # Parallel analysis for larger slide sets
+        results = {}
+        with ThreadPoolExecutor(max_workers=min(10, len(slides))) as executor:
+            futures = {executor.submit(analyze_one, (i, slide)): i
+                      for i, slide in enumerate(slides)}
+
+            for future in as_completed(futures):
+                idx, slide_type = future.result()
+                results[idx] = slide_type
+
+        return results
+
+    def create_visual_prompt_ai(self, slide: SlideContent) -> str:
+        """
+        Use AI (Claude) to create an optimized DALL-E prompt based on slide content.
+
+        Args:
+            slide: SlideContent object
+
+        Returns:
+            AI-generated DALL-E prompt string
+        """
+        if not self.anthropic_client:
+            # Fallback to template-based approach
+            return self.create_visual_prompt(slide)
+
+        # Build context for AI
+        title = slide.title
+        content_text = '\n'.join(f"• {pt}" for pt in (slide.content[:5] if slide.content else []))
+
+        # Check prompt cache
+        cache_key = f"ai_prompt_{hashlib.sha256(f'{title}{content_text}'.encode()).hexdigest()}"
+        if cache_key in self._prompt_cache:
+            logger.debug(f"AI prompt cache hit for '{title}'")
+            return self._prompt_cache[cache_key]
+
+        try:
+            prompt = f"""You are an expert at creating DALL-E image prompts for presentation slides.
+
+Slide Title: {title}
+
+Slide Content:
+{content_text if content_text else '(No bullet points)'}
+
+Task: Create a concise, highly effective DALL-E 3 prompt (max 200 characters) that will generate a professional, visually striking image for this slide.
+
+Requirements:
+1. The image should visually represent the slide's core concept
+2. Professional, modern style suitable for business presentations
+3. No text, labels, or words in the image
+4. Clear, uncluttered composition
+5. Appropriate for diverse audiences
+6. Metaphorical or conceptual representation (not literal)
+
+Output ONLY the DALL-E prompt, nothing else."""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=150,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            ai_prompt = response.content[0].text.strip()
+
+            # Track cost (approximate)
+            input_tokens = len(prompt.split()) * 1.3  # rough estimate
+            output_tokens = len(ai_prompt.split()) * 1.3
+            self.cost_tracker.track_api_call(
+                provider='anthropic',
+                model='claude-3-5-sonnet-20241022',
+                input_tokens=int(input_tokens),
+                output_tokens=int(output_tokens),
+                cached=False,
+                slide_id=title,
+                call_type='visual_prompt_generation'
+            )
+
+            # Cache the result
+            self._prompt_cache[cache_key] = ai_prompt
+            if len(self._prompt_cache) > self._cache_max_size:
+                self._prompt_cache.popitem(last=False)  # Remove oldest
+
+            logger.info(f"✨ AI-generated prompt for '{title}': {ai_prompt[:80]}...")
+            return ai_prompt
+
+        except Exception as e:
+            logger.warning(f"AI prompt generation failed, using template: {e}")
+            return self.create_visual_prompt(slide)
+
     def create_visual_prompt(self, slide: SlideContent, visual_type: Optional[str] = None) -> str:
         """
-        Create a DALL-E prompt based on slide content.
+        Create a DALL-E prompt based on slide content (template-based).
 
         Args:
             slide: SlideContent object
@@ -286,9 +425,14 @@ class VisualGenerator:
                 'text_only': True
             }
 
-        # Create visual prompt
+        # Analyze slide type for cache key
         visual_type = self.analyze_slide_type(slide)
-        prompt = self.create_visual_prompt(slide, visual_type)
+
+        # Create visual prompt (use AI if enabled)
+        if self.enable_ai_prompts and self.anthropic_client:
+            prompt = self.create_visual_prompt_ai(slide)
+        else:
+            prompt = self.create_visual_prompt(slide, visual_type)
 
         # Check cache
         cache_key = self._generate_cache_key(slide.title, slide.content or [], visual_type)
@@ -383,23 +527,142 @@ class VisualGenerator:
                 'text_only': True
             }
 
-    def generate_visuals_batch(self, slides: List[SlideContent],
-                              filter_strategy: str = 'key_slides',
-                              quality: str = 'standard',
-                              size: str = '1024x1024',
-                              max_slides: Optional[int] = None) -> Dict[str, Any]:
+    def _select_slides_intelligently(self, slides: List[SlideContent],
+                                    max_slides: Optional[int] = None) -> List[Tuple[int, SlideContent]]:
         """
-        Generate visuals for multiple slides with smart filtering.
+        Use AI to intelligently select which slides would benefit most from visuals.
+
+        Args:
+            slides: List of all SlideContent objects
+            max_slides: Maximum number of slides to select
+
+        Returns:
+            List of (index, slide) tuples for selected slides
+        """
+        if not self.anthropic_client:
+            # Fallback to key_slides strategy
+            logger.info("AI not available, using key_slides fallback")
+            selected = []
+            for i, slide in enumerate(slides):
+                if (slide.slide_type in ['title', 'section_title', 'subsection_title'] or
+                    slide.heading_level in [1, 2, 3]):
+                    selected.append((i, slide))
+            return selected[:max_slides] if max_slides else selected
+
+        try:
+            # Build concise slide summary for AI analysis
+            slide_summaries = []
+            for i, slide in enumerate(slides[:50]):  # Limit to first 50 to avoid token limits
+                content_preview = ', '.join(slide.content[:2]) if slide.content else '(no content)'
+                slide_summaries.append(f"{i}. {slide.title} | {content_preview[:80]}")
+
+            slides_text = '\n'.join(slide_summaries)
+
+            prompt = f"""Analyze these {len(slide_summaries)} presentation slides and identify which ones would benefit MOST from AI-generated visuals.
+
+Slides:
+{slides_text}
+
+Task: Select the {max_slides or 'top 10'} slides where a visual image would add the most value.
+
+Prioritize slides that:
+1. Introduce key concepts or sections (title slides, section headers)
+2. Present complex ideas that visuals can clarify
+3. Discuss processes, architectures, or systems
+4. Would benefit from metaphorical or conceptual imagery
+5. Are important milestones in the presentation flow
+
+Avoid selecting slides that:
+- Are purely textual lists with no visual concept
+- Contain specific numbers/data (better as charts, not images)
+- Are transitions or meta-slides
+
+Output ONLY a JSON array of slide numbers (integers), nothing else. Example: [0, 3, 7, 12, 18]"""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=200,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            # Parse AI response
+            ai_response = response.content[0].text.strip()
+            # Extract JSON array
+            import re
+            json_match = re.search(r'\[[\d,\s]+\]', ai_response)
+            if json_match:
+                selected_indices = json.loads(json_match.group(0))
+                selected_slides = [(i, slides[i]) for i in selected_indices if i < len(slides)]
+
+                logger.info(f"🤖 AI selected {len(selected_slides)} slides for visuals: {selected_indices}")
+
+                # Track cost
+                input_tokens = len(prompt.split()) * 1.3
+                output_tokens = len(ai_response.split()) * 1.3
+                self.cost_tracker.track_api_call(
+                    provider='anthropic',
+                    model='claude-3-5-sonnet-20241022',
+                    input_tokens=int(input_tokens),
+                    output_tokens=int(output_tokens),
+                    cached=False,
+                    call_type='intelligent_slide_selection'
+                )
+
+                return selected_slides[:max_slides] if max_slides else selected_slides
+            else:
+                raise ValueError(f"Could not parse AI response: {ai_response}")
+
+        except Exception as e:
+            logger.warning(f"Intelligent slide selection failed: {e}, using fallback")
+            # Fallback to key_slides
+            selected = []
+            for i, slide in enumerate(slides):
+                if (slide.slide_type in ['title', 'section_title', 'subsection_title'] or
+                    slide.heading_level in [1, 2, 3]):
+                    selected.append((i, slide))
+            return selected[:max_slides] if max_slides else selected
+
+    def _generate_image_task(self, slide_index: int, slide: SlideContent,
+                            quality: str, size: str) -> Tuple[int, Optional[Dict[str, Any]]]:
+        """
+        Worker function for parallel image generation.
+
+        Args:
+            slide_index: Index of slide in original list
+            slide: SlideContent object
+            quality: Image quality
+            size: Image size
+
+        Returns:
+            Tuple of (slide_index, result_dict)
+        """
+        try:
+            result = self.generate_image(slide, quality=quality, size=size)
+            return (slide_index, result)
+        except Exception as e:
+            logger.error(f"Error generating image for slide {slide_index} ('{slide.title}'): {e}")
+            return (slide_index, None)
+
+    def generate_visuals_batch_parallel(self, slides: List[SlideContent],
+                                       filter_strategy: str = 'key_slides',
+                                       quality: str = 'standard',
+                                       size: str = '1024x1024',
+                                       max_slides: Optional[int] = None,
+                                       use_parallel: bool = True) -> Dict[str, Any]:
+        """
+        Generate visuals for multiple slides with parallel processing and smart filtering.
 
         Args:
             slides: List of SlideContent objects
-            filter_strategy: 'all', 'key_slides', or 'none'
+            filter_strategy: 'all', 'key_slides', 'smart', or 'none'
                 - 'all': Generate for all slides
                 - 'key_slides': Only section titles and important content slides
+                - 'smart': Use AI to determine which slides need visuals
                 - 'none': No visual generation
             quality: 'standard' or 'hd'
             size: Image size
             max_slides: Maximum number of slides to generate visuals for
+            use_parallel: Enable parallel processing (default: True)
 
         Returns:
             Dict with 'visuals' (dict mapping slide index to visual data) and 'summary' (cost summary)
@@ -410,7 +673,10 @@ class VisualGenerator:
         # Filter slides based on strategy
         slides_to_process = []
 
-        if filter_strategy == 'key_slides':
+        if filter_strategy == 'smart':
+            # Use AI to select slides (implemented below)
+            slides_to_process = self._select_slides_intelligently(slides, max_slides)
+        elif filter_strategy == 'key_slides':
             # Only process title slides and section headers
             for i, slide in enumerate(slides):
                 if (slide.slide_type in ['title', 'section_title', 'subsection_title'] or
@@ -428,15 +694,42 @@ class VisualGenerator:
         logger.info(f"📊 Generating visuals for {len(slides_to_process)}/{len(slides)} slides")
         logger.info(f"💰 Estimated cost: ${estimated_cost:.2f}")
 
+        if use_parallel:
+            logger.info(f"⚡ Using parallel processing with {self.max_parallel_workers} workers")
+
         # Generate visuals
         visuals = {}
         total_cost = 0.0
+        start_time = time.time()
 
-        for i, slide in slides_to_process:
-            result = self.generate_image(slide, quality=quality, size=size)
-            if result:
-                visuals[i] = result
-                total_cost += result.get('cost', 0.0)
+        if use_parallel and len(slides_to_process) > 1:
+            # Parallel processing
+            with ThreadPoolExecutor(max_workers=self.max_parallel_workers) as executor:
+                # Submit all tasks
+                future_to_slide = {
+                    executor.submit(self._generate_image_task, i, slide, quality, size): (i, slide)
+                    for i, slide in slides_to_process
+                }
+
+                # Process results as they complete
+                completed = 0
+                for future in as_completed(future_to_slide):
+                    slide_index, result = future.result()
+                    if result:
+                        visuals[slide_index] = result
+                        total_cost += result.get('cost', 0.0)
+
+                    completed += 1
+                    logger.info(f"   Progress: {completed}/{len(slides_to_process)} slides processed")
+        else:
+            # Sequential processing (fallback or single slide)
+            for i, slide in slides_to_process:
+                result = self.generate_image(slide, quality=quality, size=size)
+                if result:
+                    visuals[i] = result
+                    total_cost += result.get('cost', 0.0)
+
+        elapsed_time = time.time() - start_time
 
         summary = {
             'total_cost': total_cost,
@@ -444,18 +737,54 @@ class VisualGenerator:
             'images_generated': len([v for v in visuals.values() if not v.get('cached', False)]),
             'cache_hits': len([v for v in visuals.values() if v.get('cached', False)]),
             'slides_processed': len(slides_to_process),
-            'total_slides': len(slides)
+            'total_slides': len(slides),
+            'processing_time': elapsed_time,
+            'parallel_mode': use_parallel and len(slides_to_process) > 1
         }
 
-        logger.info(f"✅ Visual generation complete:")
+        logger.info(f"✅ Visual generation complete in {elapsed_time:.1f}s:")
         logger.info(f"   Images generated: {summary['images_generated']}")
         logger.info(f"   Cache hits: {summary['cache_hits']}")
         logger.info(f"   Actual cost: ${summary['total_cost']:.2f}")
+        logger.info(f"   Processing mode: {'Parallel' if summary['parallel_mode'] else 'Sequential'}")
 
         return {
             'visuals': visuals,
             'summary': summary
         }
+
+    def generate_visuals_batch(self, slides: List[SlideContent],
+                              filter_strategy: str = 'key_slides',
+                              quality: str = 'standard',
+                              size: str = '1024x1024',
+                              max_slides: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Generate visuals for multiple slides with smart filtering.
+        This method now uses parallel processing by default.
+
+        Args:
+            slides: List of SlideContent objects
+            filter_strategy: 'all', 'key_slides', 'smart', or 'none'
+                - 'all': Generate for all slides
+                - 'key_slides': Only section titles and important content slides
+                - 'smart': Use AI to determine which slides need visuals
+                - 'none': No visual generation
+            quality: 'standard' or 'hd'
+            size: Image size
+            max_slides: Maximum number of slides to generate visuals for
+
+        Returns:
+            Dict with 'visuals' (dict mapping slide index to visual data) and 'summary' (cost summary)
+        """
+        # Call the new parallel implementation
+        return self.generate_visuals_batch_parallel(
+            slides=slides,
+            filter_strategy=filter_strategy,
+            quality=quality,
+            size=size,
+            max_slides=max_slides,
+            use_parallel=True
+        )
 
     def get_statistics(self) -> Dict[str, Any]:
         """
